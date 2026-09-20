@@ -1,4 +1,5 @@
 {
+  version: 1,
   roles: { edge: ["a", "b", "mismatch"] },
   layering: { edge: { may_import: ["edge", "core:*"] } },
   disabled: { "allocators/R1": "fixture: only compiler diagnostics are under test here" },

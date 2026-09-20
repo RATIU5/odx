@@ -37,8 +37,11 @@ run_checks :: proc(p: ^Project, o: Opts) -> (r: ^Report, code: int) {
 		run_family_a(&c)
 		run_family_c(&c)
 	}
-	apply_ignores(c.r, igs)
-	return c.r, finalize(c.r, o.strict)
+	ran := make(map[string]bool, context.temp_allocator)
+	for a in c.rules {if !(o.fast && a.spec.kind == "require_attribute") {ran[a.id] = true}}
+	apply_ignores(c.r, igs, ran)
+	if !o.fast && len(o.topics) == 0 && len(o.args) == 0 {report_stale_config(&c)}
+	return c.r, finalize(c.r, o.strict, o.max_violations)
 }
 
 // project_packages walks, selects and parses the packages a command works on.

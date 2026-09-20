@@ -80,6 +80,55 @@ cmd_doctor :: proc(o: Opts) {
 		strings.join(sorted_keys(names), ",", context.temp_allocator),
 	)
 
+	// one check path, three entry points (20.3): the hook and CI must call odx, not a copy of it
+	if hooks, herr := os.read_entire_file(
+		join({p.root, ".claude", "settings.json"}),
+		context.allocator,
+	); herr == nil {
+		for cmd in ([]string{"hook edit", "hook stop", "hook changed"}) {
+			if !strings.contains(
+				string(hooks),
+				cmd,
+			) {warn(&warnings, ".claude/settings.json does not run `odx %s` (odx init --hooks prints the block)", cmd)}
+		}
+	}
+	if ci, cerr := os.read_entire_file(
+		join({p.root, ".github", "workflows", "ci.yml"}),
+		context.allocator,
+	); cerr == nil && !strings.contains(string(ci), "mise run ci") {
+		warn(&warnings, ".github/workflows/ci.yml does not run `mise run ci`")
+	}
+	// a topic whose roles no package has never attaches (20.10)
+	roles_in_use := make(map[string]bool, context.temp_allocator)
+	for d in package_dirs(p.root, &p.cfg) {
+		if role, n := role_of(&p.cfg, d); n == 1 {roles_in_use[role] = true}
+	}
+	for t in p.rb.topics {
+		attached := len(t.applies_to.roles) == 0
+		for r in t.applies_to.roles {attached ||= roles_in_use[r]}
+		if !attached {warn(&warnings, "topic %s applies to roles %v but no package has one", t.name, t.applies_to.roles)}
+	}
+	if o.relock {write_lock(p.root)}
+	if o.verify || o.ci {
+		diff, has := verify_lock(p.root)
+		switch {
+		case !has:
+			warn(
+				&warnings,
+				"no %s; a human writes it with ODX_ALLOW_PROTECTED=1 odx doctor --relock",
+				LOCK_FILE,
+			)
+		case len(diff) > 0:
+			err(
+				&errors,
+				"protected files differ from %s (approve with --relock):\n  %s",
+				LOCK_FILE,
+				strings.join(diff, "\n  ", context.temp_allocator),
+			)
+		case:
+			fmt.println("lock: ok")
+		}
+	}
 	for t in p.rb.topics {if t.overrides {warn(&warnings, "topic %s is overridden by %s", t.name, t.source)}}
 	for id in sorted_keys(p.cfg.disabled) {fmt.printfln("disabled: %s (%s)", id, p.cfg.disabled[id])}
 

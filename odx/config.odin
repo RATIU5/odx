@@ -10,7 +10,10 @@ import "core:strings"
 CONFIG_FILE :: "odx.json5"
 
 // Config mirrors odx.json5 exactly; nothing runtime-only lives here.
+CONFIG_VERSION :: 1
+
 Config :: struct {
+	version:      int, // must equal CONFIG_VERSION (20.7)
 	roles:        map[string][]string, // role -> dir globs, relative to root (17.5)
 	default_role: string, // ponytail: plan says roles.default; a map field cannot hold it
 	exclude:      []string,
@@ -36,7 +39,15 @@ Odin_Cfg :: struct {
 	path:                 string,
 }
 
-CONFIG_KEYS := []string{"roles", "default_role", "exclude", "disabled", "layering", "odin"}
+CONFIG_KEYS := []string {
+	"version",
+	"roles",
+	"default_role",
+	"exclude",
+	"disabled",
+	"layering",
+	"odin",
+}
 ODIN_KEYS := []string {
 	"flags",
 	"forbidden_flags",
@@ -83,6 +94,32 @@ load_config :: proc(root: string, errs: ^[dynamic]string) -> (cfg: Config) {
 		if od, has := v.(json.Object)["odin"]; has {check_keys(errs, path, "odin", od, ODIN_KEYS)}
 	}
 	if cfg.exclude == nil {cfg.exclude = DEFAULT_EXCLUDE}
+	if cfg.version != CONFIG_VERSION {
+		errf(
+			errs,
+			"%s: version must be %d (got %d); this odx supports only version %d",
+			path,
+			CONFIG_VERSION,
+			cfg.version,
+			CONFIG_VERSION,
+		)
+	}
+	// layering keys and may_import role names must be declared roles; collections are `x:*`
+	for role in sorted_keys(cfg.layering) {
+		if role not_in cfg.roles {errf(errs, "%s: layering.%s is not a declared role", path, role)}
+		for m, i in cfg.layering[role].may_import {
+			if !strings.contains(m, ":") && m not_in cfg.roles {
+				errf(
+					errs,
+					"%s: layering.%s.may_import[%d] %q is neither a role nor a collection glob",
+					path,
+					role,
+					i,
+					m,
+				)
+			}
+		}
+	}
 	if !slice.contains(EXPLICIT_ALLOCATOR_MODES, cfg.odin.explicit_allocators) {
 		errf(errs, "%s: odin.explicit_allocators must be pure, all or off", path)
 	}

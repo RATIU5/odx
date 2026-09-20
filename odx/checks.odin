@@ -1,5 +1,6 @@
 package odx
 
+import "core:fmt"
 import "core:odin/ast"
 import "core:path/filepath"
 import "core:slice"
@@ -14,6 +15,7 @@ Ctx :: struct {
 	pkgs:  []Package,
 	rules: []Active_Rule,
 	r:     ^Report,
+	hits:  map[string]int, // config allow-list entries that matched something this run (20.2)
 }
 
 // DEFAULT_DENY_PURE is applied when a pure role has no explicit deny list (17.3).
@@ -38,7 +40,10 @@ pos_of :: proc(c: ^Ctx, n: ^ast.Node) -> (file: string, line, col: int) {
 
 // report is the one way a check emits a finding for a rule.
 report :: proc(c: ^Ctx, a: ^Active_Rule, file: string, line, col: int, msg: string) {
-	add(c.r, {file, line, col, a.id, a.rule.severity, a.spec.kind, msg, true})
+	add(
+		c.r,
+		{file, line, col, a.id, a.rule.severity, a.spec.kind, msg, a.rule.ignorable, a.rule.class},
+	)
 }
 
 run_family_b :: proc(c: ^Ctx) {
@@ -46,7 +51,10 @@ run_family_b :: proc(c: ^Ctx) {
 		// parse errors first (17.10: the model fixes syntax before rules)
 		for d in p.diags {
 			file, _ := rel_of(c.root, d.pos.file)
-			add(c.r, {file, d.pos.line, d.pos.column, "odin/syntax", "", "parse", d.msg, false})
+			add(
+				c.r,
+				{file, d.pos.line, d.pos.column, "odin/syntax", "", "parse", d.msg, false, ""},
+			)
 		}
 		for f in p.files {
 			c.r.summary.files += 1
@@ -89,6 +97,11 @@ vet_tag_names :: proc(f: ^ast.File) -> []string {
 // 17.2: `#+vet !x` silently defeats -vet; never ignorable, only allow-listable in config.
 check_vet_disables :: proc(c: ^Ctx, f: ^ast.File) {
 	for name in vet_tag_names(f) {
+		if strings.has_prefix(name, "!") {
+			if i, ok := slice.linear_search(c.cfg.odin.allowed_vet_disables, name[1:]); ok {
+				c.hits[fmt.tprintf("odin.allowed_vet_disables[%d]", i)] += 1
+			}
+		}
 		if strings.has_prefix(name, "!") &&
 		   !slice.contains(c.cfg.odin.allowed_vet_disables, name[1:]) {
 			file, _ := rel_of(c.root, f.fullpath)
@@ -109,6 +122,7 @@ check_vet_disables :: proc(c: ^Ctx, f: ^ast.File) {
 						},
 					),
 					false,
+					"",
 				},
 			)
 		}
@@ -326,4 +340,33 @@ visit_call :: proc(v: ^ast.Visitor, n: ^ast.Node) -> ^ast.Visitor {
 		report(w.c, w.a, file, line, col, strings.concatenate({"call to ", name}))
 	}
 	return v
+}
+
+// report_stale_config: every exception-list entry with zero hits (20.2). Only on a full run: a
+// narrowed scan would report false staleness. may_import is policy, not an exception list, so
+// it is not counted.
+report_stale_config :: proc(c: ^Ctx) {
+	for i in 0 ..< len(c.cfg.odin.allowed_vet_disables) {
+		stale_entry(c, fmt.tprintf("odin.allowed_vet_disables[%d]", i))
+	}
+}
+
+@(private = "file")
+stale_entry :: proc(c: ^Ctx, key: string) {
+	if c.hits[key] > 0 {return}
+	// ponytail: key path, not a line number; core:encoding/json keeps no positions (20.7)
+	add(
+		c.r,
+		{
+			CONFIG_FILE,
+			1,
+			1,
+			"odx/stale-config-entry",
+			"",
+			"config",
+			strings.concatenate({key, " matched nothing"}),
+			false,
+			"",
+		},
+	)
 }

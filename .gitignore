@@ -16,5 +16,9 @@
 !odx.json5
 !.odx/
 !.odx/**
+!.claude/
+!.claude/settings.json
+!CLAUDE.md
 !.github/
 !.github/**
+.odx/cache/

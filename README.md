@@ -2,18 +2,37 @@
 
 A queryable rulebook and checker for Odin projects. One CLI that tells an LLM (or a human)
 which conventions apply to the code it is about to write, and checks the code against them.
+Per-file rule scoping already exists in every agent host; what odx adds is rules that are
+simultaneously the check: one rule id the model can look up and CI can fail on.
 
 ```
 odx topics                       list topics
 odx explain <topic> [--rule R3]  rules, rationale, do/don't
 odx for <path>                   topics that apply to a file or package (by role)
 odx check [<path>...]            run the checks (exit 1 on violations)
-odx doctor [--ci]                toolchain, flags, mise.toml drift, overrides
+odx doctor [--ci]                toolchain, flags, mise.toml drift, overrides, protected-path lock
+odx fix [--propose]              delete stale odx:ignore directives (refuses on a dirty worktree)
+odx explain --checklist          manual rules only, for an adversarial reviewer
+odx hook edit | stop | changed   Claude Code hook entry points
 odx ext list | ext validate      project extensions in .odx/ and odx.json5
 odx init                         write odx.json5 and mise.toml for a project
 ```
 
 Global flags: `--json`, `--root <dir>`. Exit codes: 0 clean, 1 violations, 2 tool/config error.
+
+## LLM loop
+
+`odx init --hooks` writes `.claude/settings.json` (PostToolBatch runs `odx hook edit`, syntax
+and rule checks only; FileChanged on a protected path runs `odx hook changed`, the lock
+verification; Stop runs `odx hook stop`, the full check) and a short `CLAUDE.md` section. The
+Stop hook exits 0 when `stop_hook_active` is set and gives up loudly after `ODX_STOP_GUARD_MAX`
+(default 3, stricter than the harness cap of 8) identical blocks. Hook output is capped at 50
+violations with an explicit omitted count.
+
+Protected paths (`rules/`, `.odx/`, `odx.json5`, `mise.toml`, `tests/fixtures/`,
+`.claude/settings.json`, `CLAUDE.md`) are hash-locked in `.odx/lock`. `odx doctor --verify-rulebook`
+(implied by `--ci`) and the Stop hook name every changed file; a human approves with
+`ODX_ALLOW_PROTECTED=1 odx doctor --relock`. This is visibility, not a security boundary.
 
 ## Layout
 

@@ -14,6 +14,8 @@
   rules: [
     {
       id: "R1",
+      class: "layering_unroled_package",
+      ignorable: false,
       statement: "Every package directory maps to exactly one role in odx.json5.",
       why: "Unmapped code has no rules; doubly mapped code has contradictory ones.",
       severity: "error",
@@ -21,6 +23,7 @@
     },
     {
       id: "R2",
+      class: "layering_forbidden_import",
       statement: "A package imports only what its role's may_import allows; pure never imports os, net, or foreign.",
       why: "Dependencies only flow down. A pure package that reaches for I/O stops being testable without the world.",
       severity: "error",
@@ -28,6 +31,7 @@
     },
     {
       id: "R3",
+      class: "layering_hidden_state",
       statement: "No mutable package-level variables in pure packages; pass state as a parameter.",
       why: "Hidden state makes two calls with the same arguments give different answers.",
       severity: "error",
@@ -35,6 +39,7 @@
     },
     {
       id: "R4",
+      class: "layering_foreign_placement",
       statement: "foreign imports and foreign blocks live only in edge packages.",
       why: "The FFI boundary is where memory and calling conventions change; keep it in one place.",
       severity: "error",

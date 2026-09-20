@@ -1,5 +1,9 @@
-{
+{ // want: odx/stale-config-entry
+  version: 1,
   roles: { pure: ["pure"] },
   layering: { pure: { may_import: ["pure", "core:*"] } },
-  odin: { flags: ["-vet"], allowed_vet_disables: ["shadowing"] },
+  odin: { flags: ["-vet"], allowed_vet_disables: [
+    "shadowing",
+    "cast", // never used by a file: reported as odx/stale-config-entry on line 1
+  ] },
 }

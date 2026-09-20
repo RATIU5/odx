@@ -51,6 +51,7 @@ run_fixture :: proc(dir: string) -> (bad: int) {
 		bad += 1
 	}
 	wants := collect_wants(dir)
+	bad += check_fix_pairs(dir, r)
 	for v in r.violations {
 		if w := match_want(wants[:], v); w != nil {
 			w.used = true
@@ -89,7 +90,8 @@ collect_wants :: proc(root: string) -> (out: [dynamic]Want) {
 	w := os.walker_create_path(root)
 	defer os.walker_destroy(&w)
 	for fi in os.walker_walk(&w) {
-		if fi.type != .Regular || !strings.has_suffix(fi.name, ".odin") {continue}
+		if fi.type != .Regular ||
+		   !(strings.has_suffix(fi.name, ".odin") || fi.name == CONFIG_FILE) {continue}
 		data, err := os.read_entire_file(fi.fullpath, context.allocator)
 		if err != nil {fail("%s: cannot read", fi.fullpath)}
 		rel, _ := rel_of(root, fi.fullpath)
@@ -102,4 +104,55 @@ collect_wants :: proc(root: string) -> (out: [dynamic]Want) {
 		}
 	}
 	return
+}
+
+// check_fix_pairs: for every <file>.odin.after in the fixture, `odx fix` on a copy must produce
+// it, and running fix again must change nothing (20.1).
+check_fix_pairs :: proc(dir: string, r: ^Report) -> (bad: int) {
+	afters := make([dynamic]string, context.temp_allocator)
+	w := os.walker_create_path(dir)
+	defer os.walker_destroy(&w)
+	for fi in os.walker_walk(&w) {
+		if fi.type == .Regular &&
+		   strings.has_suffix(fi.name, ".odin.after") {append(&afters, fi.fullpath)}
+	}
+	if len(afters) == 0 {return}
+	tmp, terr := os.make_directory_temp("", "odx-fix-*", context.allocator)
+	if terr != nil {fail("cannot create temp dir")}
+	defer os.remove_all(tmp)
+	copy_tree(dir, tmp)
+	// the report's paths are relative, so it applies to the copy unchanged
+	apply_fixes(tmp, r, false)
+	for after in afters {
+		rel, _ := rel_of(dir, strings.trim_suffix(after, ".after"))
+		want, _ := os.read_entire_file(after, context.allocator)
+		got, _ := os.read_entire_file(join({tmp, rel}), context.allocator)
+		if string(want) != string(got) {
+			fmt.printfln("  fix %s differs from %s.after", rel, rel)
+			bad += 1
+		}
+	}
+	p := load_project(tmp)
+	r2, _ := run_checks(&p, Opts{})
+	if n := apply_fixes(tmp, r2, true); n > 0 {
+		fmt.printfln("  fix is not idempotent: second run would change %d lines", n)
+		bad += 1
+	}
+	return
+}
+
+copy_tree :: proc(from, to: string) {
+	w := os.walker_create_path(from)
+	defer os.walker_destroy(&w)
+	for fi in os.walker_walk(&w) {
+		rel, _ := rel_of(from, fi.fullpath)
+		dst := join({to, rel})
+		if fi.type == .Directory {
+			os.make_directory_all(dst)
+		} else if fi.type == .Regular {
+			data, _ := os.read_entire_file(fi.fullpath, context.allocator)
+			os.make_directory_all(filepath.dir(dst))
+			if err := os.write_entire_file(dst, data); err != nil {fail("write %s: %v", dst, err)}
+		}
+	}
 }

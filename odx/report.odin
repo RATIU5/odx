@@ -14,6 +14,7 @@ Violation :: struct {
 	check:     string,
 	message:   string,
 	ignorable: bool,
+	class:     string, // stable greppable name from the rule's frontmatter (20.4); "" for odin/odx findings
 }
 
 Report :: struct {
@@ -21,7 +22,7 @@ Report :: struct {
 	violations:  [dynamic]Violation,
 	tool_errors: [dynamic]string,
 	summary:     struct {
-		errors, warnings, ignored, files: int,
+		errors, warnings, ignored, files, omitted: int,
 	},
 }
 
@@ -41,11 +42,16 @@ sort_violations :: proc(vs: []Violation) {
 }
 
 // finalize sorts, tallies and returns the exit code (17.11).
-finalize :: proc(r: ^Report, strict: bool) -> int {
+finalize :: proc(r: ^Report, strict: bool, max_violations := 0) -> int {
 	r.schema = 1
 	sort_violations(r.violations[:])
 	for v in r.violations {
 		if v.severity == "warning" {r.summary.warnings += 1} else {r.summary.errors += 1}
+	}
+	// truncation is reported, never silent (20.8)
+	if max_violations > 0 && len(r.violations) > max_violations {
+		r.summary.omitted = len(r.violations) - max_violations
+		resize(&r.violations, max_violations)
 	}
 	if len(r.tool_errors) > 0 {return EXIT_TOOL}
 	if r.summary.errors > 0 || (strict && r.summary.warnings > 0) {return EXIT_VIOLATION}
@@ -57,14 +63,23 @@ print_report :: proc(r: ^Report, json_out: bool) {
 		print_json(r^)
 		return
 	}
-	for v in r.violations {
-		topic, _, rule := strings.partition(v.rule, "/")
-		hint :=
-			"" if topic == "odin" || topic == "odx" else fmt.tprintf("; see `odx explain %s --rule %s`", topic, rule)
-		fmt.printfln("%s:%d:%d: %s %s%s", v.file, v.line, v.col, v.rule, v.message, hint)
-	}
+	fmt.print(report_text(r))
 	for e in r.tool_errors {fmt.eprintln("odx: tool error:", e)}
 	if len(r.violations) == 0 && len(r.tool_errors) == 0 {
 		fmt.printfln("ok: %d files, %d ignored", r.summary.files, r.summary.ignored)
 	}
+}
+
+// report_text: one line per violation, the human format (17.11).
+report_text :: proc(r: ^Report) -> string {
+	b := strings.builder_make()
+	for v in r.violations {
+		topic, _, rule := strings.partition(v.rule, "/")
+		hint :=
+			"" if topic == "odin" || topic == "odx" else fmt.tprintf("; see `odx explain %s --rule %s`", topic, rule)
+		fmt.sbprintfln(&b, "%s:%d:%d: %s %s%s", v.file, v.line, v.col, v.rule, v.message, hint)
+	}
+	if r.summary.omitted >
+	   0 {fmt.sbprintfln(&b, "... %d more violations omitted (--max-violations)", r.summary.omitted)}
+	return strings.to_string(b)
 }

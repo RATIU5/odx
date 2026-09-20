@@ -1,0 +1,10 @@
+package app
+
+import "core:fmt"
+
+counter: int
+
+main :: proc() {
+	counter += 1
+	fmt.println(counter)
+}

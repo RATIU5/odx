@@ -28,12 +28,16 @@ Topic :: struct {
 }
 
 Rule :: struct {
-	id:        string,
-	statement: string,
-	why:       string,
-	severity:  string, // "" = error (17.11)
-	retired:   bool,
-	check:     Check, // "manual" or a spec
+	id:           string,
+	statement:    string,
+	why:          string,
+	severity:     string, // error | warning; mandatory (20.4)
+	class:        string, // stable greppable name, e.g. "layering_hidden_state" (20.4)
+	fix:          string, // "" | "none" | "safe" (20.1)
+	ignorable:    bool, // default true; set at load when absent
+	baselineable: bool, // 20.5: has a stable subject
+	retired:      bool,
+	check:        Check, // "manual" or a spec
 }
 
 Check :: union {
@@ -75,7 +79,18 @@ TOPIC_KEYS := []string {
 	"example_roles",
 	"rules",
 }
-RULE_KEYS := []string{"id", "statement", "why", "severity", "retired", "check"}
+RULE_KEYS := []string {
+	"id",
+	"statement",
+	"why",
+	"severity",
+	"class",
+	"fix",
+	"ignorable",
+	"baselineable",
+	"retired",
+	"check",
+}
 DEFAULT_RESULT_SUFFIX := []string{"Error"}
 
 Rulebook :: struct {
@@ -137,6 +152,19 @@ add_topic :: proc(rb: ^Rulebook, source, dir_name, js, md: string, errs: ^[dynam
 			for r in rules.(json.Array) or_else nil {check_keys(errs, at, "rule.", r, RULE_KEYS)}
 		}
 	}
+	// ignorable defaults to true; json.unmarshal leaves an absent bool false, so read presence
+	present := make(map[string]bool, context.temp_allocator)
+	if v, perr := json.parse_string(js, spec = .JSON5); perr == nil {
+		if rules, has := v.(json.Object)["rules"]; has {
+			for r in rules.(json.Array) or_else nil {
+				if obj, ok := r.(json.Object); ok {
+					if id, has_id := obj["id"].(json.String);
+					   has_id && "ignorable" in obj {present[id] = true}
+				}
+			}
+		}
+	}
+	for &r in t.rules {if r.id not_in present {r.ignorable = true}}
 	if t.name != dir_name {errf(errs, "%s: name %s does not match directory", at, t.name)}
 	if t.summary == "" {errf(errs, "%s: summary is required", at)}
 	if md == "" {errf(errs, "%s: %s is missing or empty", at, PROSE_FILE)}
@@ -162,9 +190,13 @@ add_topic :: proc(rb: ^Rulebook, source, dir_name, js, md: string, errs: ^[dynam
 @(private = "file")
 validate_rule :: proc(r: ^Rule, at: string, errs: ^[dynamic]string) {
 	if r.statement == "" {errf(errs, "%s: statement is required", at)}
-	if r.severity != "" && r.severity != "error" && r.severity != "warning" {
-		errf(errs, "%s: severity must be error or warning", at)
+	if r.why == "" {errf(errs, "%s: why is required (20.4)", at)}
+	if r.severity != "error" && r.severity != "warning" {
+		errf(errs, "%s: severity must be error or warning (20.4)", at)
 	}
+	if r.fix != "" &&
+	   r.fix != "none" &&
+	   r.fix != "safe" {errf(errs, "%s: fix must be none or safe", at)}
 	switch &c in r.check {
 	case string:
 		if c != "manual" {errf(errs, "%s: check must be \"manual\" or an object", at)}

@@ -57,6 +57,7 @@ collect_ignores :: proc(
 						"ignores",
 						bad,
 						false,
+						"",
 					},
 				)
 				continue
@@ -91,7 +92,7 @@ ignore_target :: proc(lines: []string, comment_line: int, whole: bool) -> int {
 }
 
 // apply_ignores drops suppressed violations and reports stale ignores (17.8).
-apply_ignores :: proc(r: ^Report, igs: []Ignore) {
+apply_ignores :: proc(r: ^Report, igs: []Ignore, ran: map[string]bool) {
 	kept := make([dynamic]Violation)
 	for v in r.violations {
 		hit := false
@@ -109,7 +110,7 @@ apply_ignores :: proc(r: ^Report, igs: []Ignore) {
 	}
 	r.violations = kept
 	for ig in igs {
-		if !ig.used {
+		if !ig.used && ig.rule in ran { 	// an ignore for a rule that did not run is not stale
 			add(
 				r,
 				{
@@ -121,6 +122,7 @@ apply_ignores :: proc(r: ^Report, igs: []Ignore) {
 					"ignores",
 					strings.concatenate({"ignore of ", ig.rule, " suppressed nothing"}),
 					false,
+					"",
 				},
 			)
 		}

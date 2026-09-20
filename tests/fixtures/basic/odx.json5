@@ -1,4 +1,5 @@
 {
+  version: 1,
   roles: { pure: ["core"], edge: ["platform"] },
   layering: {
     pure: { may_import: ["pure", "core:*"] },

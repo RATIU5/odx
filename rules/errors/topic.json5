@@ -14,18 +14,23 @@
   rules: [
     {
       id: "R1",
+      class: "errors_typed_result",
       statement: "Exported procedures that can fail return an error type as the last result, not a bool.",
       why: "A bool says that something failed, never what. Callers cannot branch on it or report it.",
+      severity: "error",
       check: "manual",
     },
     {
       id: "R2",
+      class: "errors_one_type_per_package",
       statement: "Each package declares one Error enum or union; no string or any errors.",
       why: "A typed error is exhaustively switchable and greppable; strings and any are neither.",
+      severity: "error",
       check: "manual",
     },
     {
       id: "R3",
+      class: "errors_require_results",
       statement: "Exported procedures whose last result is an error type carry @(require_results).",
       why: "Only the attribute makes the compiler reject a discarded failure; -vet does not.",
       severity: "error",
@@ -33,8 +38,10 @@
     },
     {
       id: "R4",
+      class: "errors_or_return",
       statement: "Propagate with or_return; handle locally only when the proc can actually recover.",
       why: "or_return keeps the happy path linear and makes every ignored error a visible choice.",
+      severity: "error",
       check: "manual",
     },
   ],

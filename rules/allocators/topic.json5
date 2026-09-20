@@ -14,6 +14,7 @@
   rules: [
     {
       id: "R1",
+      class: "allocators_explicit_tag",
       statement: "Every file in a pure or service package starts with `#+vet explicit-allocators`.",
       why: "The compiler then rejects make/new/append without an allocator argument; hidden context.allocator use is where leaks come from.",
       severity: "error",
@@ -21,14 +22,18 @@
     },
     {
       id: "R2",
+      class: "allocators_owner_parameter",
       statement: "A procedure that allocates takes `allocator := context.allocator` as its last parameter and documents who frees.",
       why: "Callers pick arenas or trackers; the proc stays testable and leak-free by construction.",
+      severity: "error",
       check: "manual",
     },
     {
       id: "R3",
+      class: "allocators_sanitized_tests",
       statement: "Tests run with -sanitize:address and -define:ODIN_TEST_FAIL_ON_BAD_MEMORY=true.",
       why: "Leaks are only WARN by default; the define turns them into failures.",
+      severity: "error",
       check: "manual",
     },
   ],

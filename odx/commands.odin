@@ -29,6 +29,10 @@ cmd_topics :: proc(o: Opts) {
 }
 
 cmd_explain :: proc(o: Opts) {
+	if o.checklist {
+		cmd_checklist(o)
+		return
+	}
 	if len(o.args) != 1 {fail("usage: odx explain <topic> [--rule R3]")}
 	p := must_load(o, false)
 	t := find_topic(&p.rb, o.args[0])
@@ -59,6 +63,18 @@ cmd_explain :: proc(o: Opts) {
 	}
 	fmt.println()
 	fmt.print(t.prose)
+}
+
+// cmd_checklist prints the manual rules (section 10): what a reviewer checks that odx check cannot.
+cmd_checklist :: proc(o: Opts) {
+	p := must_load(o, false)
+	for t in p.rb.topics {
+		if len(o.args) > 0 && !slice.contains(o.args[:], t.name) {continue}
+		for r in t.rules {
+			if _, is_spec := r.check.(Check_Spec); r.retired || is_spec {continue}
+			fmt.printfln("- [%s/%s] %s\n  why: %s", t.name, r.id, r.statement, r.why)
+		}
+	}
 }
 
 cmd_for :: proc(o: Opts) {
@@ -134,7 +150,8 @@ INIT_CONFIG_HEAD :: `{
   // Package roles: each glob is a directory path relative to this file (17.5).
   // Every package must match exactly one role. Detected package directories:
 `
-INIT_CONFIG_BODY :: `  roles: {
+INIT_CONFIG_BODY :: `  version: 1,
+  roles: {
     pure: [],    // no os, no foreign, no I/O, no mutable globals
     service: [], // takes capabilities as parameters
     edge: [],    // os, foreign, I/O allowed
@@ -182,7 +199,11 @@ depends = ["check", "test"]
 cmd_init :: proc(o: Opts) {
 	root, _ := filepath.abs(o.root if o.root != "" else ".")
 	cfg_path := join({root, CONFIG_FILE})
-	if os.exists(cfg_path) {fail("%s already exists", cfg_path)}
+	if os.exists(cfg_path) {
+		if !o.hooks {fail("%s already exists", cfg_path)}
+		write_hooks(root) // existing project: --hooks adds only the hook files
+		return
+	}
 
 	// the detected package directories go into the header comment as a hint for the human
 	b := strings.builder_make()
@@ -204,6 +225,7 @@ cmd_init :: proc(o: Opts) {
 		   err != nil {fail("write %s: %v", mise, err)}
 		fmt.println("wrote", mise)
 	}
+	if o.hooks {write_hooks(root)}
 	gi := join({root, ".gitignore"})
 	if data, rerr := os.read_entire_file(gi, context.allocator);
 	   rerr == nil && !strings.contains(string(data), ".odx/cache/") {
@@ -211,4 +233,53 @@ cmd_init :: proc(o: Opts) {
 		   err != nil {fail("write %s: %v", gi, err)}
 		fmt.println("appended .odx/cache/ to", gi)
 	}
+}
+
+// Claude Code hooks (17.10): the binary reads the hook JSON itself, so no jq and no wrapper script.
+INIT_HOOKS :: `{
+  "hooks": {
+    "PostToolBatch": [{ "hooks": [{ "type": "command", "command": "odx hook edit" }] }],
+    "FileChanged": [{ "matcher": "rules/**|odx.json5|.odx/**|.claude/settings.json", "hooks": [{ "type": "command", "command": "odx hook changed" }] }],
+    "Stop": [{ "hooks": [{ "type": "command", "command": "odx hook stop" }] }]
+  }
+}
+`
+INIT_CLAUDE_MD ::
+	`
+## odx
+
+- Before writing Odin code run ` +
+	"`odx for <path>`" +
+	` and ` +
+	"`odx explain <topic>`" +
+	`; ` +
+	"`odx check`" +
+	` must pass before you stop.
+- Never edit rules/, .odx/, odx.json5, mise.toml, tests/fixtures/ or .claude/settings.json without asking.
+  They are hash-locked; ` +
+	"`odx doctor --verify-rulebook`" +
+	` names any change and a human approves it with ` +
+	"`ODX_ALLOW_PROTECTED=1 odx doctor --relock`" +
+	`.
+- Reviewing a diff: ` +
+	"`odx explain --checklist`" +
+	` lists the rules only a reader can check.
+`
+
+write_hooks :: proc(root: string) {
+	settings := join({root, ".claude", "settings.json"})
+	if os.exists(settings) {
+		fmt.printfln("%s exists; merge in:\n%s", settings, INIT_HOOKS)
+	} else {
+		os.make_directory_all(join({root, ".claude"}))
+		if err := os.write_entire_file(settings, INIT_HOOKS);
+		   err != nil {fail("write %s: %v", settings, err)}
+		fmt.println("wrote", settings)
+	}
+	md := join({root, "CLAUDE.md"})
+	data, _ := os.read_entire_file(md, context.allocator)
+	if strings.contains(string(data), "## odx") {return}
+	if err := os.write_entire_file(md, strings.concatenate({string(data), INIT_CLAUDE_MD}));
+	   err != nil {fail("write %s: %v", md, err)}
+	fmt.println("appended odx section to", md)
 }

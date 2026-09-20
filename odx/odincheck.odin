@@ -83,7 +83,11 @@ run_family_a :: proc(c: ^Ctx) {
 		// odin type-checks dependencies too; each package reports only its own files, and a
 		// broken dependency becomes one summary line so the failure is never silent.
 		foreign_errors := 0
+		seen := make(map[string]bool, context.temp_allocator) // odin repeats some diagnostics (20.8)
 		for e in oe.errors {
+			key := fmt.tprintf("%s:%d:%d:%s", e.pos.file, e.pos.line, e.pos.column, e.msgs)
+			if key in seen {continue}
+			seen[key] = true
 			file, _ := rel_of(c.root, e.pos.file)
 			if dir, _ := rel_of(c.root, filepath.dir(e.pos.file)); dir != p.rel {
 				if e.type == "error" {foreign_errors += 1}
@@ -94,7 +98,21 @@ run_family_a :: proc(c: ^Ctx) {
 				e.type,
 				strings.join(e.msgs, " ", context.temp_allocator),
 			)
-			add(c.r, {file, e.pos.line, e.pos.column, rule, e.type, "odin", msg, false})
+			// odin sometimes reports column 0 (ols clamps too)
+			add(
+				c.r,
+				{
+					file,
+					max(e.pos.line, 1),
+					max(e.pos.column, 1),
+					rule,
+					e.type,
+					"odin",
+					msg,
+					false,
+					"",
+				},
+			)
 		}
 		if foreign_errors > 0 {
 			add(
@@ -111,6 +129,7 @@ run_family_a :: proc(c: ^Ctx) {
 						foreign_errors,
 					),
 					false,
+					"",
 				},
 			)
 		}
