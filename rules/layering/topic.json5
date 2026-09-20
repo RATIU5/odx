@@ -43,7 +43,7 @@
       statement: "foreign imports and foreign blocks live only in edge packages.",
       why: "The FFI boundary is where memory and calling conventions change; keep it in one place.",
       severity: "error",
-      check: { kind: "banned_construct", construct: "foreign", except_roles: ["edge"] },
+      check: { kind: "banned_construct", construct: "foreign_decl", except_roles: ["edge"] },
     },
   ],
 }

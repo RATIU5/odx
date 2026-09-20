@@ -18,7 +18,7 @@
       statement: "Exported procedures that can fail return an error type as the last result, not a bool.",
       why: "A bool says that something failed, never what. Callers cannot branch on it or report it.",
       severity: "error",
-      check: "manual",
+      check: { kind: "manual" },
     },
     {
       id: "R2",
@@ -26,7 +26,7 @@
       statement: "Each package declares one Error enum or union; no string or any errors.",
       why: "A typed error is exhaustively switchable and greppable; strings and any are neither.",
       severity: "error",
-      check: "manual",
+      check: { kind: "manual" },
     },
     {
       id: "R3",
@@ -42,7 +42,7 @@
       statement: "Propagate with or_return; handle locally only when the proc can actually recover.",
       why: "or_return keeps the happy path linear and makes every ignored error a visible choice.",
       severity: "error",
-      check: "manual",
+      check: { kind: "manual" },
     },
   ],
 }

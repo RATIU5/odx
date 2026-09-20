@@ -2,11 +2,10 @@ package odx
 
 import "core:fmt"
 import "core:os"
-import "core:slice"
 import "core:strings"
 
 // `odx fix` (20.1): the textual, unambiguous subset. Today that is one thing: deleting stale
-// stale ignore directives (odx/stale-ignore). Refuses on a dirty worktree unless --allow-dirty and
+// ignore directives (odx/stale-ignore). Refuses on a dirty worktree unless --allow-dirty and
 // always outside git, because `git checkout` is the undo.
 
 cmd_fix :: proc(o: Opts) {
@@ -21,9 +20,10 @@ cmd_fix :: proc(o: Opts) {
 		if len(strings.trim_space(string(out))) > 0 &&
 		   !o.allow_dirty {fail("worktree is dirty; commit first or pass --allow-dirty")}
 	}
-	r, _ := run_checks(&p, Opts{args = o.args})
-	fixed := apply_fixes(p.root, r, o.dry_run)
-	remaining := len(r.violations) - fixed
+	c := make_ctx(&p, o.args[:])
+	run_checks(&c, Opts{args = o.args})
+	fixed := apply_fixes(p.root, c.r, o.dry_run)
+	remaining := len(c.r.violations) - fixed
 	fmt.printfln(
 		"%s %d stale ignores, %d violations remain",
 		"would remove" if o.dry_run else "removed",
@@ -34,32 +34,39 @@ cmd_fix :: proc(o: Opts) {
 }
 
 // apply_fixes deletes every odx/stale-ignore directive in the report; returns how many.
+// The report is sorted by file then line, so one file's directives are contiguous.
 apply_fixes :: proc(root: string, r: ^Report, dry_run: bool) -> (n: int) {
-	by_file := make(map[string][dynamic]int, context.temp_allocator)
-	for v in r.violations {
-		if v.rule != "odx/stale-ignore" {continue}
-		lines := by_file[v.file] // &map[k] is nil for a missing key; copy, append, store back
-		append(&lines, v.line)
-		by_file[v.file] = lines
-	}
-	for file in sorted_keys(by_file) {
-		lines := by_file[file]
-		path := join({root, file})
-		data, err := os.read_entire_file(path, context.allocator)
-		if err != nil {fail("%s: cannot read", path)}
-		src := strings.split_lines(string(data), context.temp_allocator)
-		keep := make([dynamic]string, context.temp_allocator)
-		for l, i in src {
-			if !slice.contains(lines[:], i + 1) {
-				append(&keep, l)
-				continue
-			}
-			n += 1
-			at := strings.index(l, "// " + IGNORE_PREFIX)
-			if dry_run {fmt.printfln("%s:%d: remove `%s`", file, i + 1, strings.trim_space(l[at:]))}
-			if code := strings.trim_right_space(l[:at]); code != "" {append(&keep, code)}
-		}
-		if !dry_run {write_atomic(path, strings.join(keep[:], "\n"))}
+	vs := r.violations[:]
+	for i := 0; i < len(vs); i += 1 {
+		if vs[i].rule != "odx/stale-ignore" {continue}
+		file := vs[i].file
+		j := i
+		for j < len(vs) && vs[j].file == file && vs[j].rule == "odx/stale-ignore" {j += 1}
+		n += len(vs[i:j])
+		strip_lines(join({root, file}), file, vs[i:j], dry_run)
+		i = j - 1
 	}
 	return
+}
+
+// strip_lines removes the directive at (line, col) for each violation; a directive alone on its
+// line takes the line with it.
+@(private = "file")
+strip_lines :: proc(path, rel: string, vs: []Violation, dry_run: bool) {
+	data, err := os.read_entire_file(path, context.allocator)
+	if err != nil {fail("%s: cannot read", path)}
+	src := strings.split_lines(string(data), context.temp_allocator)
+	keep := make([dynamic]string, context.temp_allocator)
+	for l, i in src {
+		v: ^Violation
+		for &cand in vs {if cand.line == i + 1 {v = &cand}}
+		if v == nil {
+			append(&keep, l)
+			continue
+		}
+		at := v.col - 1
+		if dry_run {fmt.printfln("%s:%d: remove `%s`", rel, v.line, strings.trim_space(l[at:]))}
+		if code := strings.trim_right_space(l[:at]); code != "" {append(&keep, code)}
+	}
+	if !dry_run {write_atomic(path, strings.join(keep[:], "\n"))}
 }

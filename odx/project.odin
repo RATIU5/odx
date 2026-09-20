@@ -10,10 +10,13 @@ import "core:slice"
 import "core:strings"
 
 // Project is everything loaded from disk before any command runs: root, rulebook, config.
+// Memory: odx is a short-lived process; loaders allocate on context.allocator and never free,
+// and per-call scratch goes on context.temp_allocator. Nothing runs long enough to matter.
 Project :: struct {
 	root: string, // "" when no odx.json5 was found (topics/explain still work)
 	rb:   Rulebook,
 	cfg:  Config,
+	dirs: []string, // every package directory under root, minus exclude, sorted
 	errs: [dynamic]string, // config and topic problems, sorted
 }
 
@@ -23,21 +26,26 @@ load_project :: proc(root_override: string) -> (p: Project) {
 	p.rb = load_rulebook(p.root, &p.errs)
 	if p.root != "" {
 		p.cfg = load_config(p.root, &p.errs)
-		for id in sorted_keys(p.cfg.disabled) {
-			if find_rule(&p.rb, id) ==
-			   nil {errf(&p.errs, "%s: disabled %s is not a known rule", CONFIG_FILE, id)}
-		}
-		dirs := package_dirs(p.root, &p.cfg)
-		for role in sorted_keys(p.cfg.roles) {
-			for g in p.cfg.roles[role] {
-				hit := false
-				for d in dirs {hit ||= glob_match(g, d)}
-				if !hit {errf(&p.errs, "%s: roles.%s glob %q matches no package directory", CONFIG_FILE, role, g)}
-			}
-		}
+		validate_project(&p)
 	}
 	slice.sort(p.errs[:])
 	return
+}
+
+// validate_project: the checks that need both the rulebook and the tree on disk (20.7).
+validate_project :: proc(p: ^Project) {
+	for id in sorted_keys(p.cfg.disabled) {
+		if find_rule(&p.rb, id) ==
+		   nil {errf(&p.errs, "%s: disabled %s is not a known rule", CONFIG_FILE, id)}
+	}
+	p.dirs = package_dirs(p.root, &p.cfg)
+	for role in sorted_keys(p.cfg.roles) {
+		for g in p.cfg.roles[role] {
+			hit := false
+			for d in p.dirs {hit ||= glob_match(g, d)}
+			if !hit {errf(&p.errs, "%s: roles.%s glob %q matches no package directory", CONFIG_FILE, role, g)}
+		}
+	}
 }
 
 // must_load is load_project for commands that cannot proceed with a broken setup.

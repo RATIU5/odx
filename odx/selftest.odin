@@ -8,7 +8,8 @@ import "core:strings"
 // `odx self-test`: every tests/fixtures/<name>/ with an odx.json5 is checked as a project and
 // its violations are diffed both ways against `// want: topic/R1 other/R2` markers (17.14).
 // A package-level violation (file is a directory) is satisfied by a marker on line 1 of any
-// file in that directory.
+// file in that directory. Fixtures with api/ verify their snapshots; every template is rendered
+// as `Sample` into a temp project and checked (17.16).
 
 Want :: struct {
 	file: string, // relative to the fixture root
@@ -23,60 +24,17 @@ WANT_PREFIX :: "// want:"
 cmd_selftest :: proc(o: Opts) {
 	root := find_root(o.root)
 	if root == "" {fail("no %s found; run from the odx repo", CONFIG_FILE)}
-	dir := join({root, FIXTURES_DIR})
-	entries, rerr := os.read_all_directory_by_path(dir, context.allocator)
-	if rerr != nil {fail("%s: cannot read", dir)}
-	names := make([dynamic]string)
-	for e in entries {if e.type == .Directory && os.exists(join({e.fullpath, CONFIG_FILE})) {append(&names, e.name)}}
-	if len(names) == 0 {fail("no fixtures under %s", dir)}
+	fixtures := project_subdirs(root, FIXTURES_DIR)
+	if len(fixtures) == 0 {fail("no fixtures under %s/%s", root, FIXTURES_DIR)}
 	failed := 0
-	for name in names {
-		bad := run_fixture(join({dir, name}))
-		fmt.printfln("%s %s/%s", "ok  " if bad == 0 else "FAIL", FIXTURES_DIR, name)
+	for e in fixtures {
+		if !os.exists(join({e.fullpath, CONFIG_FILE})) {continue}
+		bad := run_fixture(e.fullpath)
+		fmt.printfln("%s %s/%s", "ok  " if bad == 0 else "FAIL", FIXTURES_DIR, e.name)
 		failed += bad
 	}
 	failed += check_templates(root)
 	if failed > 0 {os.exit(EXIT_VIOLATION)}
-}
-
-// check_templates renders each template as `Sample` into a temp project with a generated
-// odx.json5 and runs the full check there (17.16). api/ snapshots are verified per fixture too.
-check_templates :: proc(root: string) -> (failed: int) {
-	errs: [dynamic]string
-	for &t in load_templates(root, &errs) {
-		tmp, terr := os.make_directory_temp("", "odx-tpl-*", context.allocator)
-		if terr != nil {fail("cannot create temp dir")}
-		defer os.remove_all(tmp)
-		cfg := strings.concatenate(
-			{
-				`{ version: 1, roles: { `,
-				t.role,
-				`: ["sample"] }, layering: { `,
-				t.role,
-				`: { may_import: ["core:*"] } }, odin: { flags: ["-vet", "-vet-tabs", "-vet-cast", "-strict-style", "-warnings-as-errors"] } }`,
-			},
-			context.temp_allocator,
-		)
-		if err := os.write_entire_file(join({tmp, CONFIG_FILE}), cfg);
-		   err != nil {fail("write: %v", err)}
-		render_template(&t, "Sample", tmp)
-		p := load_project(tmp)
-		bad := len(p.errs)
-		for e in p.errs {fmt.println("  config:", e)}
-		if bad == 0 {
-			r, code := run_checks(&p, Opts{})
-			fmt.print(report_text(r))
-			for e in r.tool_errors {fmt.println("  tool error:", e)}
-			if code != 0 {bad += 1}
-		}
-		fmt.printfln("%s template %s", "ok  " if bad == 0 else "FAIL", t.name)
-		failed += bad
-	}
-	for e in errs {
-		fmt.println("  template:", e)
-		failed += 1
-	}
-	return
 }
 
 // run_fixture returns the number of mismatches, printing each one.
@@ -86,24 +44,14 @@ run_fixture :: proc(dir: string) -> (bad: int) {
 		for e in p.errs {fmt.println("  config:", e)}
 		return len(p.errs)
 	}
-	r, _ := run_checks(&p, Opts{})
-	for e in r.tool_errors {
+	c := make_ctx(&p, nil)
+	run_checks(&c, Opts{})
+	for e in c.r.tool_errors {
 		fmt.println("  tool error:", e)
 		bad += 1
 	}
 	wants := collect_wants(dir)
-	bad += check_fix_pairs(dir, r)
-	if os.is_directory(join({dir, API_DIR})) {
-		c := Ctx {
-			root = dir,
-			cfg  = &p.cfg,
-			rb   = &p.rb,
-			r    = new(Report),
-		}
-		c.pkgs = project_packages(&p, nil)
-		bad += api_snapshots(&c, false)
-	}
-	for v in r.violations {
+	for v in c.r.violations {
 		if w := match_want(wants[:], v); w != nil {
 			w.used = true
 			continue
@@ -117,6 +65,8 @@ run_fixture :: proc(dir: string) -> (bad: int) {
 			bad += 1
 		}
 	}
+	bad += check_fix_pairs(dir, c.r)
+	if os.is_directory(join({dir, API_DIR})) {bad += api_snapshots(&c, false)}
 	return
 }
 
@@ -135,8 +85,8 @@ match_want :: proc(wants: []Want, v: Violation) -> ^Want {
 	return nil
 }
 
-// collect_wants scans every .odin file under root for `// want:` markers (text, not AST, so
-// files that fail to parse still carry expectations).
+// collect_wants scans every .odin file (and odx.json5) under root for `// want:` markers.
+// Text, not AST, so files that fail to parse still carry expectations.
 collect_wants :: proc(root: string) -> (out: [dynamic]Want) {
 	w := os.walker_create_path(root)
 	defer os.walker_destroy(&w)
@@ -168,8 +118,7 @@ check_fix_pairs :: proc(dir: string, r: ^Report) -> (bad: int) {
 		   strings.has_suffix(fi.name, ".odin.after") {append(&afters, fi.fullpath)}
 	}
 	if len(afters) == 0 {return}
-	tmp, terr := os.make_directory_temp("", "odx-fix-*", context.allocator)
-	if terr != nil {fail("cannot create temp dir")}
+	tmp := temp_dir("odx-fix-*")
 	defer os.remove_all(tmp)
 	copy_tree(dir, tmp)
 	// the report's paths are relative, so it applies to the copy unchanged
@@ -184,12 +133,53 @@ check_fix_pairs :: proc(dir: string, r: ^Report) -> (bad: int) {
 		}
 	}
 	p := load_project(tmp)
-	r2, _ := run_checks(&p, Opts{})
-	if n := apply_fixes(tmp, r2, true); n > 0 {
+	c := make_ctx(&p, nil)
+	run_checks(&c, Opts{})
+	if n := apply_fixes(tmp, c.r, true); n > 0 {
 		fmt.printfln("  fix is not idempotent: second run would change %d lines", n)
 		bad += 1
 	}
 	return
+}
+
+// check_templates renders each template into a temp project built in memory (no odx.json5 on
+// disk) and runs the full check there.
+check_templates :: proc(root: string) -> (failed: int) {
+	errs: [dynamic]string
+	for &t in load_templates(root, &errs) {
+		tmp := temp_dir("odx-tpl-*")
+		defer os.remove_all(tmp)
+		render_template(&t, "Sample", tmp)
+		p := Project {
+			root = tmp,
+			rb   = load_rulebook("", &errs),
+			cfg  = default_config(),
+		}
+		clear(&p.cfg.roles)
+		p.cfg.roles[t.role] = {"sample"}
+		clear(&p.cfg.layering)
+		p.cfg.layering[t.role] = {
+			may_import = {"core:*"},
+		}
+		p.dirs = package_dirs(tmp, &p.cfg)
+		c := make_ctx(&p, nil)
+		code := run_checks(&c, Opts{})
+		fmt.print(report_text(c.r))
+		for e in c.r.tool_errors {fmt.println("  tool error:", e)}
+		fmt.printfln("%s template %s", "ok  " if code == 0 else "FAIL", t.name)
+		if code != 0 {failed += 1}
+	}
+	for e in errs {
+		fmt.println("  template:", e)
+		failed += 1
+	}
+	return
+}
+
+temp_dir :: proc(pattern: string) -> string {
+	tmp, err := os.make_directory_temp("", pattern, context.allocator)
+	if err != nil {fail("cannot create temp dir")}
+	return tmp
 }
 
 copy_tree :: proc(from, to: string) {

@@ -33,9 +33,21 @@ odin_flags :: proc(c: ^Ctx) -> []string {
 	append(&out, ..c.cfg.odin.flags)
 	names := make(map[string]bool, context.temp_allocator)
 	for p in c.pkgs {if p.pkg != nil {names[p.pkg.name] = true}}
-	if len(names) >
-	   0 {append(&out, fmt.aprintf("-vet-packages:%s", strings.join(sorted_keys(names), ",", context.temp_allocator)))}
-	for k in sorted_keys(c.cfg.odin.collections) {append(&out, fmt.aprintf("-collection:%s=%s", k, join({c.root, c.cfg.odin.collections[k]})))}
+	if len(names) > 0 {
+		append(
+			&out,
+			fmt.aprintf(
+				"-vet-packages:%s",
+				strings.join(sorted_keys(names), ",", context.temp_allocator),
+			),
+		)
+	}
+	for k in sorted_keys(c.cfg.odin.collections) {
+		append(
+			&out,
+			fmt.aprintf("-collection:%s=%s", k, join({c.root, c.cfg.odin.collections[k]})),
+		)
+	}
 	for a in c.cfg.odin.custom_attributes {append(&out, fmt.aprintf("-custom-attribute:%s", a))}
 	return out[:]
 }
@@ -47,7 +59,7 @@ run_odin :: proc(c: ^Ctx, args: ..string) -> (exit_code: int, stderr: string, ok
 	append(&cmd, ..args)
 	state, _, err_bytes, err := os.process_exec({command = cmd[:]}, context.allocator)
 	if err != nil {
-		append(&c.r.tool_errors, fmt.aprintf("cannot run %s: %v", cmd[0], err))
+		tool_error(c.r, "cannot run %s: %v", cmd[0], err)
 		return
 	}
 	return state.exit_code, strings.trim_space(string(err_bytes)), true
@@ -61,24 +73,22 @@ run_family_a :: proc(c: ^Ctx) {
 		append(&args, "check", p.dir)
 		append(&args, ..flags)
 		append(&args, "-no-entry-point", "-json-errors")
-		code, text, ok := run_odin(c, ..args[:])
-		// ponytail: the 2026-09 nightly segfaults intermittently (exit 11, no output); retry twice
-		for _ in 0 ..< 2 {
-			if !(ok && code != 0 && text == "") {break}
+		code: int
+		text: string
+		ok: bool
+		for _ in 0 ..< 3 {
 			code, text, ok = run_odin(c, ..args[:])
+			// ponytail: the 2026-09 nightly segfaults intermittently (exit 11, no output): retry
+			if !(ok && code != 0 && text == "") {break}
 		}
 		if !ok {return}
 		if text == "" {
-			if code !=
-			   0 {append(&c.r.tool_errors, fmt.aprintf("odin check %s exited %d with no output", p.rel, code))}
+			if code != 0 {tool_error(c.r, "odin check %s exited %d with no output", p.rel, code)}
 			continue // 17.1: nothing printed on a clean run
 		}
 		oe: Odin_Errors
 		if uerr := json.unmarshal_string(text, &oe); uerr != nil {
-			append(
-				&c.r.tool_errors,
-				fmt.aprintf("odin check %s: unparseable -json-errors output: %s", p.rel, text),
-			)
+			tool_error(c.r, "odin check %s: unparseable -json-errors output: %s", p.rel, text)
 			continue
 		}
 		// odin type-checks dependencies too; each package reports only its own files, and a
@@ -100,38 +110,21 @@ run_family_a :: proc(c: ^Ctx) {
 				strings.join(e.msgs, " ", context.temp_allocator),
 			)
 			// odin sometimes reports column 0 (ols clamps too)
-			add(
-				c.r,
-				{
-					file,
-					max(e.pos.line, 1),
-					max(e.pos.column, 1),
-					rule,
-					e.type,
-					"odin",
-					msg,
-					false,
-					"",
-				},
-			)
+			note(c.r, rule, "odin", file, max(e.pos.line, 1), max(e.pos.column, 1), msg)
+			if e.type != "error" {c.r.violations[len(c.r.violations) - 1].severity = .warning}
 		}
 		if foreign_errors > 0 {
-			add(
+			note(
 				c.r,
-				{
-					p.rel if p.rel != "" else ".",
-					1,
-					1,
-					"odin/error",
-					"error",
-					"odin",
-					fmt.aprintf(
-						"a dependency fails to type-check (%d errors outside this package); run `odx check` on it",
-						foreign_errors,
-					),
-					false,
-					"",
-				},
+				"odin/error",
+				"odin",
+				p.rel if p.rel != "" else ".",
+				1,
+				1,
+				fmt.aprintf(
+					"a dependency fails to type-check (%d errors outside this package); run `odx check` on it",
+					foreign_errors,
+				),
 			)
 		}
 	}

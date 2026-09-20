@@ -4,83 +4,108 @@ import "core:fmt"
 import "core:os"
 import "core:strings"
 
-// `odx doctor`: the toolchain and task-file drift report (sections 3, 17.11, 17.15).
-// Errors exit 2: config broken, odin missing, a forbidden flag in use. Everything else is a
-// warning, except version drift under --ci.
+// `odx doctor`: the toolchain and task-file drift report (sections 3, 17.11, 17.15, 20.3).
+// Errors exit 2: config broken, odin missing, a forbidden flag in use, a dirty lock.
+// Everything else is a warning, except version drift under --ci.
+
+Doctor :: struct {
+	errors, warnings: int,
+}
+
+warn :: proc(d: ^Doctor, f: string, args: ..any) {
+	d.warnings += 1
+	fmt.print("warning: ")
+	fmt.printfln(f, ..args)
+}
+
+err :: proc(d: ^Doctor, f: string, args: ..any) {
+	d.errors += 1
+	fmt.print("error: ")
+	fmt.printfln(f, ..args)
+}
 
 cmd_doctor :: proc(o: Opts) {
 	p := must_load(o, true)
-	errors, warnings := 0, 0
-	warn :: proc(n: ^int, f: string, args: ..any) {
-		n^ += 1
-		fmt.print("warning: ")
-		fmt.printfln(f, ..args)
+	c := make_ctx(&p, nil)
+	d: Doctor
+	check_toolchain(&d, &c, o.ci)
+	check_task_files(&d, &p)
+	// the canonical argv (20.3): the hook, CI and this all shell out to the same odin flags
+	fmt.printfln(
+		"expected test task: odin test . %s %s",
+		strings.join(odin_flags(&c), " ", context.temp_allocator),
+		strings.join(p.cfg.odin.required_flags, " ", context.temp_allocator),
+	)
+	check_attachment(&d, &c)
+	if o.relock {write_lock(p.root)}
+	if o.verify || o.ci {
+		switch state, text := lock_check(p.root); state {
+		case .missing:
+			warn(&d, "no %s; %s", LOCK_FILE, LOCK_HINT)
+		case .dirty:
+			err(&d, "%s", text)
+		case .clean:
+			fmt.println("lock: ok")
+		}
 	}
-	err :: proc(n: ^int, f: string, args: ..any) {
-		n^ += 1
-		fmt.print("error: ")
-		fmt.printfln(f, ..args)
-	}
+	for t in p.rb.topics {if t.overrides {warn(&d, "topic %s is overridden by %s", t.name, t.source)}}
+	for id in sorted_keys(p.cfg.disabled) {fmt.printfln("disabled: %s (%s)", id, p.cfg.disabled[id])}
+	fmt.printfln("%d errors, %d warnings", d.errors, d.warnings)
+	if d.errors > 0 {os.exit(EXIT_TOOL)}
+}
 
-	exe := odin_exe(&p.cfg)
+// check_toolchain: odin runs, its version matches, and `odin check` accepts every config flag.
+check_toolchain :: proc(d: ^Doctor, c: ^Ctx, ci: bool) {
+	exe := odin_exe(c.cfg)
 	version := odin_output(exe, "version")
 	if version == "" {
-		err(&errors, "cannot run %s (set odin.path in %s or ODX_ODIN)", exe, CONFIG_FILE)
-	} else {
-		_, _, ver := strings.partition(version, "version ")
-		fmt.printfln("odin: %s %s", exe, ver)
-		if want := p.cfg.odin.version; want != "" && !strings.has_prefix(ver, want) {
-			if o.ci {err(&errors, "odin version %s does not match odin.version %s", ver, want)} else {warn(&warnings, "odin version %s does not match odin.version %s", ver, want)}
-		}
-		help := odin_output(exe, "help", "check")
-		for f in p.cfg.odin.flags {
-			name, _, _ := strings.partition(f, ":")
-			if !strings.contains(
+		err(d, "cannot run %s (set odin.path in %s or ODX_ODIN)", exe, CONFIG_FILE)
+		return
+	}
+	_, _, ver := strings.partition(version, "version ")
+	fmt.printfln("odin: %s %s", exe, ver)
+	if want := c.cfg.odin.version; want != "" && !strings.has_prefix(ver, want) {
+		report := err if ci else warn
+		report(d, "odin version %s does not match odin.version %s", ver, want)
+	}
+	help := odin_output(exe, "help", "check")
+	for f in c.cfg.odin.flags {
+		name, _, _ := strings.partition(f, ":")
+		if !strings.contains(
+			   help,
+			   strings.concatenate({"\n\t", name, "\n"}, context.temp_allocator),
+		   ) &&
+		   !strings.contains(
 				   help,
-				   strings.concatenate({"\n\t", name, "\n"}, context.temp_allocator),
-			   ) &&
-			   !strings.contains(
-					   help,
-					   strings.concatenate({"\n\t", name, ":"}, context.temp_allocator),
-				   ) {
-				err(&errors, "flag %s is not accepted by `odin check` on this compiler", f)
-			}
+				   strings.concatenate({"\n\t", name, ":"}, context.temp_allocator),
+			   ) {
+			err(d, "flag %s is not accepted by `odin check` on this compiler", f)
 		}
-	}
-
-	for f in p.cfg.odin.flags {
 		if flag_listed(
-			p.cfg.odin.forbidden_flags,
+			c.cfg.odin.forbidden_flags,
 			f,
-		) {err(&errors, "odin.flags contains forbidden flag %s", f)}
+		) {err(d, "odin.flags contains forbidden flag %s", f)}
 	}
-	mise_path := join({p.root, "mise.toml"})
-	if mise, rerr := os.read_entire_file(mise_path, context.allocator); rerr == nil {
+}
+
+// check_task_files: mise.toml carries the required flags and none of the forbidden ones; the
+// hook config and CI workflow call odx rather than a copy of it (20.3).
+check_task_files :: proc(d: ^Doctor, p: ^Project) {
+	if mise, rerr := os.read_entire_file(join({p.root, "mise.toml"}), context.allocator);
+	   rerr == nil {
 		text := string(mise)
 		for f in p.cfg.odin.forbidden_flags {
-			if strings.contains(text, f) {err(&errors, "mise.toml uses forbidden flag %s", f)}
+			if strings.contains(text, f) {err(d, "mise.toml uses forbidden flag %s", f)}
 		}
 		for f in p.cfg.odin.required_flags {
 			if !strings.contains(
 				text,
 				f,
-			) {warn(&warnings, "mise.toml test task lacks required flag %s", f)}
+			) {warn(d, "mise.toml test task lacks required flag %s", f)}
 		}
 	} else {
-		warn(&warnings, "no mise.toml (odx init writes one)")
+		warn(d, "no mise.toml (odx init writes one)")
 	}
-
-	// the canonical test line, -vet-packages computed from the project's package names (17.15)
-	names := make(map[string]bool, context.temp_allocator)
-	for pk in load_packages(p.root, &p.cfg, package_dirs(p.root, &p.cfg)) {if pk.pkg != nil {names[pk.pkg.name] = true}}
-	fmt.printfln(
-		"expected test task: odin test . %s %s -vet-packages:%s",
-		strings.join(p.cfg.odin.flags, " ", context.temp_allocator),
-		strings.join(p.cfg.odin.required_flags, " ", context.temp_allocator),
-		strings.join(sorted_keys(names), ",", context.temp_allocator),
-	)
-
-	// one check path, three entry points (20.3): the hook and CI must call odx, not a copy of it
 	if hooks, herr := os.read_entire_file(
 		join({p.root, ".claude", "settings.json"}),
 		context.allocator,
@@ -89,51 +114,26 @@ cmd_doctor :: proc(o: Opts) {
 			if !strings.contains(
 				string(hooks),
 				cmd,
-			) {warn(&warnings, ".claude/settings.json does not run `odx %s` (odx init --hooks prints the block)", cmd)}
+			) {warn(d, ".claude/settings.json does not run `odx %s` (odx init --hooks prints the block)", cmd)}
 		}
 	}
 	if ci, cerr := os.read_entire_file(
 		join({p.root, ".github", "workflows", "ci.yml"}),
 		context.allocator,
 	); cerr == nil && !strings.contains(string(ci), "mise run ci") {
-		warn(&warnings, ".github/workflows/ci.yml does not run `mise run ci`")
+		warn(d, ".github/workflows/ci.yml does not run `mise run ci`")
 	}
-	// a topic whose roles no package has never attaches (20.10)
+}
+
+// check_attachment: a topic whose roles no package has never attaches (20.10).
+check_attachment :: proc(d: ^Doctor, c: ^Ctx) {
 	roles_in_use := make(map[string]bool, context.temp_allocator)
-	for d in package_dirs(p.root, &p.cfg) {
-		if role, n := role_of(&p.cfg, d); n == 1 {roles_in_use[role] = true}
-	}
-	for t in p.rb.topics {
+	for pk in c.pkgs {if pk.role_count == 1 {roles_in_use[pk.role] = true}}
+	for t in c.rb.topics {
 		attached := len(t.applies_to.roles) == 0
 		for r in t.applies_to.roles {attached ||= roles_in_use[r]}
-		if !attached {warn(&warnings, "topic %s applies to roles %v but no package has one", t.name, t.applies_to.roles)}
+		if !attached {warn(d, "topic %s applies to roles %v but no package has one", t.name, t.applies_to.roles)}
 	}
-	if o.relock {write_lock(p.root)}
-	if o.verify || o.ci {
-		diff, has := verify_lock(p.root)
-		switch {
-		case !has:
-			warn(
-				&warnings,
-				"no %s; a human writes it with ODX_ALLOW_PROTECTED=1 odx doctor --relock",
-				LOCK_FILE,
-			)
-		case len(diff) > 0:
-			err(
-				&errors,
-				"protected files differ from %s (approve with --relock):\n  %s",
-				LOCK_FILE,
-				strings.join(diff, "\n  ", context.temp_allocator),
-			)
-		case:
-			fmt.println("lock: ok")
-		}
-	}
-	for t in p.rb.topics {if t.overrides {warn(&warnings, "topic %s is overridden by %s", t.name, t.source)}}
-	for id in sorted_keys(p.cfg.disabled) {fmt.printfln("disabled: %s (%s)", id, p.cfg.disabled[id])}
-
-	fmt.printfln("%d errors, %d warnings", errors, warnings)
-	if errors > 0 {os.exit(EXIT_TOOL)}
 }
 
 // odin_output runs odin with args and returns stdout+stderr trimmed, "" if it cannot run.
@@ -141,8 +141,8 @@ odin_output :: proc(exe: string, args: ..string) -> string {
 	cmd := make([dynamic]string, context.temp_allocator)
 	append(&cmd, exe)
 	append(&cmd, ..args)
-	_, out, errb, err := os.process_exec({command = cmd[:]}, context.allocator)
-	if err != nil {return ""}
+	_, out, errb, perr := os.process_exec({command = cmd[:]}, context.allocator)
+	if perr != nil {return ""}
 	return strings.trim_space(strings.concatenate({string(out), string(errb)}))
 }
 

@@ -26,7 +26,7 @@
       statement: "A procedure that allocates takes `allocator := context.allocator` as its last parameter and documents who frees.",
       why: "Callers pick arenas or trackers; the proc stays testable and leak-free by construction.",
       severity: "error",
-      check: "manual",
+      check: { kind: "manual" },
     },
     {
       id: "R3",
@@ -34,7 +34,7 @@
       statement: "Tests run with -sanitize:address and -define:ODIN_TEST_FAIL_ON_BAD_MEMORY=true.",
       why: "Leaks are only WARN by default; the define turns them into failures.",
       severity: "error",
-      check: "manual",
+      check: { kind: "manual" },
     },
   ],
 }

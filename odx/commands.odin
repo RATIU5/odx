@@ -8,7 +8,7 @@ import "core:slice"
 import "core:strings"
 
 print_json :: proc(v: any) {
-	out, err := json.marshal(v, {pretty = true, sort_maps_by_key = true})
+	out, err := json.marshal(v, {pretty = true, sort_maps_by_key = true, use_enum_names = true})
 	if err != nil {fail("json: %v", err)}
 	fmt.println(string(out))
 }
@@ -50,9 +50,8 @@ cmd_explain :: proc(o: Opts) {
 		if r.retired || (o.rule != "" && r.id != o.rule) {continue}
 		shown += 1
 		id := strings.concatenate({t.name, "/", r.id}, context.temp_allocator)
-		how := "check: manual (reviewer checklist)"
-		if c, ok := r.check.(Check_Spec);
-		   ok {how = strings.concatenate({"check: ", c.kind}, context.temp_allocator)}
+		how := fmt.tprintf("check: %v", r.check.kind)
+		if r.check.kind == .manual {how = "check: manual (reviewer checklist)"}
 		if reason, dis := p.cfg.disabled[id];
 		   dis {how = strings.concatenate({how, "  DISABLED: ", reason}, context.temp_allocator)}
 		fmt.printfln("%-14s %s\n%-14s why: %s\n%-14s %s", id, r.statement, "", r.why, "", how)
@@ -71,7 +70,7 @@ cmd_checklist :: proc(o: Opts) {
 	for t in p.rb.topics {
 		if len(o.args) > 0 && !slice.contains(o.args[:], t.name) {continue}
 		for r in t.rules {
-			if _, is_spec := r.check.(Check_Spec); r.retired || is_spec {continue}
+			if r.retired || r.check.kind != .manual {continue}
 			fmt.printfln("- [%s/%s] %s\n  why: %s", t.name, r.id, r.statement, r.why)
 		}
 	}

@@ -30,15 +30,9 @@ KIND_RANK := [doc.Entity_Kind]int {
 
 cmd_api :: proc(o: Opts) {
 	p := must_load(o, true)
-	c := Ctx {
-		root = p.root,
-		cfg  = &p.cfg,
-		rb   = &p.rb,
-		r    = new(Report),
-	}
-	c.pkgs = project_packages(&p, o.args[:])
+	c := make_ctx(&p, o.args[:])
 	changed := api_snapshots(&c, os.get_env("ODX_UPDATE_SNAPSHOTS", context.temp_allocator) == "1")
-	for e in c.r.tool_errors {fmt.eprintln("odx: tool error:", e)}
+	print_tool_errors(c.r)
 	if len(c.r.tool_errors) > 0 {os.exit(EXIT_TOOL)}
 	if changed > 0 {os.exit(EXIT_VIOLATION)}
 }
@@ -48,7 +42,7 @@ cmd_api :: proc(o: Opts) {
 api_snapshots :: proc(c: ^Ctx, update: bool) -> (changed: int) {
 	tmp, terr := os.make_directory_temp("", "odx-api-*", context.allocator)
 	if terr != nil {
-		append(&c.r.tool_errors, "cannot create temp dir for odin doc")
+		tool_error(c.r, "cannot create temp dir for odin doc")
 		return
 	}
 	defer os.remove_all(tmp)
@@ -57,7 +51,7 @@ api_snapshots :: proc(c: ^Ctx, update: bool) -> (changed: int) {
 		h, status := doc_package(c, &p, tmp, i, flags)
 		if status == .Fatal {return}
 		if status == .Skipped {
-			append(&c.r.tool_errors, fmt.aprintf("%s does not type-check; run odx check", p.rel))
+			tool_error(c.r, "%s does not type-check; run odx check", p.rel)
 			continue
 		}
 		text := render_api(h, p.dir)

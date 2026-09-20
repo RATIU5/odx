@@ -13,6 +13,7 @@ import "core:strings"
 // ODX_ALLOW_PROTECTED=1 `odx doctor --relock`, and that diff is the approval record.
 
 LOCK_FILE :: ".odx/lock"
+LOCK_HINT :: "a human approves with ODX_ALLOW_PROTECTED=1 odx doctor --relock"
 PROTECTED := []string {
 	"rules/**",
 	".odx/**",
@@ -24,6 +25,49 @@ PROTECTED := []string {
 }
 LOCK_SKIP := []string{LOCK_FILE, ".odx/cache/**"}
 
+Lock_State :: enum {
+	clean,
+	dirty,
+	missing, // no lock yet: nothing to verify against
+}
+
+// lock_check compares the tree to the lock; text is the human message for a dirty lock.
+lock_check :: proc(root: string) -> (state: Lock_State, text: string) {
+	old, err := os.read_entire_file(join({root, LOCK_FILE}), context.allocator)
+	if err != nil {return .missing, ""}
+	want := parse_manifest(string(old))
+	have := parse_manifest(lock_manifest(root))
+	diff := make([dynamic]string, context.temp_allocator)
+	for path in sorted_keys(have) {
+		if w, ok := want[path]; !ok {
+			append(&diff, strings.concatenate({"added   ", path}, context.temp_allocator))
+		} else if w != have[path] {
+			append(&diff, strings.concatenate({"changed ", path}, context.temp_allocator))
+		}
+	}
+	for path in sorted_keys(want) {
+		if path not_in
+		   have {append(&diff, strings.concatenate({"removed ", path}, context.temp_allocator))}
+	}
+	if len(diff) == 0 {return .clean, ""}
+	return .dirty, fmt.aprintf(
+		"protected files differ from %s; %s:\n  %s",
+		LOCK_FILE,
+		LOCK_HINT,
+		strings.join(diff[:], "\n  ", context.temp_allocator),
+	)
+}
+
+@(private = "file")
+parse_manifest :: proc(text: string) -> map[string]string {
+	m := make(map[string]string, context.temp_allocator)
+	for l in strings.split_lines(text, context.temp_allocator) {
+		sum, _, path := strings.partition(l, "  ")
+		if path != "" {m[path] = sum}
+	}
+	return m
+}
+
 // lock_manifest hashes every protected file under root.
 lock_manifest :: proc(root: string) -> string {
 	lines := make([dynamic]string)
@@ -34,46 +78,23 @@ lock_manifest :: proc(root: string) -> string {
 		switch {
 		case fi.type == .Symlink || (fi.type == .Directory && (rel == ".git" || rel == "build")):
 			os.walker_skip_dir(&w)
-		case fi.type == .Regular && matches_glob(PROTECTED, rel) && !matches_glob(LOCK_SKIP, rel):
+		case fi.type == .Regular && path_matches(PROTECTED, rel) && !path_matches(LOCK_SKIP, rel):
 			data, err := os.read_entire_file(fi.fullpath, context.allocator)
 			if err != nil {fail("%s: cannot read", fi.fullpath)}
-			sum := hex.encode(hash.hash_bytes(.SHA256, data))
-			append(&lines, fmt.aprintf("%s  %s", string(sum), rel))
+			append(&lines, fmt.aprintf("%s  %s", sha256_hex(data), rel))
 		}
 	}
 	slice.sort(lines[:])
 	return strings.concatenate({strings.join(lines[:], "\n"), "\n"})
 }
 
-matches_glob :: proc(globs: []string, rel: string) -> bool {
-	for g in globs {if glob_match(g, rel) {return true}}
-	return false
+sha256_hex :: proc(data: []byte) -> string {
+	return string(hex.encode(hash.hash_bytes(.SHA256, data)))
 }
 
-// verify_lock returns the changed, added and removed protected paths. has_lock is false when
-// no lock exists yet (nothing to verify against).
-verify_lock :: proc(root: string) -> (diff: []string, has_lock: bool) {
-	old, err := os.read_entire_file(join({root, LOCK_FILE}), context.allocator)
-	if err != nil {return nil, false}
-	want := make(map[string]string, context.temp_allocator)
-	for l in strings.split_lines(string(old), context.temp_allocator) {
-		sum, _, path := strings.partition(l, "  ")
-		if path != "" {want[path] = sum}
-	}
-	out := make([dynamic]string)
-	seen := make(map[string]bool, context.temp_allocator)
-	for l in strings.split_lines(lock_manifest(root), context.temp_allocator) {
-		sum, _, path := strings.partition(l, "  ")
-		if path == "" {continue}
-		seen[path] = true
-		if w, ok := want[path]; !ok {
-			append(&out, strings.concatenate({"added   ", path}))
-		} else if w != sum {
-			append(&out, strings.concatenate({"changed ", path}))
-		}
-	}
-	for path in sorted_keys(want) {if path not_in seen {append(&out, strings.concatenate({"removed ", path}))}}
-	return out[:], true
+path_matches :: proc(globs: []string, rel: string) -> bool {
+	for g in globs {if glob_match(g, rel) {return true}}
+	return false
 }
 
 write_lock :: proc(root: string) {

@@ -4,14 +4,14 @@ import "core:encoding/json"
 import "core:fmt"
 import "core:os"
 import "core:path/filepath"
+import "core:reflect"
 import "core:slice"
 import "core:strings"
 
 CONFIG_FILE :: "odx.json5"
-
-// Config mirrors odx.json5 exactly; nothing runtime-only lives here.
 CONFIG_VERSION :: 1
 
+// Config mirrors odx.json5 exactly; nothing runtime-only lives here.
 Config :: struct {
 	version:      int, // must equal CONFIG_VERSION (20.7)
 	roles:        map[string][]string, // role -> dir globs, relative to root (17.5)
@@ -34,9 +34,16 @@ Odin_Cfg :: struct {
 	collections:          map[string]string,
 	custom_attributes:    []string,
 	allowed_vet_disables: []string, // 17.2
-	explicit_allocators:  string, // "pure" (default) | "all" | "off"
+	explicit_allocators:  Explicit_Allocators,
 	version:              string,
 	path:                 string,
+}
+
+// Explicit_Allocators: which roles must carry `#+vet explicit-allocators` (allocators/R1).
+Explicit_Allocators :: enum {
+	pure, // pure and service packages (the default)
+	all,
+	off,
 }
 
 CONFIG_KEYS := []string {
@@ -59,7 +66,6 @@ ODIN_KEYS := []string {
 	"version",
 	"path",
 }
-EXPLICIT_ALLOCATOR_MODES := []string{"", "pure", "all", "off"}
 DEFAULT_EXCLUDE := []string{".odx/**", "rules/**", "vendor/**", "build/**"}
 
 errf :: proc(errs: ^[dynamic]string, f: string, args: ..any) {
@@ -89,10 +95,11 @@ load_config :: proc(root: string, errs: ^[dynamic]string) -> (cfg: Config) {
 		errf(errs, "%s: cannot read", path)
 		return
 	}
-	if !unmarshal_json5(string(data), &cfg, path, CONFIG_KEYS, errs) {return}
-	if v, perr := json.parse_string(string(data), spec = .JSON5); perr == nil {
-		if od, has := v.(json.Object)["odin"]; has {check_keys(errs, path, "odin", od, ODIN_KEYS)}
-	}
+	tree, ok := unmarshal_json5(string(data), &cfg, path, CONFIG_KEYS, errs)
+	if !ok {return}
+	odin_obj, _ := tree["odin"].(json.Object)
+	check_keys(errs, path, "odin.", odin_obj, ODIN_KEYS)
+	check_enum(errs, path, odin_obj, "odin.explicit_allocators", Explicit_Allocators)
 	if cfg.exclude == nil {cfg.exclude = DEFAULT_EXCLUDE}
 	if cfg.version != CONFIG_VERSION {
 		errf(
@@ -120,9 +127,6 @@ load_config :: proc(root: string, errs: ^[dynamic]string) -> (cfg: Config) {
 			}
 		}
 	}
-	if !slice.contains(EXPLICIT_ALLOCATOR_MODES, cfg.odin.explicit_allocators) {
-		errf(errs, "%s: odin.explicit_allocators must be pure, all or off", path)
-	}
 	if cfg.default_role != "" && cfg.default_role not_in cfg.roles {
 		errf(errs, "%s: default_role %s is not a role", path, cfg.default_role)
 	}
@@ -133,50 +137,73 @@ load_config :: proc(root: string, errs: ^[dynamic]string) -> (cfg: Config) {
 	return
 }
 
-// unmarshal_json5 fills v and reports unknown top-level keys, which unmarshal silently skips (17.20).
+// unmarshal_json5 fills v and returns the parsed tree for the checks unmarshal cannot do:
+// unknown keys (silently skipped, 17.20) and misspelt enum names (silently zero).
 unmarshal_json5 :: proc(
 	text: string,
 	v: ^$T,
 	at: string,
 	keys: []string,
 	errs: ^[dynamic]string,
-) -> bool {
+) -> (
+	tree: json.Object,
+	ok: bool,
+) {
 	if uerr := json.unmarshal_string(text, v, spec = .JSON5); uerr != nil {
 		errf(errs, "%s: %v", at, uerr)
-		return false
+		return
 	}
-	if val, perr := json.parse_string(text, spec = .JSON5); perr == nil {
-		check_keys(errs, at, "", val, keys)
-	}
-	return true
+	val, perr := json.parse_string(text, spec = .JSON5)
+	if perr != nil {return}
+	tree, ok = val.(json.Object)
+	check_keys(errs, at, "", tree, keys)
+	return
 }
 
-// check_keys appends an error for every key of v (an object) not in allowed.
-check_keys :: proc(errs: ^[dynamic]string, at, section: string, v: json.Value, allowed: []string) {
-	obj, ok := v.(json.Object)
-	if !ok {return}
+json_array :: proc(obj: json.Object, key: string) -> []json.Value {
+	arr, _ := obj[key].(json.Array)
+	return arr[:]
+}
+
+// check_keys appends an error for every key of obj not in allowed. A nil obj passes.
+check_keys :: proc(
+	errs: ^[dynamic]string,
+	at, section: string,
+	obj: json.Object,
+	allowed: []string,
+) {
 	keys, _ := slice.map_keys(obj, context.temp_allocator)
 	slice.sort(keys)
 	for k in keys {
-		if !slice.contains(allowed, k) {
-			errf(
-				errs,
-				"%s: unknown key %s%s",
-				at,
-				section,
-				k if section == "" else strings.concatenate({".", k}, context.temp_allocator),
-			)
-		}
+		if !slice.contains(allowed, k) {errf(errs, "%s: unknown key %s%s", at, section, k)}
 	}
+}
+
+require_key :: proc(errs: ^[dynamic]string, at: string, obj: json.Object, key: string) {
+	if key not_in obj {errf(errs, "%s: %s is required", at, key)}
+}
+
+// check_enum: if obj[key] is present it must spell one of E's names.
+check_enum :: proc(errs: ^[dynamic]string, at: string, obj: json.Object, key: string, $E: typeid) {
+	name := key[strings.last_index(key, ".") + 1:]
+	v, present := obj[name]
+	if !present {return}
+	if s, is_str := v.(json.String); is_str {
+		if _, found := reflect.enum_from_name(E, s); found {return}
+	}
+	errf(errs, "%s: %s must be one of %v", at, key, reflect.enum_field_names(E))
+}
+
+// reflect_enum parses a lowercase enum name; the CLI's subcommand words are enums too.
+reflect_enum :: proc($E: typeid, name: string) -> (E, bool) {
+	return reflect.enum_from_name(E, name)
 }
 
 // role_of resolves the role of a package directory (relative to root, `/` separators).
 // n is the number of matching roles: 0 = unmapped, >1 = config conflict (17.5).
 role_of :: proc(cfg: ^Config, rel_dir: string) -> (role: string, n: int) {
-	names, _ := slice.map_keys(cfg.roles, context.temp_allocator)
-	slice.sort(names)
-	for name in names {
-		for g in cfg.roles[name] {
+	for name, globs in cfg.roles {
+		for g in globs {
 			if glob_match(g, rel_dir) {
 				role = name
 				n += 1

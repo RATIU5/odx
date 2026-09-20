@@ -27,47 +27,58 @@ Topic :: struct {
 	overrides:         bool, // project topic shadowing a builtin of the same name
 }
 
+// Rule is one entry of a topic's frontmatter, the only registry of rule metadata (20.4).
+// Enum fields unmarshal from their lowercase names; validate_rule checks presence and spelling
+// against the parsed tree because json.unmarshal leaves an unknown name at the zero value.
 Rule :: struct {
 	id:           string,
 	statement:    string,
 	why:          string,
-	severity:     string, // error | warning; mandatory (20.4)
-	class:        string, // stable greppable name, e.g. "layering_hidden_state" (20.4)
-	fix:          string, // "" | "none" | "safe" (20.1)
+	severity:     Severity, // mandatory
+	class:        string, // stable greppable name, e.g. "layering_hidden_state"
+	fix:          Fix_Mode,
 	ignorable:    bool, // default true; set at load when absent
 	baselineable: bool, // 20.5: has a stable subject
 	retired:      bool,
-	check:        Check, // "manual" or a spec
+	check:        Check_Spec, // mandatory; `{ kind: "manual" }` for reviewer-only rules
 }
 
-Check :: union {
-	string,
-	Check_Spec,
+Fix_Mode :: enum {
+	none,
+	safe,
+}
+
+Check_Kind :: enum {
+	manual,
+	path_role,
+	banned_import,
+	banned_construct,
+	banned_call,
+	vet_tag,
+	require_attribute,
+}
+
+Construct :: enum {
+	mutable_global,
+	foreign_decl,
+	using_stmt,
+	no_bounds_check,
 }
 
 // Check_Spec is one field bag for every kind because core:encoding/json cannot pick a union
-// variant by a discriminator field. validate_spec enforces the per-kind shape at load time.
+// variant by a discriminator field. validate_rule enforces the per-kind shape at load time.
 Check_Spec :: struct {
-	kind:               string, // one of CHECK_KINDS
+	kind:               Check_Kind,
 	attribute:          string, // require_attribute
 	on:                 string, // require_attribute: "" | "exported_procs"
 	result_type_suffix: []string, // require_attribute; defaults to ["Error"]
 	from:               string, // banned_import: documentation only
-	construct:          string, // banned_construct: one of CONSTRUCTS
+	construct:          Construct, // banned_construct
 	names:              []string, // banned_call
 	roles:              []string, // only these roles
 	except_roles:       []string, // all but these roles
 }
 
-CHECK_KINDS := []string {
-	"path_role",
-	"banned_import",
-	"banned_construct",
-	"banned_call",
-	"vet_tag",
-	"require_attribute",
-}
-CONSTRUCTS := []string{"mutable_global", "foreign", "using", "no_bounds_check"}
 TOPIC_KEYS := []string {
 	"name",
 	"summary",
@@ -111,28 +122,24 @@ load_rulebook :: proc(root: string, errs: ^[dynamic]string) -> (rb: Rulebook) {
 		}
 		add_topic(&rb, "builtin", b.name, js, md, errs)
 	}
-	if root != "" {
-		dir := join({root, PROJECT_TOPICS_DIR})
-		if os.is_directory(dir) {
-			entries, _ := os.read_all_directory_by_path(dir, context.allocator)
-			slice.sort_by(entries, proc(a, b: os.File_Info) -> bool {return a.name < b.name})
-			for e in entries {
-				if e.type != .Directory {continue}
-				js, _ := os.read_entire_file(join({e.fullpath, TOPIC_FILE}), context.allocator)
-				md, _ := os.read_entire_file(join({e.fullpath, PROSE_FILE}), context.allocator)
-				add_topic(
-					&rb,
-					join({PROJECT_TOPICS_DIR, e.name}),
-					e.name,
-					string(js),
-					string(md),
-					errs,
-				)
-			}
-		}
+	for e in project_subdirs(root, PROJECT_TOPICS_DIR) {
+		js, _ := os.read_entire_file(join({e.fullpath, TOPIC_FILE}), context.allocator)
+		md, _ := os.read_entire_file(join({e.fullpath, PROSE_FILE}), context.allocator)
+		add_topic(&rb, join({PROJECT_TOPICS_DIR, e.name}), e.name, string(js), string(md), errs)
 	}
 	slice.sort_by(rb.topics[:], proc(a, b: Topic) -> bool {return a.name < b.name})
 	return
+}
+
+// project_subdirs lists the directories under <root>/<sub>, sorted by name; none if root is "".
+project_subdirs :: proc(root, sub: string) -> []os.File_Info {
+	if root == "" {return nil}
+	entries, err := os.read_all_directory_by_path(join({root, sub}), context.allocator)
+	if err != nil {return nil}
+	dirs := make([dynamic]os.File_Info)
+	for e in entries {if e.type == .Directory {append(&dirs, e)}}
+	slice.sort_by(dirs[:], proc(a, b: os.File_Info) -> bool {return a.name < b.name})
+	return dirs[:]
 }
 
 @(private = "file")
@@ -146,35 +153,24 @@ add_topic :: proc(rb: ^Rulebook, source, dir_name, js, md: string, errs: ^[dynam
 		source = source,
 		prose  = md,
 	}
-	if !unmarshal_json5(js, &t, at, TOPIC_KEYS, errs) {return}
-	if v, perr := json.parse_string(js, spec = .JSON5); perr == nil {
-		if rules, has := v.(json.Object)["rules"]; has {
-			for r in rules.(json.Array) or_else nil {check_keys(errs, at, "rule.", r, RULE_KEYS)}
-		}
-	}
-	// ignorable defaults to true; json.unmarshal leaves an absent bool false, so read presence
-	present := make(map[string]bool, context.temp_allocator)
-	if v, perr := json.parse_string(js, spec = .JSON5); perr == nil {
-		if rules, has := v.(json.Object)["rules"]; has {
-			for r in rules.(json.Array) or_else nil {
-				if obj, ok := r.(json.Object); ok {
-					if id, has_id := obj["id"].(json.String);
-					   has_id && "ignorable" in obj {present[id] = true}
-				}
-			}
-		}
-	}
-	for &r in t.rules {if r.id not_in present {r.ignorable = true}}
+	tree, ok := unmarshal_json5(js, &t, at, TOPIC_KEYS, errs)
+	if !ok {return}
 	if t.name != dir_name {errf(errs, "%s: name %s does not match directory", at, t.name)}
 	if t.summary == "" {errf(errs, "%s: summary is required", at)}
 	if md == "" {errf(errs, "%s: %s is missing or empty", at, PROSE_FILE)}
+	// unmarshal keeps array order, so rules[i] and the i-th object in the tree agree
+	objs := json_array(tree, "rules")
 	seen := make(map[string]bool, context.temp_allocator)
-	for &r in t.rules {
+	for &r, i in t.rules {
 		if !strings.has_prefix(r.id, "R") ||
 		   r.id in seen {errf(errs, "%s: bad or duplicate rule id %s", at, r.id)}
 		seen[r.id] = true
+		obj: json.Object
+		if i < len(objs) {obj, _ = objs[i].(json.Object)}
+		check_keys(errs, at, "rule.", obj, RULE_KEYS)
+		if "ignorable" not_in obj {r.ignorable = true}
 		if r.retired {continue}
-		validate_rule(&r, strings.concatenate({at, " ", r.id}, context.temp_allocator), errs)
+		validate_rule(&r, obj, strings.concatenate({at, " ", r.id}, context.temp_allocator), errs)
 	}
 	// same name later in the layer order overrides (17.17)
 	for &old in rb.topics {
@@ -188,39 +184,28 @@ add_topic :: proc(rb: ^Rulebook, source, dir_name, js, md: string, errs: ^[dynam
 }
 
 @(private = "file")
-validate_rule :: proc(r: ^Rule, at: string, errs: ^[dynamic]string) {
+validate_rule :: proc(r: ^Rule, obj: json.Object, at: string, errs: ^[dynamic]string) {
 	if r.statement == "" {errf(errs, "%s: statement is required", at)}
 	if r.why == "" {errf(errs, "%s: why is required (20.4)", at)}
-	if r.severity != "error" && r.severity != "warning" {
-		errf(errs, "%s: severity must be error or warning (20.4)", at)
-	}
-	if r.fix != "" &&
-	   r.fix != "none" &&
-	   r.fix != "safe" {errf(errs, "%s: fix must be none or safe", at)}
-	switch &c in r.check {
-	case string:
-		if c != "manual" {errf(errs, "%s: check must be \"manual\" or an object", at)}
-	case Check_Spec:
-		if !slice.contains(
-			CHECK_KINDS,
-			c.kind,
-		) {errf(errs, "%s: check.kind must be one of %v", at, CHECK_KINDS)}
-		switch c.kind {
-		case "banned_construct":
-			if !slice.contains(
-				CONSTRUCTS,
-				c.construct,
-			) {errf(errs, "%s: check.construct must be one of %v", at, CONSTRUCTS)}
-		case "banned_call":
-			if len(c.names) == 0 {errf(errs, "%s: check.names is required", at)}
-		case "require_attribute":
-			if c.attribute == "" {errf(errs, "%s: check.attribute is required", at)}
-			if c.on != "" &&
-			   c.on != "exported_procs" {errf(errs, "%s: check.on must be exported_procs", at)}
-			if c.result_type_suffix == nil {c.result_type_suffix = DEFAULT_RESULT_SUFFIX}
-		}
-	case nil:
-		errf(errs, "%s: check is required", at)
+	require_key(errs, at, obj, "severity")
+	require_key(errs, at, obj, "check")
+	check_enum(errs, at, obj, "severity", Severity)
+	check_enum(errs, at, obj, "fix", Fix_Mode)
+	spec, _ := obj["check"].(json.Object)
+	check_enum(errs, at, spec, "kind", Check_Kind)
+	c := &r.check
+	switch c.kind {
+	case .manual, .path_role, .banned_import, .vet_tag:
+	case .banned_construct:
+		require_key(errs, at, spec, "construct")
+		check_enum(errs, at, spec, "construct", Construct)
+	case .banned_call:
+		if len(c.names) == 0 {errf(errs, "%s: check.names is required", at)}
+	case .require_attribute:
+		if c.attribute == "" {errf(errs, "%s: check.attribute is required", at)}
+		if c.on != "" &&
+		   c.on != "exported_procs" {errf(errs, "%s: check.on must be exported_procs", at)}
+		if c.result_type_suffix == nil {c.result_type_suffix = DEFAULT_RESULT_SUFFIX}
 	}
 }
 
@@ -244,7 +229,6 @@ find_rule :: proc(rb: ^Rulebook, id: string) -> ^Rule {
 Active_Rule :: struct {
 	id:   string, // "topic/Rn"
 	rule: ^Rule,
-	spec: Check_Spec,
 }
 
 active_rules :: proc(p: ^Project, only_topics: []string) -> []Active_Rule {
@@ -252,11 +236,10 @@ active_rules :: proc(p: ^Project, only_topics: []string) -> []Active_Rule {
 	for &t in p.rb.topics {
 		if len(only_topics) > 0 && !slice.contains(only_topics, t.name) {continue}
 		for &r in t.rules {
-			spec, is_spec := r.check.(Check_Spec)
-			if !is_spec || r.retired {continue}
+			if r.check.kind == .manual || r.retired {continue}
 			id := strings.concatenate({t.name, "/", r.id})
 			if id in p.cfg.disabled {continue}
-			append(&out, Active_Rule{id, &r, spec})
+			append(&out, Active_Rule{id, &r})
 		}
 	}
 	return out[:]

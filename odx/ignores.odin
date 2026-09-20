@@ -7,6 +7,7 @@ import "core:strings"
 Ignore :: struct {
 	file:   string,
 	line:   int, // comment line
+	col:    int, // column of the `//`
 	target: int, // line it applies to; 0 = whole file
 	rule:   string,
 	reason: string,
@@ -46,20 +47,7 @@ collect_ignores :: proc(
 				bad = strings.concatenate({"unknown rule ", ruleid})
 			}
 			if bad != "" {
-				add(
-					r,
-					{
-						rel,
-						tok.pos.line,
-						tok.pos.column,
-						"odx/bad-ignore",
-						"",
-						"ignores",
-						bad,
-						false,
-						"",
-					},
-				)
+				note(r, "odx/bad-ignore", "ignores", rel, tok.pos.line, tok.pos.column, bad)
 				continue
 			}
 			append(
@@ -67,6 +55,7 @@ collect_ignores :: proc(
 				Ignore {
 					file = rel,
 					line = tok.pos.line,
+					col = tok.pos.column,
 					rule = ruleid,
 					reason = reason,
 					target = ignore_target(lines, tok.pos.line, whole),
@@ -91,7 +80,8 @@ ignore_target :: proc(lines: []string, comment_line: int, whole: bool) -> int {
 	return 0
 }
 
-// apply_ignores drops suppressed violations and reports stale ignores (17.8).
+// apply_ignores drops suppressed violations and reports stale ignores (17.8). An ignore for a
+// rule that did not run this pass is not stale (20.2).
 apply_ignores :: proc(r: ^Report, igs: []Ignore, ran: map[string]bool) {
 	kept := make([dynamic]Violation)
 	for v in r.violations {
@@ -110,21 +100,15 @@ apply_ignores :: proc(r: ^Report, igs: []Ignore, ran: map[string]bool) {
 	}
 	r.violations = kept
 	for ig in igs {
-		if !ig.used && ig.rule in ran { 	// an ignore for a rule that did not run is not stale
-			add(
-				r,
-				{
-					ig.file,
-					ig.line,
-					1,
-					"odx/stale-ignore",
-					"",
-					"ignores",
-					strings.concatenate({"ignore of ", ig.rule, " suppressed nothing"}),
-					false,
-					"",
-				},
-			)
-		}
+		if ig.used || ig.rule not_in ran {continue}
+		note(
+			r,
+			"odx/stale-ignore",
+			"ignores",
+			ig.file,
+			ig.line,
+			ig.col,
+			strings.concatenate({"ignore of ", ig.rule, " suppressed nothing"}),
+		)
 	}
 }

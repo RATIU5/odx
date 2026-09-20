@@ -1,11 +1,8 @@
 package odx
 
-import "base:runtime"
-import "core:encoding/json"
 import "core:fmt"
 import "core:os"
 import "core:path/filepath"
-import "core:slice"
 import "core:strings"
 import "core:unicode"
 
@@ -44,26 +41,18 @@ load_templates :: proc(root: string, errs: ^[dynamic]string) -> []Template {
 		}
 		add_template(&out, t, b.name, js, errs)
 	}
-	if root != "" {
-		dir := join({root, PROJECT_TEMPLATES_DIR})
-		if entries, rerr := os.read_all_directory_by_path(dir, context.allocator); rerr == nil {
-			slice.sort_by(entries, proc(a, b: os.File_Info) -> bool {return a.name < b.name})
-			for e in entries {
-				if e.type != .Directory {continue}
-				t := Template {
-					source = join({PROJECT_TEMPLATES_DIR, e.name}),
-					texts  = make(map[string]string),
-				}
-				js: string
-				files, _ := os.read_all_directory_by_path(e.fullpath, context.allocator)
-				for f in files {
-					data, _ := os.read_entire_file(f.fullpath, context.allocator)
-					if f.name ==
-					   TEMPLATE_FILE {js = string(data)} else {t.texts[f.name] = string(data)}
-				}
-				add_template(&out, t, e.name, js, errs)
-			}
+	for e in project_subdirs(root, PROJECT_TEMPLATES_DIR) {
+		t := Template {
+			source = join({PROJECT_TEMPLATES_DIR, e.name}),
+			texts  = make(map[string]string),
 		}
+		js: string
+		files, _ := os.read_all_directory_by_path(e.fullpath, context.allocator)
+		for f in files {
+			data, _ := os.read_entire_file(f.fullpath, context.allocator)
+			if f.name == TEMPLATE_FILE {js = string(data)} else {t.texts[f.name] = string(data)}
+		}
+		add_template(&out, t, e.name, js, errs)
 	}
 	return out[:]
 }
@@ -83,7 +72,7 @@ add_template :: proc(
 		errf(errs, "%s: missing", at)
 		return
 	}
-	if !unmarshal_json5(js, &t, at, TEMPLATE_KEYS, errs) {return}
+	if _, ok := unmarshal_json5(js, &t, at, TEMPLATE_KEYS, errs); !ok {return}
 	if t.name != dir_name {errf(errs, "%s: name %s does not match directory", at, t.name)}
 	if t.role == "" {errf(errs, "%s: role is required", at)}
 	if len(t.files) == 0 {errf(errs, "%s: files is required", at)}
@@ -175,6 +164,3 @@ snake :: proc(name: string) -> string {
 	}
 	return strings.to_string(b)
 }
-
-_ :: runtime
-_ :: json

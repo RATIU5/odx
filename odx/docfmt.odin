@@ -12,11 +12,11 @@ import "core:strings"
 
 run_family_c :: proc(c: ^Ctx) {
 	rules := make([dynamic]^Active_Rule)
-	for &a in c.rules {if a.spec.kind == "require_attribute" {append(&rules, &a)}}
+	for &a in c.rules {if a.rule.check.kind == .require_attribute {append(&rules, &a)}}
 	if len(rules) == 0 {return}
 	tmp, terr := os.make_directory_temp("", "odx-doc-*", context.allocator)
 	if terr != nil {
-		append(&c.r.tool_errors, "cannot create temp dir for odin doc")
+		tool_error(c.r, "cannot create temp dir for odin doc")
 		return
 	}
 	defer os.remove_all(tmp)
@@ -65,17 +65,15 @@ doc_package :: proc(
 	derr: doc.Reader_Error
 	h, derr = doc.read_from_bytes(data)
 	if derr != nil {
-		append(
-			&c.r.tool_errors,
-			fmt.aprintf(
-				"doc-format reader: %v (compiler wrote version %d.%d.%d); this odx supports %d.%d.x only",
-				derr,
-				h.version.major,
-				h.version.minor,
-				h.version.patch,
-				DOC_FORMAT_MAJOR,
-				DOC_FORMAT_MINOR,
-			),
+		tool_error(
+			c.r,
+			"doc-format reader: %v (compiler wrote version %d.%d.%d); this odx supports %d.%d.x only",
+			derr,
+			h.version.major,
+			h.version.minor,
+			h.version.patch,
+			DOC_FORMAT_MAJOR,
+			DOC_FORMAT_MINOR,
 		)
 		return nil, .Fatal
 	}
@@ -102,9 +100,9 @@ check_entities :: proc(c: ^Ctx, p: ^Package, h: ^doc.Header, rules: []^Active_Ru
 			if "test" in attrs {continue} 	// 17.13
 			last := last_result_name(h, types, e.type)
 			for a in rules {
-				if !role_applies(&a.spec, p.role) ||
-				   a.spec.attribute in attrs ||
-				   !has_suffix_any(last, a.spec.result_type_suffix) {continue}
+				if !role_applies(&a.rule.check, p.role) ||
+				   a.rule.check.attribute in attrs ||
+				   !has_suffix_any(last, a.rule.check.result_type_suffix) {continue}
 				fname := doc.from_string(h, files[e.pos.file].name)
 				file, _ := rel_of(c.root, join({p.dir, filepath.base(fname)}))
 				report(
@@ -119,7 +117,7 @@ check_entities :: proc(c: ^Ctx, p: ^Package, h: ^doc.Header, rules: []^Active_Ru
 							" returns ",
 							last,
 							" but lacks @(",
-							a.spec.attribute,
+							a.rule.check.attribute,
 							")",
 						},
 					),

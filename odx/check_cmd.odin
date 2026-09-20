@@ -13,49 +13,29 @@ cmd_check :: proc(o: Opts) {
 		if p.root == "" {p.root, _ = os.get_working_directory(context.allocator)}
 		p.root = join({p.root, "rules", o.exemplar, "example"})
 		p.cfg = exemplar_config(t, &p.cfg)
+		p.dirs = package_dirs(p.root, &p.cfg)
 	}
 	for t in o.topics {if find_topic(&p.rb, t) == nil {fail("unknown topic %q", t)}}
-	r, code := run_checks(&p, o)
-	print_report(r, o.json)
+	c := make_ctx(&p, o.args[:], o.topics[:])
+	code := run_checks(&c, o)
+	print_report(c.r, o.json)
 	os.exit(code)
 }
 
-// run_checks is the whole pipeline (families B, A, C, ignores) on a loaded project; shared by
-// `check` and `self-test`.
-run_checks :: proc(p: ^Project, o: Opts) -> (r: ^Report, code: int) {
-	c := Ctx {
-		root  = p.root,
-		cfg   = &p.cfg,
-		rb    = &p.rb,
-		r     = new(Report),
-		rules = active_rules(p, o.topics[:]),
-	}
-	c.pkgs = project_packages(p, o.args[:])
-	run_family_b(&c)
-	igs := project_ignores(&c)
+// run_checks is the whole pipeline (families B, A, C, ignores, stale config) on a context.
+run_checks :: proc(c: ^Ctx, o: Opts) -> int {
+	full := !o.fast && len(o.topics) == 0 && len(o.args) == 0 // nothing narrowed (20.2)
+	run_family_b(c)
+	igs := project_ignores(c)
 	if !o.fast {
-		run_family_a(&c)
-		run_family_c(&c)
+		run_family_a(c)
+		run_family_c(c)
 	}
 	ran := make(map[string]bool, context.temp_allocator)
-	for a in c.rules {if !(o.fast && a.spec.kind == "require_attribute") {ran[a.id] = true}}
+	for a in c.rules {if !(o.fast && a.rule.check.kind == .require_attribute) {ran[a.id] = true}}
 	apply_ignores(c.r, igs, ran)
-	if !o.fast && len(o.topics) == 0 && len(o.args) == 0 {report_stale_config(&c)}
-	return c.r, finalize(c.r, o.strict, o.max_violations)
-}
-
-// project_packages walks, selects and parses the packages a command works on.
-project_packages :: proc(p: ^Project, paths: []string) -> []Package {
-	rels := package_dirs(p.root, &p.cfg)
-	if len(paths) > 0 {
-		rels = select_packages(p.root, rels, paths)
-		if len(rels) == 0 {fail("no packages under %v", paths)}
-	}
-	pkgs := load_packages(p.root, &p.cfg, rels)
-	for pk in pkgs {
-		if pk.role_count > 1 {fail("%s matches more than one role in %s", pk.rel, CONFIG_FILE)}
-	}
-	return pkgs
+	if full {report_stale_config(c)}
+	return finalize(c.r, o.strict, o.max_violations)
 }
 
 project_ignores :: proc(c: ^Ctx) -> []Ignore {
@@ -71,13 +51,7 @@ project_ignores :: proc(c: ^Ctx) -> []Ignore {
 
 cmd_ignores :: proc(o: Opts) {
 	p := must_load(o, true)
-	c := Ctx {
-		root = p.root,
-		cfg  = &p.cfg,
-		rb   = &p.rb,
-		r    = new(Report),
-	}
-	c.pkgs = project_packages(&p, nil)
+	c := make_ctx(&p, nil)
 	igs := project_ignores(&c)
 	sort_violations(c.r.violations[:])
 	if o.json {
