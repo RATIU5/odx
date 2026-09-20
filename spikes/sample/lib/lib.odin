@@ -19,6 +19,7 @@ must :: proc() -> Error {
 }
 
 // open opens a thing.
+@(require_results)
 open :: proc(p: string) -> (h: int, err: Error) {
 	return 0, .None
 }

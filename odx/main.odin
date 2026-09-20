@@ -9,10 +9,14 @@ EXIT_VIOLATION :: 1
 EXIT_TOOL :: 2
 
 Opts :: struct {
-	json: bool,
-	root: string, // --root override; "" = walk up from cwd
-	rule: string, // explain --rule
-	args: [dynamic]string, // positionals after the subcommand
+	json:     bool,
+	fast:     bool,
+	strict:   bool,
+	root:     string, // --root override; "" = walk up from cwd
+	rule:     string, // explain --rule
+	exemplar: string, // check --exemplar <topic>
+	topics:   [dynamic]string, // check --topic
+	args:     [dynamic]string, // positionals after the subcommand
 }
 
 USAGE :: `usage: odx <command> [args] [--json] [--root <dir>]
@@ -20,6 +24,8 @@ USAGE :: `usage: odx <command> [args] [--json] [--root <dir>]
   topics                       list topics
   explain <topic> [--rule R3]  rules, rationale, do/don't
   for <path>                   topics that apply to a file or package
+  check [<path>...] [--topic t] [--fast] [--strict]   run checks (--fast: syntax only)
+  ignores                      list every odx:ignore suppression
   ext list | ext validate      project extensions in .odx/ and odx.json5
   init                         write odx.json5 and mise.toml for this project
 `
@@ -30,25 +36,41 @@ fail :: proc(f: string, args: ..any) -> ! {
 	os.exit(EXIT_TOOL)
 }
 
+// parse_opts accepts `--flag`, `--flag value` and `--flag=value`.
+// ponytail: hand-rolled; core:flags has no subcommand concept (17.20)
 parse_opts :: proc(args: []string) -> (o: Opts) {
-	// ponytail: hand-rolled; core:flags has no subcommand concept (17.20)
 	for i := 0; i < len(args); i += 1 {
 		a := args[i]
-		switch {
-		case a == "--json":
-			o.json = true
-		case a == "--root" || a == "--rule":
-			if i + 1 >= len(args) {fail("%s needs a value", a)}
-			i += 1
-			if a == "--root" {o.root = args[i]} else {o.rule = args[i]}
-		case strings.has_prefix(a, "--root="):
-			o.root = a[len("--root="):]
-		case strings.has_prefix(a, "--rule="):
-			o.rule = a[len("--rule="):]
-		case strings.has_prefix(a, "-"):
-			fail("unknown flag %s", a)
-		case:
+		if !strings.has_prefix(a, "-") {
 			append(&o.args, a)
+			continue
+		}
+		name, has_eq, value := strings.partition(a, "=")
+		switch name {
+		case "--json":
+			o.json = true
+		case "--fast":
+			o.fast = true
+		case "--strict":
+			o.strict = true
+		case "--root", "--rule", "--topic", "--exemplar":
+			if has_eq == "" {
+				if i + 1 >= len(args) {fail("%s needs a value", a)}
+				i += 1
+				value = args[i]
+			}
+			switch name {
+			case "--root":
+				o.root = value
+			case "--rule":
+				o.rule = value
+			case "--topic":
+				append(&o.topics, value)
+			case "--exemplar":
+				o.exemplar = value
+			}
+		case:
+			fail("unknown flag %s", a)
 		}
 	}
 	return
@@ -67,6 +89,10 @@ main :: proc() {
 		cmd_explain(o)
 	case "for":
 		cmd_for(o)
+	case "check":
+		cmd_check(o)
+	case "ignores":
+		cmd_ignores(o)
 	case "ext":
 		cmd_ext(o)
 	case "init":

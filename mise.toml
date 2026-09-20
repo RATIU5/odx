@@ -16,10 +16,15 @@ sources = ["odx/**/*.odin", "rules/**/*"] # rules/ is embedded, so it is a build
 outputs = ["{{ env.OUT }}/odx"]
 run = "odin build odx -out:$OUT/odx $ODIN_VET -vet-packages:odx -debug"
 
+[tasks.fmt]
+description = "Format all odin files in this project"
+alias = "f"
+run = "for d in odx spikes; do odinfmt -w $d; done"  # odinfmt (from OLS) takes one path; tests/fixtures excluded on purpose
+
 [tasks.odx]
 description = "Run the odx binary (debug)"
 depends = ["build"]
-run = "./build/odx"
+run = "${ODX}"
 
 [tasks.test]
 description = "odx's own unit tests"
@@ -36,19 +41,32 @@ done
 '''
 
 [tasks.exemplars]
-description = "Every rules/<topic>/example/<pkg> compiles under the vet flags"
+description = "Every rules/<topic>/example/<pkg> compiles and passes its own topic checks"
+depends = ["build"]
 run = '''
 set -e
 for pkg in rules/*/example/*/; do
   odin check "$pkg" $ODIN_VET -no-entry-point && echo "ok $pkg"
 done
+for t in rules/*/; do $ODX check --exemplar "$(basename "$t")"; done
 '''
 
 [tasks.self]
 description = "odx validates its own config and rulebook"
 depends = ["build"]
-run = "$ODX ext validate"
+run = "$ODX ext validate && $ODX check"
 
 [tasks.ci]
 description = "Everything CI runs, in order"
-depends = ["build", "test", "exemplars", "self"]
+depends = ["build", "test", "fixtures", "exemplars", "self"]
+
+[tasks.fixtures]
+description = "odx check on tests/fixtures/* must reproduce each expected.txt byte for byte"
+depends = ["build"]
+run = '''
+set -e
+for d in tests/fixtures/*/; do
+  $ODX check --root "$d" > "$d/actual.txt" || true
+  diff -u "$d/expected.txt" "$d/actual.txt" && rm "$d/actual.txt" && echo "ok $d"
+done
+'''

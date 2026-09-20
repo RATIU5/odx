@@ -1,0 +1,10 @@
+core/core.odin:4:1: layering/R2 pure package may not import core:os; see `odx explain layering --rule R2`
+core/core.odin:7:1: layering/R3 mutable package-level variable in a pure package; see `odx explain layering --rule R3`
+core/core.odin:15:1: errors/R3 parse returns Error but lacks @(require_results); see `odx explain errors --rule R3`
+core/core.odin:31:1: layering/R3 mutable package-level variable in a pure package; see `odx explain layering --rule R3`
+core/core.odin:31:1: odx/stale-ignore ignore of layering/R2 suppressed nothing
+core/core.odin:34:13: odx/bad-ignore unknown rule layering/R9
+orphan:1:1: layering/R1 package directory has no role in odx.json5; see `odx explain layering --rule R1`
+orphan/orphan.odin:3:17: odin/syntax expected a type
+orphan/orphan.odin:4:1: odin/syntax expected ')', got 'EOF'
+platform/platform.odin:13:22: layering/R2 use core.parse instead of raw_parse; see `odx explain layering --rule R2`

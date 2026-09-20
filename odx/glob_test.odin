@@ -24,6 +24,13 @@ test_glob :: proc(t: ^testing.T) {
 		{"a/**/z", "a/b/c", false},
 	}
 	for c in cases {
-		testing.expectf(t, glob_match(c.pat, c.path) == c.want, "glob_match(%q, %q) != %v", c.pat, c.path, c.want)
+		testing.expectf(
+			t,
+			glob_match(c.pat, c.path) == c.want,
+			"glob_match(%q, %q) != %v",
+			c.pat,
+			c.path,
+			c.want,
+		)
 	}
 }

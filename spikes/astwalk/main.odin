@@ -50,7 +50,7 @@ main :: proc() {
 	for dir in sorted {
 		context.allocator = virtual.arena_allocator(&arena)
 		p := parser.default_parser()
-		p.err = proc(pos: tokenizer.Pos, msg: string, args: ..any) {} // ponytail: swallow; odx collects via thread-local per 17.20
+		p.err = proc(pos: tokenizer.Pos, msg: string, args: ..any) {} 	// ponytail: swallow; odx collects via thread-local per 17.20
 		pkg, _ := parser.parse_package_from_path(dir, &p)
 		st.dirs += 1
 		if pkg != nil {
@@ -60,14 +60,27 @@ main :: proc() {
 				f := pkg.files[k]
 				st.files += 1
 				st.syntax_errs += f.syntax_error_count
-				v := ast.Visitor{visit = count_nodes, data = &st}
+				v := ast.Visitor {
+					visit = count_nodes,
+					data  = &st,
+				}
 				ast.walk(&v, f)
 			}
 		}
 		virtual.arena_free_all(&arena)
 	}
 	total := time.tick_since(start)
-	fmt.printfln("dirs=%d files=%d nodes=%d syntax_errors=%d", st.dirs, st.files, st.nodes, st.syntax_errs)
-	fmt.printfln("walk=%.0fms parse+visit=%.0fms total=%.0fms",
-		time.duration_milliseconds(walked), time.duration_milliseconds(total - walked), time.duration_milliseconds(total))
+	fmt.printfln(
+		"dirs=%d files=%d nodes=%d syntax_errors=%d",
+		st.dirs,
+		st.files,
+		st.nodes,
+		st.syntax_errs,
+	)
+	fmt.printfln(
+		"walk=%.0fms parse+visit=%.0fms total=%.0fms",
+		time.duration_milliseconds(walked),
+		time.duration_milliseconds(total - walked),
+		time.duration_milliseconds(total),
+	)
 }

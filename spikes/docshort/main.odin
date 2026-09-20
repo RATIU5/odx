@@ -43,7 +43,10 @@ main :: proc() {
 		fmt.eprintln("usage: spike_docshort <pkg-dir>")
 		os.exit(2)
 	}
-	state, stdout, stderr, err := os.process_exec({command = {"odin", "doc", os.args[1]}}, context.allocator)
+	state, stdout, stderr, err := os.process_exec(
+		{command = {"odin", "doc", os.args[1]}},
+		context.allocator,
+	)
 	if err != nil || state.exit_code != 0 {
 		fmt.eprintfln("odin doc failed: %v %s", err, stderr)
 		os.exit(2)

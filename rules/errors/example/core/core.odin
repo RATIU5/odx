@@ -1,3 +1,4 @@
+#+vet explicit-allocators
 package core
 
 Handle :: distinct int

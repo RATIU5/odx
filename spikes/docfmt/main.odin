@@ -4,8 +4,8 @@
 package docfmt
 
 import "core:fmt"
-import doc "core:odin/doc-format"
 import "core:odin/ast"
+import doc "core:odin/doc-format"
 import "core:odin/parser"
 import "core:os"
 import "core:path/filepath"
@@ -19,8 +19,18 @@ main :: proc() {
 	out := "build/spike.odin-doc"
 	os.remove(out)
 	state, _, stderr, perr := os.process_exec(
-		{command = {"odin", "doc", os.args[1], "-doc-format", "-all-packages", fmt.tprintf("-out:%s", out)}},
-		context.allocator)
+		{
+			command = {
+				"odin",
+				"doc",
+				os.args[1],
+				"-doc-format",
+				"-all-packages",
+				fmt.tprintf("-out:%s", out),
+			},
+		},
+		context.allocator,
+	)
 	if perr != nil || state.exit_code != 0 || !os.exists(out) {
 		// 19.2: type errors -> no file written; caller falls back to -json-errors
 		fmt.eprintfln("odin doc failed (exit %d), no output file: %s", state.exit_code, stderr)
@@ -36,8 +46,17 @@ main :: proc() {
 	files := doc.from_array(h, h.files)
 	pkgs := doc.from_array(h, h.pkgs)
 	ents := doc.from_array(h, h.entities)
-	fmt.printfln("format %d.%d.%d  files=%d pkgs=%d entities=%d types=%d bytes=%d",
-		h.version.major, h.version.minor, h.version.patch, len(files), len(pkgs), len(ents), h.types.length, len(data))
+	fmt.printfln(
+		"format %d.%d.%d  files=%d pkgs=%d entities=%d types=%d bytes=%d",
+		h.version.major,
+		h.version.minor,
+		h.version.patch,
+		len(files),
+		len(pkgs),
+		len(ents),
+		h.types.length,
+		len(data),
+	)
 
 	joined, total := 0, 0
 	for pkg, pi in pkgs {
@@ -47,7 +66,10 @@ main :: proc() {
 		fmt.printfln("PKG %s  %s", doc.from_string(h, pkg.name), full)
 
 		// AST side: parse the package once, index decls by (file base, line, col)
-		Key :: struct { file: string, line, col: int }
+		Key :: struct {
+			file:      string,
+			line, col: int,
+		}
 		decls := make(map[Key]^ast.Value_Decl)
 		apkg, ok := parser.parse_package_from_path(full)
 		assert(ok && apkg != nil)
@@ -66,14 +88,25 @@ main :: proc() {
 			ty := doc.from_array(h, h.types)[e.type]
 			attrs: [dynamic]string
 			for a in doc.from_array(h, e.attributes) {
-				append(&attrs, fmt.tprintf("%s=%s", doc.from_string(h, a.name), doc.from_string(h, a.value)))
+				append(
+					&attrs,
+					fmt.tprintf("%s=%s", doc.from_string(h, a.name), doc.from_string(h, a.value)),
+				)
 			}
 			total += 1
 			vd, hit := decls[{filepath.base(fname), int(pos.line), int(pos.column)}]
 			if hit {joined += 1}
-			fmt.printfln("  %-10v %-8s %s:%d:%d  type=%v  attrs=%v  ast=%v",
-				e.kind, doc.from_string(h, e.name), filepath.base(fname), pos.line, pos.column,
-				doc.from_array(h, h.types)[e.type].kind, attrs[:], hit ? fmt.tprintf("Value_Decl(mutable=%v)", vd.is_mutable) : "MISS")
+			fmt.printfln(
+				"  %-10v %-8s %s:%d:%d  type=%v  attrs=%v  ast=%v",
+				e.kind,
+				doc.from_string(h, e.name),
+				filepath.base(fname),
+				pos.line,
+				pos.column,
+				doc.from_array(h, h.types)[e.type].kind,
+				attrs[:],
+				hit ? fmt.tprintf("Value_Decl(mutable=%v)", vd.is_mutable) : "MISS",
+			)
 			_ = ty
 		}
 	}

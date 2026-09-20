@@ -1,3 +1,4 @@
+#+vet explicit-allocators
 package core
 
 // A pure package: values in, values out, no globals, no I/O.

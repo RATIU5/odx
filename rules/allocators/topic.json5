@@ -1,0 +1,35 @@
+{
+  name: "allocators",
+  summary: "Explicit allocator parameters in pure code; every allocation has a visible owner and a defer",
+  tags: ["allocators", "memory", "arena", "defer", "leaks"],
+  aliases: ["memory management", "allocation", "context.allocator"],
+  example_questions: [
+    "who frees this slice",
+    "should this proc take an allocator parameter",
+    "how do I avoid leaks in tests",
+  ],
+  applies_to: { roles: ["pure", "service"] },
+  related: ["errors", "layering"],
+  example_roles: { "example/core": "pure" },
+  rules: [
+    {
+      id: "R1",
+      statement: "Every file in a pure or service package starts with `#+vet explicit-allocators`.",
+      why: "The compiler then rejects make/new/append without an allocator argument; hidden context.allocator use is where leaks come from.",
+      severity: "error",
+      check: { kind: "vet_tag" },
+    },
+    {
+      id: "R2",
+      statement: "A procedure that allocates takes `allocator := context.allocator` as its last parameter and documents who frees.",
+      why: "Callers pick arenas or trackers; the proc stays testable and leak-free by construction.",
+      check: "manual",
+    },
+    {
+      id: "R3",
+      statement: "Tests run with -sanitize:address and -define:ODIN_TEST_FAIL_ON_BAD_MEMORY=true.",
+      why: "Leaks are only WARN by default; the define turns them into failures.",
+      check: "manual",
+    },
+  ],
+}

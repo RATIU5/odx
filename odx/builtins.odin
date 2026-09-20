@@ -7,6 +7,7 @@ import "base:runtime"
 BUILTIN_TOPICS := []Builtin {
 	{"errors", #load_directory("../rules/errors")},
 	{"layering", #load_directory("../rules/layering")},
+	{"allocators", #load_directory("../rules/allocators")},
 }
 
 Builtin :: struct {
