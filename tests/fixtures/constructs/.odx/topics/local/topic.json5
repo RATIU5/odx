@@ -1,0 +1,10 @@
+{
+  name: "local",
+  summary: "fixture topic: using, no_bounds_check, banned_call",
+  applies_to: { roles: ["pure", "edge"] },
+  rules: [
+    { id: "R1", statement: "no using", why: "fixture", check: { kind: "banned_construct", construct: "using" } },
+    { id: "R2", statement: "no #no_bounds_check", why: "fixture", check: { kind: "banned_construct", construct: "no_bounds_check", roles: ["pure"] } },
+    { id: "R3", statement: "no os.exit or panic", why: "fixture", check: { kind: "banned_call", names: ["os.exit", "panic"], except_roles: ["edge"] } },
+  ],
+}

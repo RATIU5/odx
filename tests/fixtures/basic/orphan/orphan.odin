@@ -1,3 +1,4 @@
-package orphan
+package orphan // want: layering/R1
 
-broken :: proc( {
+broken :: proc( { // want: odin/syntax
+// want: odin/syntax

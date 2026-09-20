@@ -149,6 +149,7 @@ INIT_CONFIG_BODY :: `  roles: {
   odin: {
     flags: ["-vet", "-vet-tabs", "-vet-cast", "-strict-style", "-warnings-as-errors"],
     forbidden_flags: ["-no-bounds-check", "-disable-assert", "-no-type-assert", "-ignore-unknown-attributes"],
+    required_flags: ["-sanitize:address", "-define:ODIN_TEST_FAIL_ON_BAD_MEMORY=true"],
     version: "dev-2026-09",
   },
 }

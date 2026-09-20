@@ -10,5 +10,5 @@ raw_parse :: proc(s: string) -> int {
 
 main :: proc() {
 	n, err := core.parse("abc")
-	fmt.println(n, err, raw_parse("x"))
+	fmt.println(n, err, raw_parse("x")) // want: layering/R2
 }

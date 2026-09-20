@@ -1,0 +1,5 @@
+{
+  roles: { pure: ["pure"] },
+  layering: { pure: { may_import: ["pure", "core:*"] } },
+  odin: { flags: ["-vet"], allowed_vet_disables: ["shadowing"] },
+}

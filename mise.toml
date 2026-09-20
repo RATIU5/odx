@@ -52,21 +52,15 @@ for t in rules/*/; do $ODX check --exemplar "$(basename "$t")"; done
 '''
 
 [tasks.self]
-description = "odx validates its own config and rulebook"
+description = "odx checks its own sources with its own rules (milestone stop condition)"
 depends = ["build"]
-run = "$ODX ext validate && $ODX check"
+run = "$ODX doctor --ci && $ODX check"
 
 [tasks.ci]
 description = "Everything CI runs, in order"
 depends = ["build", "test", "fixtures", "exemplars", "self"]
 
 [tasks.fixtures]
-description = "odx check on tests/fixtures/* must reproduce each expected.txt byte for byte"
+description = "Every tests/fixtures/<name>/ is checked and diffed against its // want: markers (17.14)"
 depends = ["build"]
-run = '''
-set -e
-for d in tests/fixtures/*/; do
-  $ODX check --root "$d" > "$d/actual.txt" || true
-  diff -u "$d/expected.txt" "$d/actual.txt" && rm "$d/actual.txt" && echo "ok $d"
-done
-'''
+run = "$ODX self-test"

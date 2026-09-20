@@ -15,15 +15,22 @@ cmd_check :: proc(o: Opts) {
 		p.cfg = exemplar_config(t, &p.cfg)
 	}
 	for t in o.topics {if find_topic(&p.rb, t) == nil {fail("unknown topic %q", t)}}
+	r, code := run_checks(&p, o)
+	print_report(r, o.json)
+	os.exit(code)
+}
+
+// run_checks is the whole pipeline (families B, A, C, ignores) on a loaded project; shared by
+// `check` and `self-test`.
+run_checks :: proc(p: ^Project, o: Opts) -> (r: ^Report, code: int) {
 	c := Ctx {
 		root  = p.root,
 		cfg   = &p.cfg,
 		rb    = &p.rb,
 		r     = new(Report),
-		rules = active_rules(&p, o.topics[:]),
+		rules = active_rules(p, o.topics[:]),
 	}
-	c.pkgs = project_packages(&p, o.args[:])
-
+	c.pkgs = project_packages(p, o.args[:])
 	run_family_b(&c)
 	igs := project_ignores(&c)
 	if !o.fast {
@@ -31,9 +38,7 @@ cmd_check :: proc(o: Opts) {
 		run_family_c(&c)
 	}
 	apply_ignores(c.r, igs)
-	code := finalize(c.r, o.strict)
-	print_report(c.r, o.json)
-	os.exit(code)
+	return c.r, finalize(c.r, o.strict)
 }
 
 // project_packages walks, selects and parses the packages a command works on.

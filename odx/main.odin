@@ -12,6 +12,7 @@ Opts :: struct {
 	json:     bool,
 	fast:     bool,
 	strict:   bool,
+	ci:       bool, // doctor: version drift is an error
 	root:     string, // --root override; "" = walk up from cwd
 	rule:     string, // explain --rule
 	exemplar: string, // check --exemplar <topic>
@@ -26,6 +27,8 @@ USAGE :: `usage: odx <command> [args] [--json] [--root <dir>]
   for <path>                   topics that apply to a file or package
   check [<path>...] [--topic t] [--fast] [--strict]   run checks (--fast: syntax only)
   ignores                      list every odx:ignore suppression
+  doctor [--ci]                toolchain, flags, mise.toml drift, overrides (--ci: drift fails)
+  self-test                    run every tests/fixtures/* and diff its // want: markers
   ext list | ext validate      project extensions in .odx/ and odx.json5
   init                         write odx.json5 and mise.toml for this project
 `
@@ -53,6 +56,8 @@ parse_opts :: proc(args: []string) -> (o: Opts) {
 			o.fast = true
 		case "--strict":
 			o.strict = true
+		case "--ci":
+			o.ci = true
 		case "--root", "--rule", "--topic", "--exemplar":
 			if has_eq == "" {
 				if i + 1 >= len(args) {fail("%s needs a value", a)}
@@ -93,6 +98,10 @@ main :: proc() {
 		cmd_check(o)
 	case "ignores":
 		cmd_ignores(o)
+	case "doctor":
+		cmd_doctor(o)
+	case "self-test":
+		cmd_selftest(o)
 	case "ext":
 		cmd_ext(o)
 	case "init":

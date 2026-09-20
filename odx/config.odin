@@ -27,6 +27,7 @@ Layer :: struct {
 Odin_Cfg :: struct {
 	flags:                []string,
 	forbidden_flags:      []string,
+	required_flags:       []string, // must appear in the mise.toml test task (17.15)
 	collections:          map[string]string,
 	custom_attributes:    []string,
 	allowed_vet_disables: []string, // 17.2
@@ -39,6 +40,7 @@ CONFIG_KEYS := []string{"roles", "default_role", "exclude", "disabled", "layerin
 ODIN_KEYS := []string {
 	"flags",
 	"forbidden_flags",
+	"required_flags",
 	"collections",
 	"custom_attributes",
 	"allowed_vet_disables",

@@ -51,7 +51,6 @@ run_family_b :: proc(c: ^Ctx) {
 		for f in p.files {
 			c.r.summary.files += 1
 			check_vet_disables(c, f)
-			check_package_name(c, &p, f)
 		}
 		for &a in c.rules {
 			if !role_applies(&a.spec, p.role) {continue}
@@ -72,27 +71,6 @@ run_family_b :: proc(c: ^Ctx) {
 			}
 		}
 	}
-}
-
-// 17.7: package name must agree among files without #+build tags.
-check_package_name :: proc(c: ^Ctx, p: ^Package, f: ^ast.File) {
-	if p.pkg == nil || len(f.tags) > 0 || f.pkg_name == p.pkg.name {return}
-	file, line, col := pos_of(c, &f.pkg_decl.node)
-	add(
-		c.r,
-		{
-			file,
-			line,
-			col,
-			"odin/syntax",
-			"",
-			"parse",
-			strings.concatenate(
-				{"package ", f.pkg_name, " differs from sibling files (", p.pkg.name, ")"},
-			),
-			false,
-		},
-	)
 }
 
 // vet_tag_names lists the names on a file's `#+vet` tags (`!x` kept as written).
@@ -307,7 +285,7 @@ check_calls :: proc(c: ^Ctx, p: ^Package, a: ^Active_Rule) {
 		for d in f.decls {
 			if imp, ok := d.derived.(^ast.Import_Decl); ok {
 				path := strings.trim(imp.relpath.text, `"`)
-				w.aliases[imp.name.text if imp.name.text != "" else filepath.base(path)] = path
+				w.aliases[imp.name.text if imp.name.text != "" else import_pkg_name(path)] = path
 			}
 		}
 		v := ast.Visitor {
@@ -316,6 +294,12 @@ check_calls :: proc(c: ^Ctx, p: ^Package, a: ^Active_Rule) {
 		}
 		ast.walk(&v, f)
 	}
+}
+
+// import_pkg_name: the default local name of an import path: "core:os" -> os, "../core" -> core.
+import_pkg_name :: proc(path: string) -> string {
+	_, _, rest := strings.partition(path, ":")
+	return filepath.base(rest if rest != "" else path)
 }
 
 visit_call :: proc(v: ^ast.Visitor, n: ^ast.Node) -> ^ast.Visitor {
@@ -332,7 +316,7 @@ visit_call :: proc(v: ^ast.Visitor, n: ^ast.Node) -> ^ast.Visitor {
 			// canonical form is the import's last path element: `fs.read` with `import fs "core:os"` -> os.read
 			path, aliased := w.aliases[pkg.name]
 			name = strings.concatenate(
-				{filepath.base(path) if aliased else pkg.name, ".", e.field.name},
+				{import_pkg_name(path) if aliased else pkg.name, ".", e.field.name},
 				context.temp_allocator,
 			)
 		}

@@ -16,4 +16,5 @@
 !odx.json5
 !.odx/
 !.odx/**
-!tests/fixtures/**/expected.txt
+!.github/
+!.github/**
