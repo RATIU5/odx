@@ -12,9 +12,20 @@ ODIN_VET = "-vet -vet-tabs -vet-cast -strict-style -warnings-as-errors"
 [tasks.build]
 description = "Build the odx binary (debug)"
 alias = "b"
-sources = ["odx/**/*.odin", "rules/**/*"] # rules/ is embedded, so it is a build input
+sources = ["odx/**/*.odin", "rules/**/*", "templates/**/*"] # rules/ and templates/ are embedded, so they are build inputs
 outputs = ["{{ env.OUT }}/odx"]
 run = "odin build odx -out:$OUT/odx $ODIN_VET -vet-packages:odx -debug"
+
+[tasks.release]
+description = "Optimized binary for distribution (ubi: path once a tagged release exists, 18.3)"
+sources = ["odx/**/*.odin", "rules/**/*", "templates/**/*"]
+outputs = ["{{ env.OUT }}/release/odx"]
+run = "odin build odx -out:$OUT/release/odx $ODIN_VET -vet-packages:odx -o:speed"
+
+[tasks.install]
+description = "Put a release build on PATH for local use in other projects"
+depends = ["release"]
+run = "install -m 755 $OUT/release/odx ~/.local/bin/odx"
 
 [tasks.fmt]
 description = "Format all odin files in this project"

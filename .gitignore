@@ -11,6 +11,10 @@
 !spikes/**
 !rules/
 !rules/**
+!templates/
+!templates/**
+!api/
+!api/**
 !tests/
 !tests/**
 !odx.json5

@@ -1,0 +1,13 @@
+#+vet explicit-allocators
+package {{name_snake}}
+
+import "core:testing"
+
+@(test)
+test_make_{{name_snake}} :: proc(t: ^testing.T) {
+	v, err := make_{{name_snake}}(1)
+	testing.expect_value(t, err, {{Name}}_Error.None)
+	testing.expect_value(t, v.value, 1)
+	_, err = make_{{name_snake}}(-1)
+	testing.expect_value(t, err, {{Name}}_Error.Invalid)
+}

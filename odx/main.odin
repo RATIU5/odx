@@ -21,6 +21,8 @@ Opts :: struct {
 	max_violations: int,
 	allow_dirty:    bool, // fix --allow-dirty
 	hooks:          bool, // init --hooks
+	list:           bool, // new --list
+	dir:            string, // new --dir
 	root:           string, // --root override; "" = walk up from cwd
 	rule:           string, // explain --rule
 	exemplar:       string, // check --exemplar <topic>
@@ -36,6 +38,8 @@ USAGE :: `usage: odx <command> [args] [--json] [--root <dir>]
   for <path>                   topics that apply to a file or package
   check [<path>...] [--topic t] [--fast] [--strict] [--max-violations n]   run checks
   ignores                      list every odx:ignore suppression
+  api [<path>...]              public API snapshots in api/<pkg>.txt (ODX_UPDATE_SNAPSHOTS=1 re-blesses)
+  new <template> <Name> [--dir d]   scaffold a package from a template (--list: templates)
   doctor [--ci] [--verify-rulebook | --relock]   toolchain, flags, mise.toml drift, protected-path lock
   fix [<path>...] [--propose] [--allow-dirty]    delete stale odx:ignore directives (--propose: print only)
   hook edit | stop | changed   Claude Code hook entry points (read the hook JSON on stdin)
@@ -81,6 +85,8 @@ parse_opts :: proc(args: []string) -> (o: Opts) {
 			o.allow_dirty = true
 		case "--hooks":
 			o.hooks = true
+		case "--list":
+			o.list = true
 		case "--max-violations":
 			if has_eq == "" {
 				if i + 1 >= len(args) {fail("%s needs a value", a)}
@@ -90,7 +96,7 @@ parse_opts :: proc(args: []string) -> (o: Opts) {
 			n, ok := strconv.parse_int(value)
 			if !ok || n < 0 {fail("--max-violations needs a non-negative integer")}
 			o.max_violations = n
-		case "--root", "--rule", "--topic", "--exemplar":
+		case "--root", "--rule", "--topic", "--exemplar", "--dir":
 			if has_eq == "" {
 				if i + 1 >= len(args) {fail("%s needs a value", a)}
 				i += 1
@@ -105,6 +111,8 @@ parse_opts :: proc(args: []string) -> (o: Opts) {
 				append(&o.topics, value)
 			case "--exemplar":
 				o.exemplar = value
+			case "--dir":
+				o.dir = value
 			}
 		case:
 			fail("unknown flag %s", a)
@@ -136,6 +144,10 @@ main :: proc() {
 		cmd_selftest(o)
 	case "fix":
 		cmd_fix(o)
+	case "api":
+		cmd_api(o)
+	case "new":
+		cmd_new(o)
 	case "hook":
 		cmd_hook(o)
 	case "ext":

@@ -1,0 +1,2 @@
+{ version: 1, roles: { pure: ["lib"] }, layering: { pure: { may_import: ["core:*"] } }, odin: { flags: ["-vet"] },
+  disabled: { "allocators/R1": "fixture: the snapshot, not the allocator tag, is under test" } }

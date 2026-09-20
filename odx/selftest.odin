@@ -35,7 +35,48 @@ cmd_selftest :: proc(o: Opts) {
 		fmt.printfln("%s %s/%s", "ok  " if bad == 0 else "FAIL", FIXTURES_DIR, name)
 		failed += bad
 	}
+	failed += check_templates(root)
 	if failed > 0 {os.exit(EXIT_VIOLATION)}
+}
+
+// check_templates renders each template as `Sample` into a temp project with a generated
+// odx.json5 and runs the full check there (17.16). api/ snapshots are verified per fixture too.
+check_templates :: proc(root: string) -> (failed: int) {
+	errs: [dynamic]string
+	for &t in load_templates(root, &errs) {
+		tmp, terr := os.make_directory_temp("", "odx-tpl-*", context.allocator)
+		if terr != nil {fail("cannot create temp dir")}
+		defer os.remove_all(tmp)
+		cfg := strings.concatenate(
+			{
+				`{ version: 1, roles: { `,
+				t.role,
+				`: ["sample"] }, layering: { `,
+				t.role,
+				`: { may_import: ["core:*"] } }, odin: { flags: ["-vet", "-vet-tabs", "-vet-cast", "-strict-style", "-warnings-as-errors"] } }`,
+			},
+			context.temp_allocator,
+		)
+		if err := os.write_entire_file(join({tmp, CONFIG_FILE}), cfg);
+		   err != nil {fail("write: %v", err)}
+		render_template(&t, "Sample", tmp)
+		p := load_project(tmp)
+		bad := len(p.errs)
+		for e in p.errs {fmt.println("  config:", e)}
+		if bad == 0 {
+			r, code := run_checks(&p, Opts{})
+			fmt.print(report_text(r))
+			for e in r.tool_errors {fmt.println("  tool error:", e)}
+			if code != 0 {bad += 1}
+		}
+		fmt.printfln("%s template %s", "ok  " if bad == 0 else "FAIL", t.name)
+		failed += bad
+	}
+	for e in errs {
+		fmt.println("  template:", e)
+		failed += 1
+	}
+	return
 }
 
 // run_fixture returns the number of mismatches, printing each one.
@@ -52,6 +93,16 @@ run_fixture :: proc(dir: string) -> (bad: int) {
 	}
 	wants := collect_wants(dir)
 	bad += check_fix_pairs(dir, r)
+	if os.is_directory(join({dir, API_DIR})) {
+		c := Ctx {
+			root = dir,
+			cfg  = &p.cfg,
+			rb   = &p.rb,
+			r    = new(Report),
+		}
+		c.pkgs = project_packages(&p, nil)
+		bad += api_snapshots(&c, false)
+	}
 	for v in r.violations {
 		if w := match_want(wants[:], v); w != nil {
 			w.used = true

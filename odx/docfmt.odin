@@ -23,33 +23,68 @@ run_family_c :: proc(c: ^Ctx) {
 	flags := odin_flags(c)
 
 	for &p, i in c.pkgs {
-		if p.pkg == nil || len(p.diags) > 0 {continue}
-		out := join({tmp, fmt.tprintf("%d.odin-doc", i)})
-		args := make([dynamic]string, context.temp_allocator)
-		append(&args, "doc", p.dir, "-doc-format", strings.concatenate({"-out:", out}))
-		append(&args, ..flags)
-		code, _, ok := run_odin(c, ..args[:])
-		if !ok {return}
-		if code != 0 || !os.exists(out) {continue}
-		data, rerr := os.read_entire_file(out, context.allocator)
-		if rerr != nil {continue}
-		h, derr := doc.read_from_bytes(data)
-		if derr != nil {
-			append(
-				&c.r.tool_errors,
-				fmt.aprintf(
-					"doc-format reader: %v (compiler wrote version %d.%d.%d). Family C skipped.",
-					derr,
-					h.version.major,
-					h.version.minor,
-					h.version.patch,
-				),
-			)
+		h, status := doc_package(c, &p, tmp, i, flags)
+		switch status {
+		case .Fatal:
 			return
+		case .Skipped:
+			continue
+		case .Ok:
+			check_entities(c, &p, h, rules[:])
 		}
-		check_entities(c, &p, h, rules[:])
 	}
 }
+
+Doc_Status :: enum {
+	Ok,
+	Skipped, // did not type-check, or nothing to parse: family A already said why
+	Fatal, // odin missing or reader version mismatch: a tool error was recorded
+}
+
+// doc_package runs `odin doc <pkg> -doc-format` and reads the result (19.2).
+doc_package :: proc(
+	c: ^Ctx,
+	p: ^Package,
+	tmp: string,
+	i: int,
+	flags: []string,
+) -> (
+	h: ^doc.Header,
+	status: Doc_Status,
+) {
+	if p.pkg == nil || len(p.diags) > 0 {return nil, .Skipped}
+	out := join({tmp, fmt.tprintf("%d.odin-doc", i)})
+	args := make([dynamic]string, context.temp_allocator)
+	append(&args, "doc", p.dir, "-doc-format", strings.concatenate({"-out:", out}))
+	append(&args, ..flags)
+	code, _, ok := run_odin(c, ..args[:])
+	if !ok {return nil, .Fatal}
+	if code != 0 || !os.exists(out) {return nil, .Skipped}
+	data, rerr := os.read_entire_file(out, context.allocator)
+	if rerr != nil {return nil, .Skipped}
+	derr: doc.Reader_Error
+	h, derr = doc.read_from_bytes(data)
+	if derr != nil {
+		append(
+			&c.r.tool_errors,
+			fmt.aprintf(
+				"doc-format reader: %v (compiler wrote version %d.%d.%d); this odx supports %d.%d.x only",
+				derr,
+				h.version.major,
+				h.version.minor,
+				h.version.patch,
+				DOC_FORMAT_MAJOR,
+				DOC_FORMAT_MINOR,
+			),
+		)
+		return nil, .Fatal
+	}
+	return h, .Ok
+}
+
+// the odx <-> doc-format compatibility matrix (20.6): one supported line, stated in the error
+DOC_FORMAT_MAJOR :: 0
+DOC_FORMAT_MINOR :: 3
 
 @(private = "file")
 check_entities :: proc(c: ^Ctx, p: ^Package, h: ^doc.Header, rules: []^Active_Rule) {

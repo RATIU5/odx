@@ -14,6 +14,8 @@ odx doctor [--ci]                toolchain, flags, mise.toml drift, overrides, p
 odx fix [--propose]              delete stale odx:ignore directives (refuses on a dirty worktree)
 odx explain --checklist          manual rules only, for an adversarial reviewer
 odx hook edit | stop | changed   Claude Code hook entry points
+odx api [<path>...]              public API snapshot per package in api/<pkg>.txt; exit 1 on drift
+odx new <template> <Name>        scaffold a package from a template (odx new --list)
 odx ext list | ext validate      project extensions in .odx/ and odx.json5
 odx init                         write odx.json5 and mise.toml for a project
 ```
@@ -53,4 +55,19 @@ mise run ci         # all of the above + odx doctor --ci + odx checking itself
 
 A fixture is a small project under `tests/fixtures/<name>/` with its own `odx.json5`; each
 offending line carries `// want: topic/R2` (several ids space-separated). A package-level
-finding is marked on line 1 of any file in that package.
+finding is marked on line 1 of any file in that package. A fixture with an `api/` directory
+also verifies its snapshots; every template is rendered as `Sample` and checked.
+
+## API snapshots
+
+`odx api` writes one sorted text file per package under `api/`: one fully qualified line per
+exported entity with resolved types and the whitelisted attributes (`require_results`,
+`deprecated`, `odx_*`). A later run diffs structurally (added, removed, changed by entity) and
+exits 1; `ODX_UPDATE_SNAPSHOTS=1 odx api` re-blesses and the git diff is the review. Reading a
+`.odin-doc` from an unsupported doc-format version is a tool error naming both versions.
+
+## Templates
+
+`odx new <template> <Name>` renders `templates/<name>/` (built in) or `.odx/templates/<name>/`
+into the role's directory from `odx.json5` (or `--dir`). Placeholders: `{{Name}}`,
+`{{name_snake}}`, `{{name_upper}}`. It never overwrites.

@@ -1,0 +1,10 @@
+{
+  name: "package",
+  summary: "A pure package: explicit allocators, one Error enum, a @(require_results) proc and a test",
+  role: "pure",
+  // template file -> target path, both relative; placeholders: {{Name}} {{name_snake}} {{name_upper}}
+  files: {
+    "pkg.odin.tmpl": "{{name_snake}}/{{name_snake}}.odin",
+    "pkg_test.odin.tmpl": "{{name_snake}}/{{name_snake}}_test.odin",
+  },
+}

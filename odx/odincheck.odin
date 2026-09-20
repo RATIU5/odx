@@ -62,8 +62,9 @@ run_family_a :: proc(c: ^Ctx) {
 		append(&args, ..flags)
 		append(&args, "-no-entry-point", "-json-errors")
 		code, text, ok := run_odin(c, ..args[:])
-		if ok && code != 0 && text == "" {
-			// ponytail: the 2026-09 nightly segfaults intermittently; one retry, then a tool error
+		// ponytail: the 2026-09 nightly segfaults intermittently (exit 11, no output); retry twice
+		for _ in 0 ..< 2 {
+			if !(ok && code != 0 && text == "") {break}
 			code, text, ok = run_odin(c, ..args[:])
 		}
 		if !ok {return}
