@@ -1,0 +1,44 @@
+{
+  name: "layering",
+  summary: "Package roles (pure, service, edge) fix who may import whom, hold globals, and touch foreign",
+  tags: ["layering", "roles", "imports", "globals", "foreign", "architecture"],
+  aliases: ["package structure", "dependencies", "import rules", "modules"],
+  example_questions: [
+    "which package should this code go in",
+    "can a core package import os",
+    "where do foreign bindings live",
+  ],
+  applies_to: { roles: ["pure", "service", "edge"] },
+  related: ["errors"],
+  example_roles: { "example/core": "pure", "example/platform": "edge" },
+  rules: [
+    {
+      id: "R1",
+      statement: "Every package directory maps to exactly one role in odx.json5.",
+      why: "Unmapped code has no rules; doubly mapped code has contradictory ones.",
+      severity: "error",
+      check: { kind: "path_role" },
+    },
+    {
+      id: "R2",
+      statement: "A package imports only what its role's may_import allows; pure never imports os, net, or foreign.",
+      why: "Dependencies only flow down. A pure package that reaches for I/O stops being testable without the world.",
+      severity: "error",
+      check: { kind: "banned_import", from: "layering.may_import" },
+    },
+    {
+      id: "R3",
+      statement: "No mutable package-level variables in pure packages; pass state as a parameter.",
+      why: "Hidden state makes two calls with the same arguments give different answers.",
+      severity: "error",
+      check: { kind: "banned_construct", construct: "mutable_global", roles: ["pure"] },
+    },
+    {
+      id: "R4",
+      statement: "foreign imports and foreign blocks live only in edge packages.",
+      why: "The FFI boundary is where memory and calling conventions change; keep it in one place.",
+      severity: "error",
+      check: { kind: "banned_construct", construct: "foreign", except_roles: ["edge"] },
+    },
+  ],
+}

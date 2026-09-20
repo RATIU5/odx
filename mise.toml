@@ -1,0 +1,54 @@
+[tools]
+odin = "dev-2026-09" # the only version odx is tested against; odx doctor reports drift
+
+[env]
+# macOS: the prebuilt odin's -sanitize:address links only against LLVM's clang, not Apple's
+_.path = ["{% if os() == 'macos' %}/opt/homebrew/opt/llvm@22/bin{% endif %}"]
+OUT = "build"
+ODX = "{{ config_root }}/build/odx"
+# vet flags used for odx's own sources; the same list odx recommends to projects
+ODIN_VET = "-vet -vet-tabs -vet-cast -strict-style -warnings-as-errors"
+
+[tasks.build]
+description = "Build the odx binary (debug)"
+alias = "b"
+sources = ["odx/**/*.odin", "rules/**/*"] # rules/ is embedded, so it is a build input
+outputs = ["{{ env.OUT }}/odx"]
+run = "odin build odx -out:$OUT/odx $ODIN_VET -vet-packages:odx -debug"
+
+[tasks.odx]
+description = "Run the odx binary (debug)"
+depends = ["build"]
+run = "./build/odx"
+
+[tasks.test]
+description = "odx's own unit tests"
+run = "odin test odx $ODIN_VET -sanitize:address -define:ODIN_TEST_FAIL_ON_BAD_MEMORY=true -out:$OUT/odx_test"
+
+[tasks.spikes]
+description = "M0 feasibility spikes (spikes/README.md records results)"
+run = '''
+set -e
+for s in spikes/*/; do
+  [ -f "$s/main.odin" ] || continue
+  odin build "$s" -out:$OUT/spike_$(basename "$s") $ODIN_VET -debug
+done
+'''
+
+[tasks.exemplars]
+description = "Every rules/<topic>/example/<pkg> compiles under the vet flags"
+run = '''
+set -e
+for pkg in rules/*/example/*/; do
+  odin check "$pkg" $ODIN_VET -no-entry-point && echo "ok $pkg"
+done
+'''
+
+[tasks.self]
+description = "odx validates its own config and rulebook"
+depends = ["build"]
+run = "$ODX ext validate"
+
+[tasks.ci]
+description = "Everything CI runs, in order"
+depends = ["build", "test", "exemplars", "self"]

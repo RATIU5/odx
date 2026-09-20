@@ -1,0 +1,41 @@
+{
+  name: "errors",
+  summary: "Typed errors, @(require_results), or_return; never discard a failure",
+  tags: ["errors", "results", "or_return", "require_results"],
+  aliases: ["error handling", "failure", "fallible"],
+  example_questions: [
+    "how do I return failures from a proc",
+    "should this return a bool or an error",
+    "how do I propagate an error to the caller",
+  ],
+  applies_to: { roles: ["pure", "service", "edge"] },
+  related: ["layering"],
+  example_roles: { "example/core": "pure" },
+  rules: [
+    {
+      id: "R1",
+      statement: "Exported procedures that can fail return an error type as the last result, not a bool.",
+      why: "A bool says that something failed, never what. Callers cannot branch on it or report it.",
+      check: "manual",
+    },
+    {
+      id: "R2",
+      statement: "Each package declares one Error enum or union; no string or any errors.",
+      why: "A typed error is exhaustively switchable and greppable; strings and any are neither.",
+      check: "manual",
+    },
+    {
+      id: "R3",
+      statement: "Exported procedures whose last result is an error type carry @(require_results).",
+      why: "Only the attribute makes the compiler reject a discarded failure; -vet does not.",
+      severity: "error",
+      check: { kind: "require_attribute", attribute: "require_results", on: "exported_procs", result_type_suffix: ["Error"] },
+    },
+    {
+      id: "R4",
+      statement: "Propagate with or_return; handle locally only when the proc can actually recover.",
+      why: "or_return keeps the happy path linear and makes every ignored error a visible choice.",
+      check: "manual",
+    },
+  ],
+}

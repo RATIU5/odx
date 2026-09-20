@@ -1,0 +1,30 @@
+{
+  // Package roles: each glob is a directory path relative to this file (17.5).
+  // Every package must match exactly one role. Detected package directories:
+  //   odx
+  //   rules/errors/example/core
+  //   rules/layering/example/core
+  //   rules/layering/example/platform
+  //   spikes/astwalk
+  //   spikes/docfmt
+  //   spikes/docshort
+  //   spikes/sample/app
+  //   spikes/sample/lib
+  roles: {
+    pure: [],    // no os, no foreign, no I/O, no mutable globals
+    service: [], // takes capabilities as parameters
+    edge: ["odx", "odx/**", "spikes/**"], // os, foreign, I/O allowed
+  },
+  layering: {
+    pure: { may_import: ["pure", "core:*"] },
+    service: { may_import: ["pure", "service", "core:*"] },
+    edge: { may_import: ["pure", "service", "edge", "core:*", "vendor:*"] },
+  },
+  exclude: [".odx/**", "rules/**", "vendor/**", "build/**"],
+  // disabled: { "allocators/R2": "reason of at least ten characters" },
+  odin: {
+    flags: ["-vet", "-vet-tabs", "-vet-cast", "-strict-style", "-warnings-as-errors"],
+    forbidden_flags: ["-no-bounds-check", "-disable-assert", "-no-type-assert", "-ignore-unknown-attributes"],
+    version: "dev-2026-09",
+  },
+}
