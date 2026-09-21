@@ -47,6 +47,7 @@ Doc_Status :: enum {
 	Fatal, // odin missing or reader version mismatch: a tool error was recorded
 }
 
+@(require_results)
 doc_package :: proc(
 	c: ^Ctx,
 	p: ^Package,
@@ -140,11 +141,10 @@ check_entities :: proc(c: ^Ctx, p: ^Package, h: ^doc.Header, rules: []^Active_Ru
 			attrs := make(map[string]bool, context.temp_allocator)
 			for at in doc.from_array(h, e.attributes) {attrs[doc.from_string(h, at.name)] = true}
 			if "test" in attrs {continue}
-			last := last_result_name(h, types, e.type)
+			last, is_err := last_result_error(h, types, ents, e.type, c.cfg.errors.types)
 			for a in rules {
 				if !role_applies(&a.rule.check, p.role) {continue}
-				if a.rule.check.attribute in attrs ||
-				   !has_suffix_any(last, a.rule.check.result_type_suffix) {continue}
+				if a.rule.check.attribute in attrs || !is_err {continue}
 				fname := doc.from_string(h, files[e.pos.file].name)
 				file, _ := rel_of(c.root, join({p.dir, filepath.base(fname)}))
 				report(
@@ -170,22 +170,45 @@ check_entities :: proc(c: ^Ctx, p: ^Package, h: ^doc.Header, rules: []^Active_Ru
 	}
 }
 
+// last_result_error: the name of a procedure's last result type and whether it is an error
+// type: a name ending in one of `suffixes` (odx.json5 errors.types), or, regardless of name,
+// an enum with a None/Ok variant or a union that admits nil. The name is the entry point a
+// grep could do; the structure is what only the checked entity table can say.
 @(private = "file")
-last_result_name :: proc(h: ^doc.Header, types: []doc.Type, ti: doc.Type_Index) -> string {
+last_result_error :: proc(
+	h: ^doc.Header,
+	types: []doc.Type,
+	ents: []doc.Entity,
+	ti: doc.Type_Index,
+	suffixes: []string,
+) -> (
+	name: string,
+	is_err: bool,
+) {
 	t := types[ti]
-	if t.kind != .Proc {return ""}
+	if t.kind != .Proc {return}
 	sub := doc.from_array(h, t.types)
-	if len(sub) < 2 || sub[1] == 0 {return ""}
+	if len(sub) < 2 || sub[1] == 0 {return}
 	res_ents := doc.from_array(h, types[sub[1]].entities)
-	if len(res_ents) == 0 {return ""}
-	ents := doc.from_array(h, h.entities)
+	if len(res_ents) == 0 {return}
 	last := types[ents[res_ents[len(res_ents) - 1]].type]
-	return doc.from_string(h, last.name) if last.kind == .Named else ""
-}
-
-@(private = "file")
-has_suffix_any :: proc(s: string, suffixes: []string) -> bool {
-	if s == "" {return false}
-	for suf in suffixes {if strings.has_suffix(s, suf) {return true}}
-	return false
+	if last.kind != .Named {return}
+	name = doc.from_string(h, last.name)
+	for suf in suffixes {if strings.has_suffix(name, suf) {return name, true}}
+	named := doc.from_array(h, last.types)
+	if len(named) == 0 {return}
+	base := types[named[0]]
+	#partial switch base.kind {
+	case .Enum:
+		for ei in doc.from_array(h, base.entities) {
+			switch doc.from_string(h, ents[ei].name) {
+			case "None", "Ok":
+				return name, true
+			}
+		}
+	case .Union:
+		flags := transmute(doc.Type_Flags_Union)base.flags
+		return name, .No_Nil not_in flags
+	}
+	return
 }

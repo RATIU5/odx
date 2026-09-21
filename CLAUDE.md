@@ -32,7 +32,7 @@ Applies to roles pure, service, edge (odx.json5).
 
 ### errors: Typed errors, @(require_results), or_return; never discard a failure
 Applies to roles pure, service, edge (odx.json5).
-- **errors/R3** Exported procedures whose last result is an error type carry @(require_results).
+- **errors/R3** Exported procedures whose last result is an error type (a name in odx.json5 errors.types, an enum with a None/Ok variant, or a nil-able union) carry @(require_results).
   Why: Only the attribute makes the compiler reject a discarded failure; -vet does not (`x, _ := f()` and a bare `g()` both pass). This is odx's convention, not a documented Odin one.
   Instead of: Trusting callers to check the error result by convention.
 

@@ -192,13 +192,18 @@ INIT_CONFIG_BODY :: `  version: 1,
     edge: { may_import: ["pure", "service", "edge", "core:*", "vendor:*"] },
   },
   exclude: [".odx/**", "rules/**", "vendor/**", "build/**"],
-  // disabled: { "allocators/R2": "reason of at least ten characters" },
+  // disabled: { "errors/R3": "reason of at least ten characters" },
   odin: {
     flags: ["-vet", "-vet-tabs", "-vet-cast", "-strict-style", "-warnings-as-errors"],
     forbidden_flags: ["-no-bounds-check", "-disable-assert", "-no-type-assert", "-ignore-unknown-attributes"],
     required_flags: ["-sanitize:address", "-define:ODIN_TEST_FAIL_ON_BAD_MEMORY=true"],
+    // declined: { "-vet-style": "why this project considered the flag and refused it" },
+    // tagged_files_min: 0, // #+vet explicit-allocators coverage may not drop below this; raise it as it grows
     version: "dev-2026-09",
   },
+  // type-name suffixes errors/R3 treats as an error result, besides any enum with a None/Ok
+  // variant or nil-able union, which need no name
+  errors: { types: ["Error"] },
 }
 `
 

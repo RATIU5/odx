@@ -106,6 +106,12 @@ run_family_b :: proc(c: ^Ctx) {
 			c.r.summary.files += 1
 			check_vet_disables(c, f)
 		}
+		// every `match: call` rule shares one AST walk per file (the only check that walks)
+		calls := make([dynamic]^Active_Rule, context.temp_allocator)
+		for &a in c.rules {
+			if a.rule.check.kind == .pattern && a.rule.check.match == "call" && role_applies(&a.rule.check, p.role) {append(&calls, &a)}
+		}
+		if len(calls) > 0 {check_calls(c, &p, calls[:])}
 		for &a in c.rules {
 			spec := &a.rule.check
 			if !role_applies(spec, p.role) {continue}
@@ -252,7 +258,22 @@ check_imports :: proc(c: ^Ctx, p: ^Package, a: ^Active_Rule) {
 			for m in layer.may_import {
 				allowed ||= (target_role != "" && m == target_role) || import_glob(m, path)
 			}
-			if allowed && !import_matches(deny, path) {continue}
+			if allowed && !import_matches(deny, path) {
+				// an allowed project import may still reach a denied collection further down:
+				// report it here, at the line that opens the path
+				if !strings.contains(path, ":") || target_role != "" {
+					for denied, via in reach_denied(c, label, deny) {
+						report_at(
+							c,
+							a,
+							&imp.node,
+							fmt.tprintf("%s package reaches %s via %s", p.role, denied, via),
+							strings.concatenate({path, " -> ", denied}),
+						)
+					}
+				}
+				continue
+			}
 			what :=
 				label if target_role == "" else strings.concatenate({label, " (role ", target_role, ")"}, context.temp_allocator)
 			report_at(
@@ -264,6 +285,39 @@ check_imports :: proc(c: ^Ctx, p: ^Package, a: ^Active_Rule) {
 			)
 		}
 	}
+}
+
+// reach_denied walks the project packages reachable from start (a root-relative package dir)
+// and returns every denied collection import found, with the first import chain that reaches
+// it. Packages outside the project are leaves: the compiler's own graph owns those.
+// ponytail: recomputed per direct import; memoise per package if a project makes this slow.
+reach_denied :: proc(c: ^Ctx, start: string, deny: []string) -> map[string]string {
+	found := make(map[string]string, context.temp_allocator)
+	visited := make(map[string]bool, context.temp_allocator)
+	walk :: proc(c: ^Ctx, rel, chain: string, deny: []string, found: ^map[string]string, visited: ^map[string]bool) {
+		if rel in visited {return}
+		visited[rel] = true
+		for &q in c.pkgs {
+			if q.rel != rel {continue}
+			for f in q.files {
+				if strings.has_suffix(f.fullpath, "_test.odin") {continue}
+				for d in f.decls {
+					imp, ok := d.derived.(^ast.Import_Decl)
+					if !ok {continue}
+					path := strings.trim(imp.relpath.text, `"`)
+					label, role := import_target(c, &q, path)
+					if strings.contains(path, ":") && role == "" {
+						if import_matches(deny, path) && path not_in found {found[path] = chain}
+						continue
+					}
+					walk(c, label, strings.concatenate({chain, " -> ", label}, context.temp_allocator), deny, found, visited)
+				}
+			}
+			break
+		}
+	}
+	walk(c, start, start, deny, &found, &visited)
+	return found
 }
 
 // Import strings are not paths: `core:*` means any core package, `core:sys/*` any package under
@@ -283,14 +337,15 @@ import_matches :: proc(globs: []string, path: string) -> bool {
 
 Walk :: struct {
 	c:       ^Ctx,
-	a:       ^Active_Rule,
+	rules:   []^Active_Rule, // every call rule that applies to the package
 	aliases: map[string]string, // local import name -> import path
 }
 
 // Matches `pkg.name` or bare `name` calls; aliases resolved per file, best effort.
-check_calls :: proc(c: ^Ctx, p: ^Package, a: ^Active_Rule) {
+// One walk per file dispatches to every rule, so the cost is O(files), not O(files × rules).
+check_calls :: proc(c: ^Ctx, p: ^Package, rules: []^Active_Rule) {
 	for f in p.files {
-		w := Walk{c, a, make(map[string]string, context.temp_allocator)}
+		w := Walk{c, rules, make(map[string]string, context.temp_allocator)}
 		for d in f.decls {
 			if imp, ok := d.derived.(^ast.Import_Decl); ok {
 				path := strings.trim(imp.relpath.text, `"`)
@@ -329,8 +384,9 @@ visit_call :: proc(v: ^ast.Visitor, n: ^ast.Node) -> ^ast.Visitor {
 			)
 		}
 	}
-	if name != "" && slice.contains(w.a.rule.check.names, name) {
-		report_at(w.c, w.a, n, strings.concatenate({"call to ", name}), name)
+	if name == "" {return v}
+	for a in w.rules {
+		if slice.contains(a.rule.check.names, name) {report_at(w.c, a, n, strings.concatenate({"call to ", name}), name)}
 	}
 	return v
 }

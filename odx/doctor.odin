@@ -11,6 +11,7 @@ import "core:strings"
 Doctor :: struct {
 	errors, warnings: [dynamic]string,
 	json:             bool, // collect only; the free-text sections are skipped and the lists printed once
+	guarantees:       Guarantees_Report,
 }
 
 warn :: proc(d: ^Doctor, f: string, args: ..any) {
@@ -32,10 +33,15 @@ doctor_exit :: proc(d: ^Doctor) {
 	if d.json {
 		print_json(
 			struct {
-				schema:   int,
-				errors:   []string,
-				warnings: []string,
-			}{1, d.errors[:], d.warnings[:]},
+				schema:     int,
+				errors:     []string,
+				warnings:   []string,
+				guarantees: struct {
+					flags:  []Guarantee,
+					tagged: int,
+					needed: int,
+				},
+			}{1, d.errors[:], d.warnings[:], {d.guarantees.flags[:], d.guarantees.tagged, d.guarantees.needed}},
 		)
 	} else {
 		fmt.printfln("%d errors, %d warnings", len(d.errors), len(d.warnings))

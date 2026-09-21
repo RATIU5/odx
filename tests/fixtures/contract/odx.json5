@@ -1,13 +1,15 @@
 // Stage 0 contract: one package per executing rule, a fires file and a silent file each.
-// The findings on this tree must stay byte-identical through CUT_IMPR Stages 1-3.
+// Stage 6 added errors_r3_shape (structural error types) and dependencies_r2_via (transitive reach).
 {
   version: 1,
   roles: {
-    pure: ["allocators_r1", "dependencies_r2", "dependencies_r3"],
-    edge: ["errors_r3"],
+    pure: ["allocators_r1", "dependencies_r2", "dependencies_r2_via", "dependencies_r3"],
+    service: ["dependencies_r2_svc"],
+    edge: ["errors_r3", "errors_r3_shape"],
   },
   dependencies: {
-    pure: { may_import: ["pure", "core:*"] },
+    pure: { may_import: ["pure", "service", "core:*"] },
+    service: { may_import: ["pure", "service", "core:*"] },
     edge: { may_import: ["pure", "edge", "core:*"] },
   },
   odin: { flags: ["-vet", "-warnings-as-errors"] },

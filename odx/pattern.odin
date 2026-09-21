@@ -12,7 +12,7 @@ check_pattern :: proc(c: ^Ctx, p: ^Package, a: ^Active_Rule) {
 	spec := &a.rule.check
 	switch spec.match {
 	case "call":
-		check_calls(c, p, a)
+	// run_family_b batches every call rule into one walk per file (check_calls)
 	case "import":
 		for f in p.files {
 			for d in f.decls {

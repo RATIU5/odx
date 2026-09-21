@@ -20,7 +20,17 @@ Config :: struct {
 	disabled:     map[string]string, // "topic/R2" -> reason
 	dependencies: map[string]Layer,
 	odin:         Odin_Cfg,
+	errors:       Errors_Cfg,
 }
+
+// errors.types: the type-name suffixes errors/R3 treats as an error result, on top of the
+// structural test (an enum with a None/Ok variant, or a nil-able union) that needs no name.
+Errors_Cfg :: struct {
+	types: []string, // absent = DEFAULT_ERROR_TYPES
+}
+
+DEFAULT_ERROR_TYPES := []string{"Error"}
+ERRORS_KEYS := []string{"types"}
 
 Layer :: struct {
 	may_import: []string, // roles or import globs (`core:*`)
@@ -35,6 +45,8 @@ Odin_Cfg :: struct {
 	custom_attributes:    []string,
 	allowed_vet_disables: []string,
 	explicit_allocators:  Explicit_Allocators,
+	declined:             map[string]string, // flag -> why this project considered and refused it
+	tagged_files_min:     int, // floor for `#+vet explicit-allocators` coverage; doctor errors below it
 	version:              string,
 	path:                 string,
 }
@@ -54,6 +66,7 @@ CONFIG_KEYS := []string {
 	"disabled",
 	"dependencies",
 	"odin",
+	"errors",
 }
 ODIN_KEYS := []string {
 	"flags",
@@ -63,6 +76,8 @@ ODIN_KEYS := []string {
 	"custom_attributes",
 	"allowed_vet_disables",
 	"explicit_allocators",
+	"declined",
+	"tagged_files_min",
 	"version",
 	"path",
 }
@@ -105,8 +120,14 @@ load_config :: proc(root: string, errs: ^[dynamic]string) -> (cfg: Config) {
 	odin_obj, _ := tree["odin"].(json.Object)
 	check_keys(errs, path, "odin.", odin_obj, ODIN_KEYS)
 	check_enum(errs, path, odin_obj, "odin.explicit_allocators", Explicit_Allocators)
+	errors_obj, _ := tree["errors"].(json.Object)
+	check_keys(errs, path, "errors.", errors_obj, ERRORS_KEYS)
 	// unmarshal leaves an empty array nil: presence in the tree is the real signal
 	if "exclude" not_in tree {cfg.exclude = DEFAULT_EXCLUDE}
+	if "types" not_in errors_obj {cfg.errors.types = DEFAULT_ERROR_TYPES}
+	for flag, reason in cfg.odin.declined {
+		if len(reason) < 10 {errf(errs, "%s: odin.declined %s needs a reason of 10+ characters", path, flag)}
+	}
 	dependencies_obj, _ := tree["dependencies"].(json.Object)
 	for role in sorted_keys(cfg.dependencies) {
 		obj, _ := dependencies_obj[role].(json.Object)

@@ -66,12 +66,15 @@ rule_try :: proc(o: Opts) {
 	fmt.printfln("%d match%s", n, "" if n == 1 else "es")
 }
 
+// The evidence bar: a compiler version and a command whose output shows the failure the rule
+// prevents (allocators/R1 and errors/R3 are the models). An evidence field nobody can check by
+// running something is not evidence; the idiom stays a reader check in topic.md until it is.
 RULE_STUB :: `---
 id: "@ID@",
 statement: "",
 why: "",
 instead_of: "",
-evidence: "",
+evidence: "", // name the compiler version and the command that reproduces the failure; prose is not evidence
 cost: "",
 severity: "error",
 role: "edge",

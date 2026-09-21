@@ -1,8 +1,22 @@
 package odx
 
+import "core:fmt"
 import "core:os"
 import "core:slice"
 import "core:strings"
+
+// Guarantee is one row of the ratchet, as `odx doctor --json` reports it.
+Guarantee :: struct {
+	flag:     string,
+	on:       bool,
+	declined: bool,
+}
+
+Guarantees_Report :: struct {
+	flags:  [dynamic]Guarantee,
+	tagged: int, // files carrying #+vet explicit-allocators
+	needed: int, // files the policy says should
+}
 
 // Guarantees: the checks the installed compiler can enforce that only an external tool
 // can verify are switched on. Doctor reports; check enforces (allocators/R1, odx/feature-optout).
@@ -89,16 +103,23 @@ report_guarantees :: proc(d: ^Doctor, c: ^Ctx, hf: Help_Flags) {
 	if on["-vet"] {for f in implied {on[f] = true}}
 	say(d, "guarantees (odin.flags):")
 	for f in flags {
+		reason, declined := c.cfg.odin.declined[f]
 		state := "on " if on[f] else "off"
-		say(d, "  %s %s", state, f)
+		append(&d.guarantees.flags, Guarantee{f, on[f], declined})
+		say(d, "  %s %s%s", state, f, fmt.tprintf("  declined: %s", reason) if declined else "")
 		if !on[f] {
 			if slice.contains(DEFAULT_GUARANTEES, f) {
 				warn(d, "default guarantee %s is not in odin.flags", f)
-			} else if slice.contains(implied, f) {
+			} else if slice.contains(implied, f) || declined {
+				// implied by -vet, or considered and refused: not noise
 			} else {
-				warn(d, "the installed compiler offers %s and this project has not adopted it", f)
+				warn(d, "the installed compiler offers %s and this project has not adopted it (odin.flags to adopt, odin.declined to refuse)", f)
 			}
 		}
+	}
+	for f in sorted_keys(c.cfg.odin.declined) {
+		if f not_in hf.flags {warn(d, "odin.declined names %s, which this compiler does not offer", f)}
+		if on[f] {warn(d, "odin.declined names %s, which odin.flags also turns on", f)}
 	}
 	tagged, needed := 0, 0
 	for p in c.pkgs {
@@ -111,8 +132,15 @@ report_guarantees :: proc(d: ^Doctor, c: ^Ctx, hf: Help_Flags) {
 			if slice.contains(vet_tag_names(f), "explicit-allocators") {tagged += 1}
 		}
 	}
+	d.guarantees.tagged, d.guarantees.needed = tagged, needed
 	if needed >
 	   0 {say(d, "  %s #+vet explicit-allocators: %d of %d pure/service files tagged (allocators/R1 names the rest)", "on " if tagged == needed else "off", tagged, needed)}
+	// the ratchet for the one per-file guarantee: coverage may not drop below the recorded floor
+	if floor := c.cfg.odin.tagged_files_min; tagged < floor {
+		err(d, "#+vet explicit-allocators coverage is %d files, below odin.tagged_files_min %d", tagged, floor)
+	} else if tagged > floor && needed > 0 {
+		warn(d, "#+vet explicit-allocators coverage is %d files; raise odin.tagged_files_min from %d so it cannot regress", tagged, floor)
+	}
 	for p in c.pkgs {
 		for f in p.files {
 			for tok in f.tags {

@@ -84,7 +84,6 @@ Check_Spec :: struct {
 	kind:               Check_Kind,
 	attribute:          string, // require_attribute
 	on:                 string, // require_attribute: "" | "exported_procs"
-	result_type_suffix: []string, // require_attribute; defaults to ["Error"]
 	from:               string, // banned_import: documentation only
 	names:              []string, // call: canonical `pkg.name` or bare `name`
 	roles:              []string,
@@ -127,7 +126,6 @@ CHECK_KEYS := []string {
 	"kind",
 	"attribute",
 	"on",
-	"result_type_suffix",
 	"from",
 	"names",
 	"roles",
@@ -139,7 +137,6 @@ CHECK_KEYS := []string {
 	"at",
 	"mutable",
 }
-DEFAULT_RESULT_SUFFIX := []string{"Error"}
 
 Rulebook :: struct {
 	topics: [dynamic]Topic, // sorted by name
@@ -312,7 +309,6 @@ validate_check :: proc(c: ^Check_Spec, spec: json.Object, at: string, errs: ^[dy
 		if c.attribute == "" {errf(errs, "%s: check.attribute is required", at)}
 		if c.on != "" &&
 		   c.on != "exported_procs" {errf(errs, "%s: check.on must be exported_procs", at)}
-		if c.result_type_suffix == nil {c.result_type_suffix = DEFAULT_RESULT_SUFFIX}
 	}
 }
 

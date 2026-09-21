@@ -89,6 +89,12 @@ is a per-file tag with no global switch. `odx doctor` lists every guarantee the 
 compiler offers, whether `odin.flags` in `odx.json5` turns it on, which files opt out via
 `#+vet !x` or `#+feature`, and how many pure/service files carry the allocator tag. It warns
 when the compiler gained a flag the project has not adopted, so the set ratchets as Odin grows.
+A flag the project considered and refused goes in `odin.declined: { "-vet-style": "why" }`,
+which separates *considered* from *not yet seen* and keeps the warning list honest. The
+allocator tag has no global switch, so its coverage is the ratchet applied per file:
+`odin.tagged_files_min` is a floor `odx doctor` errors below and asks you to raise as coverage
+grows. `odx doctor --json` returns `{schema, errors, warnings, guarantees: {flags: [{flag, on,
+declined}], tagged, needed}}` so CI can assert "no unadopted flags" as a gate.
 `odx check` enforces the per-file ones: a missing allocator tag is `allocators/R1`, a
 `#+feature` opt-out without a `// reason: <why>` on its line is `odx/feature-optout`.
 
@@ -98,8 +104,15 @@ Roles are opt-in: `odx.json5` may assign roles (pure, service, edge) per package
 and say who may import whom; `odx check` then reports forbidden imports, mutable globals outside
 edge, foreign blocks outside edge, and an exported procedure that passes another package's error
 type through its boundary, each with a reason and an escape hatch. A package with no role gets
-no rule. The forbidden-import check reads direct import lines; for the transitive picture the
-compiler's own `odin check -show-import-graph` is the source, not odx.
+no rule. `dependencies/R2` reads direct import lines and, for an allowed project import,
+walks the project packages behind it: a pure package that reaches `core:os` through a service
+package is reported at the import that opens the path ("reaches core:os via svc"). Packages
+outside the project are leaves; the compiler's own `odin check -show-import-graph` owns those.
+
+`errors/R3` decides what an error type is from the compiler's checked entity table: a name
+ending in one of `errors.types` in `odx.json5` (default `["Error"]`), or, regardless of name,
+an enum with a `None`/`Ok` variant or a union that admits `nil`. A `Status`, `Result` or
+`Maybe(T)` result gets the attribute check without being renamed.
 
 ## 3. The rulebook
 
@@ -128,7 +141,13 @@ procedures, `at: package_scope, mutable: true` for declarations, plus `roles`/`e
 No regex over source text. `odx rule try '<check json5>' [paths]` prints every match of a
 candidate spec with its count before any file exists (`--file <rule.odx.md>` dry-runs a
 draft); `odx rule add <topic>` scaffolds the next free id; `odx rule test <topic>/<id>`
-compiles just that rule's blocks.
+compiles just that rule's blocks. Every `match: call` rule shares one AST walk per file, so
+the check loop is O(files), not O(files × rules).
+
+The evidence bar for a new rule is the one `allocators/R1` and `errors/R3` meet: a compiler
+version and a command whose output shows the failure the rule prevents. An `evidence` field
+that cannot be checked by running something is the `why` rephrased, and the idiom stays a
+reader check in `topic.md` until it can be.
 
 ```
 odx check [<path>...]            run the checks (exit 1 on violations; odx.baseline softens, never hides)
@@ -154,7 +173,7 @@ odx is invoked by agents and CI; it never referees a session. The interface is t
 
 - `odx check --json` (schema below): every finding carries `fix_hint` (what to write
   instead) and `ignore_syntax` (the exact suppression comment), so a consumer acts on one
-  call. `odx doctor --json` returns `{schema, errors, warnings}`; `odx for --json` the
+  call. `odx doctor --json` returns `{schema, errors, warnings, guarantees}`; `odx for --json` the
   topics for a path.
 - `odx for --emit-claude-md` prints the applicable rules as a Markdown section. `odx init
   --hooks` writes it into `CLAUDE.md` once, at setup, where it costs nothing per turn;
