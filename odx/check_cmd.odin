@@ -30,6 +30,7 @@ run_checks :: proc(c: ^Ctx, o: Opts) -> int {
 	if !o.fast {
 		run_family_a(c)
 		run_family_c(c)
+		run_plugins(c)
 	}
 	ran := make(map[string]bool, context.temp_allocator)
 	for a in c.rules {if !(o.fast && a.rule.check.kind == .require_attribute) {ran[a.id] = true}}

@@ -179,6 +179,8 @@ check_templates :: proc(root: string) -> (failed: int) {
 temp_dir :: proc(pattern: string) -> string {
 	tmp, err := os.make_directory_temp("", pattern, context.allocator)
 	if err != nil {fail("cannot create temp dir")}
+	// macOS: /var is a symlink and the walker reports /private/var; rel_of needs the same form
+	tmp, _ = os.get_absolute_path(tmp, context.allocator)
 	return tmp
 }
 

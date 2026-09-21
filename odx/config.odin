@@ -20,6 +20,7 @@ Config :: struct {
 	disabled:     map[string]string, // "topic/R2" -> reason (17.17)
 	layering:     map[string]Layer,
 	odin:         Odin_Cfg,
+	plugins:      map[string]string, // name -> sha256 of the odx-<name> executable (10a, M7)
 }
 
 Layer :: struct {
@@ -54,6 +55,7 @@ CONFIG_KEYS := []string {
 	"disabled",
 	"layering",
 	"odin",
+	"plugins",
 }
 ODIN_KEYS := []string {
 	"flags",

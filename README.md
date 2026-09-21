@@ -80,3 +80,14 @@ exits 1; `ODX_UPDATE_SNAPSHOTS=1 odx api` re-blesses and the git diff is the rev
 `odx new <template> <Name>` renders `templates/<name>/` (built in) or `.odx/templates/<name>/`
 into the role's directory from `odx.json5` (or `--dir`). Placeholders: `{{Name}}`,
 `{{name_snake}}`, `{{name_upper}}`. It never overwrites.
+
+## Plugins
+
+A check the declarative rule kinds cannot express lives in an `odx-<name>` executable, found
+in `.odx/plugins/` or on `PATH`, and pinned in `odx.json5` by hash:
+`plugins: { name: "<sha256 of the executable>" }`. `odx check` runs `odx-<name> --describe`
+(expects `{"protocol":1,"checks":["myproj/R1"]}`), then per check writes
+`{"protocol":1,"check":id,"root":dir,"files":[...]}` to stdin and reads
+`{"violations":[{"file","line","col","rule","message"}]}` from stdout. Hash mismatch, unknown
+protocol, non-zero exit, unparseable output or a 30 s timeout is a tool error (exit 2).
+Plugins report only; they never edit files. Plugin findings are not ignorable.
