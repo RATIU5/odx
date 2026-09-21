@@ -84,6 +84,8 @@ report :: proc(
 			blocking = a.rule.blocking,
 			fires = a.rule.fires,
 			silent = a.rule.silent,
+			fix_hint = a.rule.instead_of,
+			ignore_syntax = ignore_syntax_of(file, a.id) if a.rule.ignorable else "",
 		},
 	)
 }

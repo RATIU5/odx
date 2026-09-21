@@ -20,6 +20,7 @@ Opts :: struct {
 	max_violations: int,
 	hooks:          bool,
 	brief:          bool,
+	emit:           bool, // for --emit-claude-md
 	added:          bool,
 	stale:          bool,
 	count:          bool,
@@ -34,15 +35,18 @@ Opts :: struct {
 }
 
 USAGE :: `usage: odx <command> [args] [--json] [--root <dir>]
+  --json is the machine contract on check, doctor, for, explain, ignores and hook (schema: 1).
+  Exit codes: 0 clean, 1 violations, 2 tool/config error.
 
   check [<path>...] [--topic t] [--fast] [--strict] [--since <ref>] [--ci]   run checks (odx.baseline softens, never hides)
   baseline add | regen         freeze current violations into odx.baseline (shrinks on its own; never grows from check)
   for <path> [--brief]         the rules that apply to a file or package (--brief: topic names only)
+  for --emit-claude-md [<path>]   the same as a Markdown section for CLAUDE.md (no path: every topic)
   explain [<topic>] [--rule R3]   no topic: list topics; with one: rules, rationale, do/don't
   explain [<topic>] --checklist   example-only rules, for an adversarial reviewer
   ignores [--added] [--stale]  every odx:ignore suppression; --added: not in HEAD; --stale: suppressing nothing
   doctor [--ci] [--verify-rulebook | --relock]   toolchain, flags, config errors, mise.toml drift, lock
-  hook edit | stop | changed   Claude Code hook entry points (read the hook JSON on stdin)
+  hook edit                    Claude Code PostToolBatch hook: reads the hook JSON on stdin, reports, exits 0
   init [--hooks]               write odx.json5 and mise.toml (--hooks: .claude/settings.json, CLAUDE.md)
   self-test                    run every tests/fixtures/* and diff its // want: markers
   rule try '<check json5>' [<path>...] [--count]   run an inline check spec, print every match (nothing written)
@@ -83,6 +87,8 @@ parse_opts :: proc(args: []string) -> (o: Opts) {
 			o.checklist = true
 		case "--hooks":
 			o.hooks = true
+		case "--emit-claude-md":
+			o.emit = true
 		case "--brief":
 			o.brief = true
 		case "--added":

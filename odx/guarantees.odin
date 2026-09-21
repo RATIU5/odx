@@ -1,6 +1,5 @@
 package odx
 
-import "core:fmt"
 import "core:os"
 import "core:slice"
 import "core:strings"
@@ -45,10 +44,10 @@ report_guarantees :: proc(d: ^Doctor, c: ^Ctx, help: string) {
 		on[name] = true
 	}
 	if on["-vet"] {for f in implied {on[f] = true}}
-	fmt.println("guarantees (odin.flags):")
+	say(d, "guarantees (odin.flags):")
 	for f in flags {
 		state := "on " if on[f] else "off"
-		fmt.printfln("  %s %s", state, f)
+		say(d, "  %s %s", state, f)
 		if !on[f] {
 			if slice.contains(DEFAULT_GUARANTEES, f) {
 				warn(d, "default guarantee %s is not in odin.flags", f)
@@ -70,14 +69,14 @@ report_guarantees :: proc(d: ^Doctor, c: ^Ctx, help: string) {
 		}
 	}
 	if needed >
-	   0 {fmt.printfln("  %s #+vet explicit-allocators: %d of %d pure/service files tagged (allocators/R1 names the rest)", "on " if tagged == needed else "off", tagged, needed)}
+	   0 {say(d, "  %s #+vet explicit-allocators: %d of %d pure/service files tagged (allocators/R1 names the rest)", "on " if tagged == needed else "off", tagged, needed)}
 	for p in c.pkgs {
 		for f in p.files {
 			for tok in f.tags {
 				t := strings.trim_space(strings.trim_prefix(tok.text, "#+"))
 				if strings.has_prefix(t, "feature") || strings.contains(t, "!") {
 					rel, _ := rel_of(c.root, f.fullpath)
-					fmt.printfln("  opt-out %s:%d: %s", rel, tok.pos.line, tok.text)
+					say(d, "  opt-out %s:%d: %s", rel, tok.pos.line, tok.text)
 				}
 			}
 		}

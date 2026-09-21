@@ -132,35 +132,38 @@ compiles just that rule's blocks.
 ```
 odx check [<path>...]            run the checks (exit 1 on violations; odx.baseline softens, never hides)
 odx for <path>                   topics that apply to a file or package (by role)
+odx for --emit-claude-md [<path>]   the same as a Markdown section for CLAUDE.md (no path: every topic)
 odx explain [<topic>] [--rule R3]   no topic: list topics; with one: rules, rationale, do/don't
 odx explain --checklist          manual rules only, for an adversarial reviewer
 odx ignores [--added] [--stale]  every odx:ignore suppression; --added: not in HEAD; --stale: suppressing nothing
 odx baseline add | regen         freeze current violations by semantic key (shrinks on its own)
 odx doctor [--ci]                guarantees, toolchain, config errors, task-file drift, protected-path lock
-odx hook edit | stop | changed   Claude Code hook entry points
-odx init [--hooks]               write odx.json5 and mise.toml for a project
+odx hook edit                    Claude Code PostToolBatch hook: report after an edit, exit 0
+odx init [--hooks]               write odx.json5 and mise.toml (--hooks: the edit hook and a CLAUDE.md section)
 odx self-test                    odx's own fixture runner
 odx rule try | add | test        measure a candidate check, scaffold a rule file, run one rule's blocks
 ```
 
-Global flags: `--json`, `--root <dir>`. Exit codes: 0 clean, 1 violations, 2 tool/config error.
+Global flags: `--json`, `--root <dir>`. Exit codes are contract: `0` clean, `1` violations,
+`2` tool or config error (`hook edit` always exits 0).
 
-## Agent loop
+## Agent interface
 
-`odx init --hooks` writes `.claude/settings.json` (PostToolBatch runs `odx hook edit`;
-FileChanged on a protected path runs `odx hook changed`; Stop runs `odx hook stop`, the full
-check) and a short `CLAUDE.md` section.
+odx is invoked by agents and CI; it never referees a session. The interface is three things:
 
-The edit hook leads with the compiler: parse errors, then `odin check` on the touched
-package, and only when that is clean odx's own rules. With no file path it scopes to the files
-changed since `HEAD` plus untracked ones, and checks nothing when nothing changed. A block
-message is self-sufficient: the first violation of each rule carries the statement, the why,
-and the exact `odx:ignore` syntax when the rule takes one. The Stop hook escalates instead of
-repeating: the second identical block appends the compiling exemplar of every topic involved,
-and the `ODX_STOP_GUARD_MAX`-th (default 3, deliberately stricter than the harness cap of 8)
-states that the remaining violations are not fixed and exits 0. Output is capped at 50
-violations with an explicit omitted count. The Stop hook also prints how many baselined
-violations remain and how many suppressions were added since `HEAD`.
+- `odx check --json` (schema below): every finding carries `fix_hint` (what to write
+  instead) and `ignore_syntax` (the exact suppression comment), so a consumer acts on one
+  call. `odx doctor --json` returns `{schema, errors, warnings}`; `odx for --json` the
+  topics for a path.
+- `odx for --emit-claude-md` prints the applicable rules as a Markdown section. `odx init
+  --hooks` writes it into `CLAUDE.md` once, at setup, where it costs nothing per turn;
+  regenerate it after editing `rules/`.
+- `odx hook edit`, the one hook `odx init --hooks` installs (PostToolBatch). It leads with
+  the compiler: parse errors, then `odin check` on the touched package, and only when that
+  is clean odx's own rules. With no file path it scopes to the files changed since `HEAD`
+  plus untracked ones. Findings go to stdout, capped at 50 with an explicit omitted count,
+  and the exit code is always 0. Nothing odx installs can block an edit or hold a session
+  open; the M6 pilot above is why.
 
 ## Adopting on an existing codebase
 
@@ -196,10 +199,12 @@ vet disables, explicit-allocators policy); one schema, and an unknown key is a l
 `<id>.odx.md` per rule, frontmatter plus fenced blocks. The lock file and `odx.baseline` are
 written by odx, never by hand.
 
-`--json` on `check`, `hook` and `ignores` is the machine contract, `schema: 1`. Each
-violation carries `file`, `line`, `col`, `rule`, `severity`, `check`, `message`, `class`
-(the rule's stable greppable name), `subject` (the baseline key), `baselined`, `blocking`,
-`ignorable`, `statement`, `why`, `fires` and `silent`. `summary` carries `errors`,
+`--json` on `check` and `ignores` is the machine contract, `schema: 1`; fields are only
+added under that number and `schema` bumps on any break. Each violation carries `file`,
+`line`, `col`, `rule`, `severity`, `check`, `message`, `class` (the rule's stable greppable
+name), `subject` (the baseline key), `baselined`, `blocking`, `ignorable`, `statement`,
+`why`, `fires`, `silent`, `fix_hint` (the rule's `instead_of`) and `ignore_syntax` (the
+suppression comment, `""` when the rule takes none). `summary` carries `errors`,
 `warnings` (baselined findings count in neither), `ignored`, `files`, `baselined` and
 `omitted`: `--max-violations` is unlimited by default and 50 on the hook path, and a
 truncated report always says how many it dropped.

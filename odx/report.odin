@@ -26,6 +26,19 @@ Violation :: struct {
 	blocking:  bool, // the hook may block on it; notes (odin/*, odx/*) always are
 	fires:     string, // the rule's compiled violating and correct forms, "" for notes
 	silent:    string,
+	// the agent contract: what to write instead, and the exact suppression line, so a
+	// consumer can act on one finding without a second call; "" for notes
+	fix_hint:      string,
+	ignore_syntax: string,
+}
+
+// ignore_syntax_of: the comment that suppresses rule at file; package-level findings (file is a
+// directory) take the -file form on line 1-3 of any file in it.
+ignore_syntax_of :: proc(file, rule: string) -> string {
+	if strings.has_suffix(file, ".odin") {
+		return fmt.tprintf("// %s %s reason: <at least ten characters>", IGNORE_PREFIX, rule)
+	}
+	return fmt.tprintf("// %s %s reason: <at least ten characters>", IGNORE_FILE_PREFIX, rule)
 }
 
 Report :: struct {
@@ -131,13 +144,6 @@ report_text :: proc(r: ^Report) -> string {
 	return strings.to_string(b)
 }
 
-// hook_blocks: advisory rules and baselined findings are printed but never block.
-hook_blocks :: proc(r: ^Report) -> bool {
-	if len(r.tool_errors) > 0 {return true}
-	for v in r.violations {if v.blocking && !v.baselined {return true}}
-	return false
-}
-
 // hook_text is report_text for the model: the first violation of each rule carries the
 // statement, the why, and the exact escape hatch (only when the rule takes one); later ones are
 // bare location lines. Compiler findings never have a body.
@@ -164,17 +170,15 @@ hook_text :: proc(r: ^Report) -> string {
 			if strings.has_suffix(v.file, ".odin") {
 				fmt.sbprintfln(
 					&b,
-					"  to suppress, on the line above it: // %s %s reason: <at least ten characters>",
-					IGNORE_PREFIX,
-					v.rule,
+					"  to suppress, on the line above it: %s",
+					ignore_syntax_of(v.file, v.rule),
 				)
 			} else {
 				fmt.sbprintfln(
 					&b,
-					"  to suppress, on line 1-3 of any file in %s/: // %s %s reason: <at least ten characters>",
+					"  to suppress, on line 1-3 of any file in %s/: %s",
 					v.file,
-					IGNORE_FILE_PREFIX,
-					v.rule,
+					ignore_syntax_of(v.file, v.rule),
 				)
 			}
 		}

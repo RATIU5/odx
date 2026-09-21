@@ -9,24 +9,45 @@ import "core:strings"
 // Everything else is a warning, except version drift under --ci.
 
 Doctor :: struct {
-	errors, warnings: int,
+	errors, warnings: [dynamic]string,
+	json:             bool, // collect only; the free-text sections are skipped and the lists printed once
 }
 
 warn :: proc(d: ^Doctor, f: string, args: ..any) {
-	d.warnings += 1
-	fmt.print("warning: ")
-	fmt.printfln(f, ..args)
+	append(&d.warnings, fmt.aprintf(f, ..args))
+	if !d.json {fmt.println("warning:", d.warnings[len(d.warnings) - 1])}
 }
 
 err :: proc(d: ^Doctor, f: string, args: ..any) {
-	d.errors += 1
-	fmt.print("error: ")
-	fmt.printfln(f, ..args)
+	append(&d.errors, fmt.aprintf(f, ..args))
+	if !d.json {fmt.println("error:", d.errors[len(d.errors) - 1])}
+}
+
+// say: an informational line, text mode only.
+say :: proc(d: ^Doctor, f: string, args: ..any) {
+	if !d.json {fmt.printfln(f, ..args)}
+}
+
+doctor_exit :: proc(d: ^Doctor) {
+	if d.json {
+		print_json(
+			struct {
+				schema:   int,
+				errors:   []string,
+				warnings: []string,
+			}{1, d.errors[:], d.warnings[:]},
+		)
+	} else {
+		fmt.printfln("%d errors, %d warnings", len(d.errors), len(d.warnings))
+	}
+	if len(d.errors) > 0 {os.exit(EXIT_TOOL)}
 }
 
 cmd_doctor :: proc(o: Opts) {
 	p := load_project(o.root)
-	d: Doctor
+	d := Doctor {
+		json = o.json,
+	}
 	if p.root == "" {
 		// no odx.json5: guarantees are reported against an empty flag set, so all read "off"
 		warn(
@@ -40,17 +61,15 @@ cmd_doctor :: proc(o: Opts) {
 		p.dirs = package_dirs(p.root, &p.cfg)
 	}
 	for e in p.errs {err(&d, "%s", e)}
-	if d.errors > 0 {
-		fmt.printfln("%d errors, %d warnings", d.errors, d.warnings)
-		os.exit(EXIT_TOOL)
-	}
+	if len(d.errors) > 0 {doctor_exit(&d)}
 	c := make_ctx(&p, nil)
 	check_toolchain(&d, &c, o.ci)
 	report_guarantees(&d, &c, odin_output(odin_exe(c.cfg), "help", "check"))
-	report_dependencies(&c)
+	if !d.json {report_dependencies(&c)}
 	check_task_files(&d, &p)
-	fmt.println("check argv: odx check  (Stop hook, mise task, CI via `mise run ci`)")
-	fmt.printfln(
+	say(&d, "check argv: odx check  (mise task, CI via `mise run ci`)")
+	say(
+		&d,
 		"expected test task: odin test . %s %s",
 		strings.join(odin_flags(&c), " ", context.temp_allocator),
 		strings.join(p.cfg.odin.required_flags, " ", context.temp_allocator),
@@ -64,13 +83,12 @@ cmd_doctor :: proc(o: Opts) {
 		case .dirty:
 			err(&d, "%s", text)
 		case .clean:
-			fmt.println("lock: ok")
+			say(&d, "lock: ok")
 		}
 	}
 	for t in p.rb.topics {if t.overrides {warn(&d, "topic %s is overridden by %s", t.name, t.source)}}
-	for id in sorted_keys(p.cfg.disabled) {fmt.printfln("disabled: %s (%s)", id, p.cfg.disabled[id])}
-	fmt.printfln("%d errors, %d warnings", d.errors, d.warnings)
-	if d.errors > 0 {os.exit(EXIT_TOOL)}
+	for id in sorted_keys(p.cfg.disabled) {say(&d, "disabled: %s (%s)", id, p.cfg.disabled[id])}
+	doctor_exit(&d)
 }
 
 check_toolchain :: proc(d: ^Doctor, c: ^Ctx, ci: bool) {
@@ -81,7 +99,7 @@ check_toolchain :: proc(d: ^Doctor, c: ^Ctx, ci: bool) {
 		return
 	}
 	_, _, ver := strings.partition(version, "version ")
-	fmt.printfln("odin: %s %s", exe, ver)
+	say(d, "odin: %s %s", exe, ver)
 	if want := c.cfg.odin.version; want != "" && !strings.has_prefix(ver, want) {
 		report := err if ci else warn
 		report(d, "odin version %s does not match odin.version %s", ver, want)
@@ -133,12 +151,10 @@ check_task_files :: proc(d: ^Doctor, p: ^Project) {
 		join({p.root, ".claude", "settings.json"}),
 		context.allocator,
 	); herr == nil {
-		for cmd in ([]string{"hook edit", "hook stop", "hook changed"}) {
-			if !strings.contains(
-				string(hooks),
-				cmd,
-			) {warn(d, ".claude/settings.json does not run `odx %s` (odx init --hooks prints the block)", cmd)}
-		}
+		if !strings.contains(
+			string(hooks),
+			"hook edit",
+		) {warn(d, ".claude/settings.json does not run `odx hook edit` (odx init --hooks prints the block)")}
 	}
 	if ci, cerr := os.read_entire_file(
 		join({p.root, ".github", "workflows", "ci.yml"}),
