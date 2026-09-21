@@ -106,7 +106,7 @@ cmd_new :: proc(o: Opts) {
 	if !valid_name(name) {fail("Name must match ^[A-Z][A-Za-z0-9_]*$, got %q", name)}
 	dir := o.dir
 	if dir == "" {dir = role_dir(&p.cfg, t.role)}
-	written := render_template(t, name, join({p.root, dir}))
+	written := render_template(t, name, dir if filepath.is_abs(dir) else join({p.root, dir}))
 	for w in written {fmt.println("wrote", w)}
 	fmt.printfln(
 		"role %s; make sure %s is covered by roles.%s in %s",
@@ -117,12 +117,19 @@ cmd_new :: proc(o: Opts) {
 	)
 }
 
-// role_dir: the role's first glob without wildcards, else the root.
+// role_dir: where a new package of this role goes: the literal segments before the first
+// wildcard of the role's first glob (`src/*` -> src, `**` -> root). A fully literal glob
+// names one package, so a sibling of it is the answer, not a child.
 role_dir :: proc(cfg: ^Config, role: string) -> string {
-	for g in cfg.roles[role] {
-		if !strings.contains_any(g, "*?[") {return g}
+	if len(cfg.roles[role]) == 0 {return "."}
+	segs := strings.split(cfg.roles[role][0], "/", context.temp_allocator)
+	lit := 0
+	for s in segs {
+		if strings.contains_any(s, "*?[") {break}
+		lit += 1
 	}
-	return "."
+	if lit == len(segs) {lit -= 1} 	// a literal glob is one package: place beside it
+	return "." if lit <= 0 else strings.join(segs[:lit], "/")
 }
 
 // render_template writes every file; refuses if any target exists (17.16).

@@ -34,7 +34,7 @@ run_checks :: proc(c: ^Ctx, o: Opts) -> int {
 	}
 	ran := make(map[string]bool, context.temp_allocator)
 	for a in c.rules {if !(o.fast && a.rule.check.kind == .require_attribute) {ran[a.id] = true}}
-	apply_ignores(c.r, igs, ran)
+	apply_ignores(c, igs, ran)
 	if full {report_stale_config(c)}
 	return finalize(c.r, o.strict, o.max_violations)
 }

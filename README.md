@@ -85,9 +85,10 @@ into the role's directory from `odx.json5` (or `--dir`). Placeholders: `{{Name}}
 
 A check the declarative rule kinds cannot express lives in an `odx-<name>` executable, found
 in `.odx/plugins/` or on `PATH`, and pinned in `odx.json5` by hash:
-`plugins: { name: "<sha256 of the executable>" }`. `odx check` runs `odx-<name> --describe`
-(expects `{"protocol":1,"checks":["myproj/R1"]}`), then per check writes
-`{"protocol":1,"check":id,"root":dir,"files":[...]}` to stdin and reads
-`{"violations":[{"file","line","col","rule","message"}]}` from stdout. Hash mismatch, unknown
-protocol, non-zero exit, unparseable output or a 30 s timeout is a tool error (exit 2).
+`plugins: { name: "<sha256 of the executable>" }`. `odx check` runs it once with
+`{"protocol":1,"root":dir,"files":[...]}` on stdin and reads
+`{"protocol":1,"checks":["myproj/R1"],"violations":[{"file","line","col","rule","message"}]}`
+from stdout. Hash mismatch, unknown protocol, non-zero exit, unparseable output, a 30 s
+timeout, an empty `checks` list, a check id that shadows a rulebook topic, a violation whose
+rule is not one of its own checks, or a file odx did not scan: each is a tool error (exit 2).
 Plugins report only; they never edit files. Plugin findings are not ignorable.

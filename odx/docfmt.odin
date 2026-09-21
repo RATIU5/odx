@@ -8,7 +8,7 @@ import "core:strings"
 
 // Family C: `odin doc -doc-format` per package, the compiler's checked entity table (19.2).
 // Only `require_attribute` rules today. A package that fails to type-check writes no file;
-// family A already reported why, so it is skipped silently.
+// family A already reported why, so it is marked doc_skipped and its ignores stay unjudged.
 
 run_family_c :: proc(c: ^Ctx) {
 	rules := make([dynamic]^Active_Rule)
@@ -28,6 +28,7 @@ run_family_c :: proc(c: ^Ctx) {
 		case .Fatal:
 			return
 		case .Skipped:
+			p.doc_skipped = true
 			continue
 		case .Ok:
 			check_entities(c, &p, h, rules[:])

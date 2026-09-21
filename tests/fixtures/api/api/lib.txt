@@ -1,6 +1,6 @@
 format_version: 1
 type_name lib.Error :: enum {None, Bad}
-type_name lib.Handle :: int
+type_name lib.Handle :: distinct int
 type_name lib.Shape :: union {lib.Vec, f32}
 type_name lib.Vec :: struct {x: f32, y: f32}
 constant lib.MAX :: untyped integer

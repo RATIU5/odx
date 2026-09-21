@@ -93,15 +93,17 @@ check_toolchain :: proc(d: ^Doctor, c: ^Ctx, ci: bool) {
 check_task_files :: proc(d: ^Doctor, p: ^Project) {
 	if mise, rerr := os.read_entire_file(join({p.root, "mise.toml"}), context.allocator);
 	   rerr == nil {
-		text := string(mise)
+		// tokens of every non-comment line: a comment naming a flag is not a use of it
+		tokens := make(map[string]bool, context.temp_allocator)
+		for line in strings.split_lines(string(mise), context.temp_allocator) {
+			code, _, _ := strings.partition(line, "#")
+			for tok in strings.fields(code, context.temp_allocator) {tokens[strings.trim(tok, "\"'")] = true}
+		}
 		for f in p.cfg.odin.forbidden_flags {
-			if strings.contains(text, f) {err(d, "mise.toml uses forbidden flag %s", f)}
+			if f in tokens {err(d, "mise.toml uses forbidden flag %s", f)}
 		}
 		for f in p.cfg.odin.required_flags {
-			if !strings.contains(
-				text,
-				f,
-			) {warn(d, "mise.toml test task lacks required flag %s", f)}
+			if f not_in tokens {warn(d, "mise.toml test task lacks required flag %s", f)}
 		}
 	} else {
 		warn(d, "no mise.toml (odx init writes one)")

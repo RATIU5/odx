@@ -21,7 +21,10 @@ cmd_fix :: proc(o: Opts) {
 		   !o.allow_dirty {fail("worktree is dirty; commit first or pass --allow-dirty")}
 	}
 	c := make_ctx(&p, o.args[:])
-	run_checks(&c, Opts{args = o.args})
+	if run_checks(&c, Opts{args = o.args}) == EXIT_TOOL {
+		print_tool_errors(c.r)
+		fail("checks did not run to completion; fixing nothing")
+	}
 	fixed := apply_fixes(p.root, c.r, o.dry_run)
 	remaining := len(c.r.violations) - fixed
 	fmt.printfln(
@@ -68,5 +71,6 @@ strip_lines :: proc(path, rel: string, vs: []Violation, dry_run: bool) {
 		if dry_run {fmt.printfln("%s:%d: remove `%s`", rel, v.line, strings.trim_space(l[at:]))}
 		if code := strings.trim_right_space(l[:at]); code != "" {append(&keep, code)}
 	}
-	if !dry_run {write_atomic(path, strings.join(keep[:], "\n"))}
+	eol := "\r\n" if strings.contains(string(data), "\r\n") else "\n"
+	if !dry_run {write_atomic(path, strings.join(keep[:], eol))}
 }

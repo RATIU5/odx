@@ -41,6 +41,8 @@ collect_ignores :: proc(
 			switch {
 			case whole && tok.pos.line > 3:
 				bad = "odx:ignore-file must be on line 1-3"
+			case strings.contains(rest, IGNORE_PREFIX):
+				bad = "one odx:ignore per line"
 			case len(reason) < 10:
 				bad = "reason must be at least 10 characters"
 			case find_rule(rb, ruleid) == nil:
@@ -58,7 +60,7 @@ collect_ignores :: proc(
 					col = tok.pos.column,
 					rule = ruleid,
 					reason = reason,
-					target = ignore_target(lines, tok.pos.line, whole),
+					target = ignore_target(lines, tok.pos.line, tok.pos.column, whole),
 				},
 			)
 		}
@@ -66,23 +68,26 @@ collect_ignores :: proc(
 }
 
 // ignore_target: whole file = 0; end-of-line comment = that line; own line = next code line.
-// ponytail: a `//` inside a string literal before the comment counts as code; good enough.
+// An own-line directive with no code after it targets itself, so it reads as stale rather
+// than silently widening to the whole file.
 @(private = "file")
-ignore_target :: proc(lines: []string, comment_line: int, whole: bool) -> int {
+ignore_target :: proc(lines: []string, comment_line, col: int, whole: bool) -> int {
 	if whole {return 0}
-	own := lines[comment_line - 1]
-	if before := own[:strings.index(own, "//")];
-	   strings.trim_space(before) != "" {return comment_line}
+	if strings.trim_space(lines[comment_line - 1][:col - 1]) != "" {return comment_line}
 	for l, i in lines[comment_line:] {
 		t := strings.trim_space(l)
 		if t != "" && !strings.has_prefix(t, "//") {return comment_line + 1 + i}
 	}
-	return 0
+	return comment_line
 }
 
 // apply_ignores drops suppressed violations and reports stale ignores (17.8). An ignore for a
-// rule that did not run this pass is not stale (20.2).
-apply_ignores :: proc(r: ^Report, igs: []Ignore, ran: map[string]bool) {
+// rule that did not run this pass, or in a package family C could not type-check, is not
+// stale (20.2): a transient compile error must never make `odx fix` delete suppressions.
+apply_ignores :: proc(c: ^Ctx, igs: []Ignore, ran: map[string]bool) {
+	r := c.r
+	unchecked := make(map[string]bool, context.temp_allocator)
+	for p in c.pkgs {if p.doc_skipped {unchecked[p.rel] = true}}
 	kept := make([dynamic]Violation)
 	for v in r.violations {
 		hit := false
@@ -101,6 +106,10 @@ apply_ignores :: proc(r: ^Report, igs: []Ignore, ran: map[string]bool) {
 	r.violations = kept
 	for ig in igs {
 		if ig.used || ig.rule not_in ran {continue}
+		if rule := find_rule(c.rb, ig.rule);
+		   rule != nil &&
+		   rule.check.kind == .require_attribute &&
+		   dir_of(ig.file) in unchecked {continue}
 		note(
 			r,
 			"odx/stale-ignore",
@@ -111,4 +120,10 @@ apply_ignores :: proc(r: ^Report, igs: []Ignore, ran: map[string]bool) {
 			strings.concatenate({"ignore of ", ig.rule, " suppressed nothing"}),
 		)
 	}
+}
+
+// dir_of: the package directory of a root-relative file path ("" for a root-level file).
+dir_of :: proc(rel: string) -> string {
+	i := strings.last_index(rel, "/")
+	return "" if i < 0 else rel[:i]
 }

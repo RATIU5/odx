@@ -25,7 +25,7 @@ Config :: struct {
 
 Layer :: struct {
 	may_import: []string, // roles or import globs (`core:*`)
-	deny:       []string, // import globs; nil on pure = DEFAULT_DENY_PURE (17.3)
+	deny:       []string, // import globs; absent on pure = DEFAULT_DENY_PURE (17.3), filled at load
 }
 
 Odin_Cfg :: struct {
@@ -68,18 +68,24 @@ ODIN_KEYS := []string {
 	"version",
 	"path",
 }
+LAYER_KEYS := []string{"may_import", "deny"}
 DEFAULT_EXCLUDE := []string{".odx/**", "rules/**", "vendor/**", "build/**"}
 
 errf :: proc(errs: ^[dynamic]string, f: string, args: ..any) {
 	append(errs, fmt.aprintf(f, ..args))
 }
 
+// canonical: absolute with symlinks resolved, so every path compares textually against the
+// root (macOS: /var and /tmp are symlinks into /private; the walker reports the real path).
+canonical :: proc(path: string) -> string {
+	if abs, err := os.get_absolute_path(path, context.allocator); err == nil {return abs}
+	abs, _ := filepath.abs(path)
+	return abs
+}
+
 // find_root walks up from cwd to the nearest odx.json5 (17.5). "" if none.
 find_root :: proc(override: string) -> string {
-	if override != "" {
-		abs, _ := filepath.abs(override)
-		return abs
-	}
+	if override != "" {return canonical(override)}
 	dir, _ := os.get_working_directory(context.allocator)
 	for {
 		if os.exists(join({dir, CONFIG_FILE})) {return dir}
@@ -102,7 +108,17 @@ load_config :: proc(root: string, errs: ^[dynamic]string) -> (cfg: Config) {
 	odin_obj, _ := tree["odin"].(json.Object)
 	check_keys(errs, path, "odin.", odin_obj, ODIN_KEYS)
 	check_enum(errs, path, odin_obj, "odin.explicit_allocators", Explicit_Allocators)
-	if cfg.exclude == nil {cfg.exclude = DEFAULT_EXCLUDE}
+	// unmarshal leaves an empty array nil (17.20): presence in the tree is the real signal
+	if "exclude" not_in tree {cfg.exclude = DEFAULT_EXCLUDE}
+	layering_obj, _ := tree["layering"].(json.Object)
+	for role in sorted_keys(cfg.layering) {
+		obj, _ := layering_obj[role].(json.Object)
+		check_keys(errs, path, fmt.tprintf("layering.%s.", role), obj, LAYER_KEYS)
+		if "deny" not_in obj {
+			l := &cfg.layering[role]
+			l.deny = DEFAULT_DENY_PURE if role == "pure" else []string{}
+		}
+	}
 	if cfg.version != CONFIG_VERSION {
 		errf(
 			errs,
@@ -156,8 +172,14 @@ unmarshal_json5 :: proc(
 		return
 	}
 	val, perr := json.parse_string(text, spec = .JSON5)
-	if perr != nil {return}
-	tree, ok = val.(json.Object)
+	if perr != nil {
+		errf(errs, "%s: %v", at, perr)
+		return
+	}
+	if tree, ok = val.(json.Object); !ok {
+		errf(errs, "%s: top level must be an object", at)
+		return
+	}
 	check_keys(errs, at, "", tree, keys)
 	return
 }

@@ -8,7 +8,7 @@ import "core:strings"
 // anything else = literal segment. filepath.match has no `**`, hence this.
 glob_match :: proc(pattern, path: string) -> bool {
 	pat := strings.split(pattern, "/", context.temp_allocator)
-	segs := strings.split(path, "/", context.temp_allocator)
+	segs := path == "" ? nil : strings.split(path, "/", context.temp_allocator)
 	return match_segs(pat, segs)
 }
 
@@ -21,7 +21,7 @@ match_segs :: proc(pat, segs: []string) -> bool {
 		}
 		return false
 	}
-	if len(segs) == 0 {return false}
+	if len(segs) == 0 || segs[0] == "" {return false} 	// an empty segment is not a segment
 	ok, _ := filepath.match(pat[0], segs[0])
 	return ok && match_segs(pat[1:], segs[1:])
 }

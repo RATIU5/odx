@@ -102,6 +102,17 @@ RULE_KEYS := []string {
 	"retired",
 	"check",
 }
+CHECK_KEYS := []string {
+	"kind",
+	"attribute",
+	"on",
+	"result_type_suffix",
+	"from",
+	"construct",
+	"names",
+	"roles",
+	"except_roles",
+}
 DEFAULT_RESULT_SUFFIX := []string{"Error"}
 
 Rulebook :: struct {
@@ -192,6 +203,8 @@ validate_rule :: proc(r: ^Rule, obj: json.Object, at: string, errs: ^[dynamic]st
 	check_enum(errs, at, obj, "severity", Severity)
 	check_enum(errs, at, obj, "fix", Fix_Mode)
 	spec, _ := obj["check"].(json.Object)
+	check_keys(errs, at, "check.", spec, CHECK_KEYS)
+	require_key(errs, at, spec, "kind") // the zero value is manual: a missing kind must not silently stop the check
 	check_enum(errs, at, spec, "kind", Check_Kind)
 	c := &r.check
 	switch c.kind {

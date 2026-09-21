@@ -11,8 +11,9 @@ import "core:strings"
 // blocks and feeds the text back to the model, exit 0 lets it through.
 //   hook edit:    family B on the edited file's package only (--fast); parse errors first.
 //   hook changed: a protected path changed on disk; the lock says whether that is approved.
-//   hook stop:    the full check plus the lock. Loop guard: after ODX_STOP_GUARD_MAX (default
-//                 3) consecutive blocks with the same output it gives up loudly.
+//   hook stop:    the full check plus the lock. It blocks on every Stop, including the ones
+//                 with stop_hook_active set, until clean. Loop guard: after ODX_STOP_GUARD_MAX
+//                 (default 3) consecutive blocks with the same output it gives up loudly.
 
 Hook_Input :: struct {
 	tool_input:       struct {
@@ -51,8 +52,7 @@ cmd_hook :: proc(o: Opts) {
 	case .changed:
 		if state, text := lock_check(p.root); state == .dirty {block(text)}
 	case .stop:
-		if in_.stop_hook_active {return}
-		hook_stop(&p)
+		hook_stop(&p) // stop_hook_active is expected: the guard below bounds the loop, not the flag
 	}
 }
 
@@ -70,9 +70,10 @@ hook_edit :: proc(p: ^Project, file: string) {
 	}
 	if file != "" {
 		if !strings.has_suffix(file, ".odin") {return}
-		rel, inside := rel_of(p.root, file)
-		if !inside || is_excluded(&p.cfg, rel) {return}
-		append(&fo.args, file)
+		abs := canonical(file)
+		rel, inside := rel_of(p.root, filepath.dir(abs))
+		// a file outside the root or excluded narrows nothing: check the whole project (17.10)
+		if inside && !is_excluded(&p.cfg, rel) {append(&fo.args, abs)}
 	}
 	c := make_ctx(p, fo.args[:])
 	if run_checks(&c, fo) != 0 {
@@ -96,7 +97,7 @@ hook_stop :: proc(p: ^Project) {
 	}
 	limit := STOP_GUARD_DEFAULT
 	if v, ok := strconv.parse_int(os.get_env("ODX_STOP_GUARD_MAX", context.temp_allocator));
-	   ok {limit = v}
+	   ok {limit = max(v, 1)} 	// 0 would disable the backstop
 	if n := guard_count(guard, text); n > limit {
 		fmt.eprint(text)
 		fmt.eprintfln(

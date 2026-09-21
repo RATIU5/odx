@@ -35,9 +35,6 @@ make_ctx :: proc(p: ^Project, paths: []string, only_topics: []string = nil) -> C
 		if len(rels) == 0 {fail("no packages under %v", paths)}
 	}
 	c.pkgs = load_packages(p.root, &p.cfg, rels)
-	for pk in c.pkgs {
-		if pk.role_count > 1 {fail("%s matches more than one role in %s", pk.rel, CONFIG_FILE)}
-	}
 	return c
 }
 
@@ -71,7 +68,7 @@ report :: proc(c: ^Ctx, a: ^Active_Rule, file: string, line, col: int, msg: stri
 			col = col,
 			rule = a.id,
 			severity = a.rule.severity,
-			check = fmt.tprint(a.rule.check.kind),
+			check = fmt.aprint(a.rule.check.kind),
 			message = msg,
 			ignorable = a.rule.ignorable,
 			class = a.rule.class,
@@ -143,7 +140,7 @@ check_vet_disables :: proc(c: ^Ctx, f: ^ast.File) {
 	for name in vet_tag_names(f) {
 		if !strings.has_prefix(name, "!") {continue}
 		if i, ok := slice.linear_search(c.cfg.odin.allowed_vet_disables, name[1:]); ok {
-			c.hits[fmt.tprintf("odin.allowed_vet_disables[%d]", i)] += 1
+			c.hits[fmt.aprintf("odin.allowed_vet_disables[%d]", i)] += 1
 			continue
 		}
 		file, _ := rel_of(c.root, f.fullpath)
@@ -201,7 +198,6 @@ check_imports :: proc(c: ^Ctx, p: ^Package, a: ^Active_Rule) {
 	layer, has_layer := c.cfg.layering[p.role]
 	if !has_layer {return} 	// no layering entry = role imports freely
 	deny := layer.deny
-	if deny == nil && p.role == "pure" {deny = DEFAULT_DENY_PURE}
 	for f in p.files {
 		is_test := strings.has_suffix(f.fullpath, "_test.odin")
 		for d in f.decls {

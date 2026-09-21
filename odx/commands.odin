@@ -235,14 +235,21 @@ cmd_init :: proc(o: Opts) {
 }
 
 // Claude Code hooks (17.10): the binary reads the hook JSON itself, so no jq and no wrapper script.
-INIT_HOOKS :: `{
+// The FileChanged matcher is PROTECTED verbatim, so the two can never drift.
+INIT_HOOKS_HEAD :: `{
   "hooks": {
     "PostToolBatch": [{ "hooks": [{ "type": "command", "command": "odx hook edit" }] }],
-    "FileChanged": [{ "matcher": "rules/**|odx.json5|.odx/**|.claude/settings.json", "hooks": [{ "type": "command", "command": "odx hook changed" }] }],
+    "FileChanged": [{ "matcher": "`
+INIT_HOOKS_TAIL :: `", "hooks": [{ "type": "command", "command": "odx hook changed" }] }],
     "Stop": [{ "hooks": [{ "type": "command", "command": "odx hook stop" }] }]
   }
 }
 `
+init_hooks :: proc() -> string {
+	return strings.concatenate(
+		{INIT_HOOKS_HEAD, strings.join(PROTECTED, "|", context.temp_allocator), INIT_HOOKS_TAIL},
+	)
+}
 INIT_CLAUDE_MD ::
 	`
 ## odx
@@ -268,10 +275,10 @@ INIT_CLAUDE_MD ::
 write_hooks :: proc(root: string) {
 	settings := join({root, ".claude", "settings.json"})
 	if os.exists(settings) {
-		fmt.printfln("%s exists; merge in:\n%s", settings, INIT_HOOKS)
+		fmt.printfln("%s exists; merge in:\n%s", settings, init_hooks())
 	} else {
 		os.make_directory_all(join({root, ".claude"}))
-		if err := os.write_entire_file(settings, INIT_HOOKS);
+		if err := os.write_entire_file(settings, init_hooks());
 		   err != nil {fail("write %s: %v", settings, err)}
 		fmt.println("wrote", settings)
 	}

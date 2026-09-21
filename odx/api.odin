@@ -150,15 +150,15 @@ render_api :: proc(h: ^doc.Header, dir: string) -> string {
 			fmt.sbprintf(&b, "%s %s.%s", kind, pname, doc.from_string(h, e.name))
 			switch e.kind {
 			case .Type_Name:
-				fmt.sbprintf(
-					&b,
-					" :: %s",
-					render_type(
-						&a,
-						a.types[e.type].types.length > 0 ? doc.from_array(h, a.types[e.type].types)[0] : e.type,
-						0,
-					),
-				)
+				// an alias points straight at its base type; `distinct` (and every struct, union,
+				// enum and bit_field) is a Named type wrapping the base (19.2)
+				base, named := e.type, a.types[e.type].kind == .Named
+				if named &&
+				   a.types[e.type].types.length >
+					   0 {base = doc.from_array(h, a.types[e.type].types)[0]}
+				keyword :=
+					"distinct " if named && a.types[base].kind not_in ALWAYS_DISTINCT else ""
+				fmt.sbprintf(&b, " :: %s%s", keyword, render_type(&a, base, 0))
 			case .Constant:
 				fmt.sbprintf(&b, " :: %s", render_type(&a, e.type, 0))
 			case .Variable:
@@ -203,6 +203,9 @@ render_api :: proc(h: ^doc.Header, dir: string) -> string {
 
 // render_type: a resolved, package-qualified rendering. Deterministic is what matters; the
 // exact spelling is odx's, not the compiler's. Depth-limited against recursive types.
+// ALWAYS_DISTINCT: type kinds that are unique types without the keyword.
+ALWAYS_DISTINCT :: bit_set[doc.Type_Kind]{.Struct, .Union, .Enum, .Bit_Field}
+
 render_type :: proc(a: ^Api_Ctx, ti: doc.Type_Index, depth: int) -> string {
 	if depth > 6 {return "..."}
 	t := a.types[ti]
@@ -287,7 +290,11 @@ render_type :: proc(a: ^Api_Ctx, ti: doc.Type_Index, depth: int) -> string {
 		)
 	case .Enum:
 		names := make([dynamic]string, context.temp_allocator)
-		for ei in doc.from_array(h, t.entities) {append(&names, doc.from_string(h, a.ents[ei].name))}
+		for ei in doc.from_array(h, t.entities) {
+			name, value :=
+				doc.from_string(h, a.ents[ei].name), doc.from_string(h, a.ents[ei].init_string)
+			append(&names, name if value == "" else fmt.tprintf("%s = %s", name, value))
+		}
 		return strings.concatenate(
 			{"enum {", strings.join(names[:], ", ", context.temp_allocator), "}"},
 			context.temp_allocator,

@@ -22,6 +22,14 @@ test_glob :: proc(t: ^testing.T) {
 		{"a/**/z", "a/z", true},
 		{"a/**/z", "a/b/c/z", true},
 		{"a/**/z", "a/b/c", false},
+		// the root package is zero segments, not one empty one
+		{"*", "", false},
+		{"**", "", true},
+		{"**/*.odin", "", false},
+		{"src/*", "src/", false},
+		{"src/core/", "src/core", false},
+		{"a/*/z", "a/z", false},
+		{"a/**/**/z", "a/z", true},
 	}
 	for c in cases {
 		testing.expectf(

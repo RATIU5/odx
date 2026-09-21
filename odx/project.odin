@@ -38,12 +38,17 @@ validate_project :: proc(p: ^Project) {
 		if find_rule(&p.rb, id) ==
 		   nil {errf(&p.errs, "%s: disabled %s is not a known rule", CONFIG_FILE, id)}
 	}
-	p.dirs = package_dirs(p.root, &p.cfg)
+	p.dirs = package_dirs(p.root, &p.cfg, &p.errs)
 	for role in sorted_keys(p.cfg.roles) {
 		for g in p.cfg.roles[role] {
 			hit := false
 			for d in p.dirs {hit ||= glob_match(g, d)}
 			if !hit {errf(&p.errs, "%s: roles.%s glob %q matches no package directory", CONFIG_FILE, role, g)}
+		}
+	}
+	for d in p.dirs {
+		if _, n := role_of(&p.cfg, d); n > 1 {
+			errf(&p.errs, "%s: %s matches more than one role", CONFIG_FILE, d if d != "" else ".")
 		}
 	}
 }
@@ -69,13 +74,14 @@ sorted_keys :: proc(m: map[string]$V) -> []string {
 
 // Package is one directory of .odin files with its role and parsed AST (17.5, 17.7).
 Package :: struct {
-	dir:        string, // absolute
-	rel:        string, // relative to root, "/" separators, "" for root itself
-	role:       string, // "" = unmapped
-	role_count: int, // 0 unmapped, >1 conflict
-	pkg:        ^ast.Package, // nil if the directory failed to parse at all
-	files:      []^ast.File, // sorted by path
-	diags:      []Diag, // parse errors
+	dir:         string, // absolute
+	rel:         string, // relative to root, "/" separators, "" for root itself
+	role:        string, // "" = unmapped
+	role_count:  int, // 0 unmapped, >1 conflict
+	pkg:         ^ast.Package, // nil if the directory failed to parse at all
+	files:       []^ast.File, // sorted by path
+	diags:       []Diag, // parse errors
+	doc_skipped: bool, // family C found no .odin-doc (type error); its ignores are never stale
 }
 
 Diag :: struct {
@@ -92,7 +98,7 @@ collect_diag :: proc(pos: tokenizer.Pos, msg: string, args: ..any) {
 }
 
 // package_dirs lists every directory under root holding a .odin file, minus exclude, sorted.
-package_dirs :: proc(root: string, cfg: ^Config) -> []string {
+package_dirs :: proc(root: string, cfg: ^Config, errs: ^[dynamic]string = nil) -> []string {
 	dirs := make(map[string]bool)
 	w := os.walker_create_path(root)
 	defer os.walker_destroy(&w)
@@ -106,6 +112,9 @@ package_dirs :: proc(root: string, cfg: ^Config) -> []string {
 		case fi.type == .Regular && strings.has_suffix(fi.name, ".odin"):
 			dir, _ := rel_of(root, filepath.dir(fi.fullpath))
 			dirs[dir] = true
+		case fi.type == .Regular && fi.name == CONFIG_FILE && rel != CONFIG_FILE:
+			if errs !=
+			   nil {errf(errs, "%s: nested %s; one config per project (17.5)", rel, CONFIG_FILE)}
 		}
 	}
 	return sorted_keys(dirs)
@@ -139,8 +148,9 @@ select_packages :: proc(root: string, rels: []string, paths: []string) -> []stri
 	want := make([dynamic]string, context.temp_allocator)
 	for a in paths {
 		// a relative path is tried from cwd first, then from the root (for `--root x sub/pkg`)
-		abs, _ := filepath.abs(a)
-		if !os.exists(abs) && !filepath.is_abs(a) {abs = join({root, a})}
+		abs := canonical(a)
+		if !os.exists(abs) && !filepath.is_abs(a) {abs = canonical(join({root, a}))}
+		if !os.exists(abs) {fail("%s does not exist", a)}
 		if !os.is_directory(abs) {abs = filepath.dir(abs)}
 		rel, inside := rel_of(root, abs)
 		if !inside {fail("%s is outside the project root %s", a, root)}

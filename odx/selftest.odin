@@ -142,26 +142,29 @@ check_fix_pairs :: proc(dir: string, r: ^Report) -> (bad: int) {
 	return
 }
 
-// check_templates renders each template into a temp project built in memory (no odx.json5 on
-// disk) and runs the full check there.
+// check_templates renders each template into a temp project whose odx.json5 maps the rendered
+// package to the template's role, then runs the full check through the real loader (17.16).
 check_templates :: proc(root: string) -> (failed: int) {
 	errs: [dynamic]string
 	for &t in load_templates(root, &errs) {
 		tmp := temp_dir("odx-tpl-*")
 		defer os.remove_all(tmp)
-		render_template(&t, "Sample", tmp)
-		p := Project {
-			root = tmp,
-			rb   = load_rulebook("", &errs),
-			cfg  = default_config(),
+		written := render_template(&t, "Sample", tmp)
+		pkg, _ := rel_of(tmp, filepath.dir(written[0]))
+		cfg := fmt.tprintf(
+			`{{version: 1, roles: {{%q: [%q]}}, layering: {{%q: {{may_import: ["core:*"]}}}}}}`,
+			t.role,
+			pkg,
+			t.role,
+		)
+		if err := os.write_entire_file(join({tmp, CONFIG_FILE}), cfg);
+		   err != nil {fail("write %s: %v", tmp, err)}
+		p := load_project(tmp)
+		for e in p.errs {fmt.println("  config:", e)}
+		if len(p.errs) > 0 {
+			failed += 1
+			continue
 		}
-		clear(&p.cfg.roles)
-		p.cfg.roles[t.role] = {"sample"}
-		clear(&p.cfg.layering)
-		p.cfg.layering[t.role] = {
-			may_import = {"core:*"},
-		}
-		p.dirs = package_dirs(tmp, &p.cfg)
 		c := make_ctx(&p, nil)
 		code := run_checks(&c, Opts{})
 		fmt.print(report_text(c.r))
@@ -179,9 +182,7 @@ check_templates :: proc(root: string) -> (failed: int) {
 temp_dir :: proc(pattern: string) -> string {
 	tmp, err := os.make_directory_temp("", pattern, context.allocator)
 	if err != nil {fail("cannot create temp dir")}
-	// macOS: /var is a symlink and the walker reports /private/var; rel_of needs the same form
-	tmp, _ = os.get_absolute_path(tmp, context.allocator)
-	return tmp
+	return canonical(tmp)
 }
 
 copy_tree :: proc(from, to: string) {
