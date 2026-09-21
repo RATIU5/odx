@@ -28,6 +28,10 @@ changed_odin_files :: proc(root, ref: string) -> (files: []string, in_git: bool)
 // added_ignores: the suppressions whose directive text is not in HEAD's copy of the file (M3.3).
 added_ignores :: proc(root: string, igs: []Ignore) -> []Ignore {
 	out := make([dynamic]Ignore)
+	if st, _, _, err := os.process_exec(
+		{command = {"git", "-C", root, "rev-parse", "--verify", "HEAD"}},
+		context.allocator,
+	); err != nil || st.exit_code != 0 {return nil} 	// no HEAD: nothing to be "since"
 	heads := make(map[string]string, context.temp_allocator)
 	for ig in igs {
 		old, cached := heads[ig.file]

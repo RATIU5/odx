@@ -1,0 +1,42 @@
+package odx
+
+import "core:os"
+import "core:strings"
+import "core:testing"
+
+// A `--since` run once emptied a baseline (full was computed without it); the file format and
+// the key must survive a round trip, and a narrowed run must never be "full".
+@(test)
+test_baseline_round_trip :: proc(t: ^testing.T) {
+	context.allocator = context.temp_allocator
+	defer free_all(context.temp_allocator)
+	dir := strings.concatenate({os.get_env("TMPDIR", context.temp_allocator), "/odx-baseline"})
+	os.remove_all(dir)
+	os.make_directory_all(dir)
+	defer os.remove_all(dir)
+	write_baseline(
+		dir,
+		{
+			{"layering/R2", "core", "core:os", "legacy, tracked in #7", false},
+			{"errors/R3", ".", "parse", "", false},
+		},
+	)
+	es, exists := read_baseline(dir)
+	testing.expect(t, exists)
+	if testing.expect_value(t, len(es), 2) {
+		testing.expect_value(t, es[0].rule, "errors/R3") // sorted
+		testing.expect_value(t, es[1].subject, "core:os")
+		testing.expect_value(t, es[1].reason, "legacy, tracked in #7")
+	}
+	rule, pkg, subject, ok := baseline_key(
+		Violation{file = "core/core.odin", rule = "layering/R2", subject = "core:os"},
+	)
+	testing.expect(t, ok)
+	testing.expect_value(t, rule, "layering/R2")
+	testing.expect_value(t, pkg, "core")
+	testing.expect_value(t, subject, "core:os")
+	_, pkg2, _, _ := baseline_key(Violation{file = "root.odin", rule = "x/R1", subject = "s"})
+	testing.expect_value(t, pkg2, ".")
+	_, _, _, ok3 := baseline_key(Violation{file = "a.odin", rule = "x/R1"}) // no subject
+	testing.expect(t, !ok3)
+}

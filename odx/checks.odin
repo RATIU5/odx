@@ -84,6 +84,7 @@ report :: proc(
 			statement = a.rule.statement,
 			why = a.rule.why,
 			subject = subject,
+			blocking = a.rule.blocking,
 		},
 	)
 }

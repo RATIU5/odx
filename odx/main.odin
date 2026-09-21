@@ -19,6 +19,8 @@ Opts :: struct {
 	checklist:      bool, // explain --checklist
 	max_violations: int,
 	hooks:          bool, // init --hooks
+	brief:          bool, // for --brief
+	report:         bool, // eval --report
 	added:          bool, // ignores --added
 	stale:          bool, // ignores --stale
 	since:          string, // check --since <ref>
@@ -33,7 +35,7 @@ USAGE :: `usage: odx <command> [args] [--json] [--root <dir>]
 
   check [<path>...] [--topic t] [--fast] [--strict] [--since <ref>] [--ci]   run checks (odx.baseline softens, never hides)
   baseline add | regen         freeze current violations into odx.baseline (shrinks on its own; never grows from check)
-  for <path>                   topics that apply to a file or package
+  for <path> [--brief]         the rules that apply to a file or package (--brief: topic names only)
   explain [<topic>] [--rule R3]   no topic: list topics; with one: rules, rationale, do/don't
   explain [<topic>] --checklist   manual rules only, for an adversarial reviewer
   ignores [--added] [--stale]  every odx:ignore suppression; --added: not in HEAD; --stale: suppressing nothing
@@ -41,6 +43,7 @@ USAGE :: `usage: odx <command> [args] [--json] [--root <dir>]
   hook edit | stop | changed   Claude Code hook entry points (read the hook JSON on stdin)
   init [--hooks]               write odx.json5 and mise.toml (--hooks: .claude/settings.json, CLAUDE.md)
   self-test                    run every tests/fixtures/* and diff its // want: markers
+  eval [<task>...] [--topic bare|for|hook] [--report]   M6 pilot: run evals/<task>/ through claude -p and score mechanically
 `
 
 fail :: proc(f: string, args: ..any) -> ! {
@@ -76,6 +79,10 @@ parse_opts :: proc(args: []string) -> (o: Opts) {
 			o.checklist = true
 		case "--hooks":
 			o.hooks = true
+		case "--report":
+			o.report = true
+		case "--brief":
+			o.brief = true
 		case "--added":
 			o.added = true
 		case "--stale":
@@ -133,6 +140,8 @@ main :: proc() {
 		cmd_ignores(o)
 	case "doctor":
 		cmd_doctor(o)
+	case "eval":
+		cmd_eval(o)
 	case "self-test":
 		cmd_selftest(o)
 	case "hook":

@@ -35,6 +35,10 @@ Rule :: struct {
 	id:           string,
 	statement:    string,
 	why:          string,
+	instead_of:   string, // admission criteria 3-5 (M5.2): compared to what, what evidence, at what cost
+	evidence:     string,
+	cost:         string,
+	blocking:     bool, // P4: blocks the hook; false = advisory, printed but never a wall
 	severity:     Severity, // mandatory
 	class:        string, // stable greppable name, e.g. "layering_hidden_state"
 	ignorable:    bool, // default true; set at load when absent
@@ -88,6 +92,10 @@ RULE_KEYS := []string {
 	"id",
 	"statement",
 	"why",
+	"instead_of",
+	"evidence",
+	"cost",
+	"blocking",
 	"severity",
 	"class",
 	"ignorable",
@@ -217,6 +225,13 @@ add_topic :: proc(
 validate_rule :: proc(r: ^Rule, obj: json.Object, at: string, errs: ^[dynamic]string) {
 	if r.statement == "" {errf(errs, "%s: statement is required", at)}
 	if r.why == "" {errf(errs, "%s: why is required (20.4)", at)}
+	// a rule cannot reach a user without its justification (M5.2)
+	if r.instead_of == "" {errf(errs, "%s: instead_of is required (compared to what?)", at)}
+	if r.evidence == "" {errf(errs, "%s: evidence is required (what hard evidence?)", at)}
+	if r.cost == "" {errf(errs, "%s: cost is required (at what cost?)", at)}
+	require_key(errs, at, obj, "blocking")
+	if r.blocking &&
+	   r.severity == .warning {errf(errs, "%s: an advisory (warning) rule cannot be blocking", at)}
 	require_key(errs, at, obj, "severity")
 	require_key(errs, at, obj, "check")
 	check_enum(errs, at, obj, "severity", Severity)

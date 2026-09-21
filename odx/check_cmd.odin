@@ -31,7 +31,7 @@ cmd_check :: proc(o: Opts) {
 
 // run_checks is the whole pipeline (families B, A, C, ignores, stale config) on a context.
 run_checks :: proc(c: ^Ctx, o: Opts) -> int {
-	full := !o.fast && len(o.topics) == 0 && len(o.args) == 0 // nothing narrowed (20.2)
+	full := !o.fast && len(o.topics) == 0 && len(o.args) == 0 && o.since == "" // nothing narrowed (20.2)
 	run_family_b(c)
 	igs := project_ignores(c)
 	if !o.fast {

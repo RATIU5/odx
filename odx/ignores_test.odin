@@ -40,3 +40,13 @@ c := "//" // odx:ignore x/R1 reason: a slash pair inside a string is code
 		testing.expect_value(t, r.violations[0].message, "one odx:ignore per line")
 	}
 }
+
+// A near miss fails loudly; prose that mentions odx and ignore is left alone (M3.3).
+@(test)
+test_ignore_near_miss :: proc(t: ^testing.T) {
+	testing.expect(t, is_near_miss("odx: ignore x/r1 reason: spaced"))
+	testing.expect(t, is_near_miss("odx-ignore x/r1"))
+	testing.expect(t, is_near_miss("odx ignore-file x/r1"))
+	testing.expect(t, !is_near_miss("odx ignores nothing here, this is prose about the tool"))
+	testing.expect(t, !is_near_miss("odx check will ignore this"))
+}

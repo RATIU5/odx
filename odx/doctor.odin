@@ -26,9 +26,20 @@ err :: proc(d: ^Doctor, f: string, args: ..any) {
 
 cmd_doctor :: proc(o: Opts) {
 	p := load_project(o.root)
-	if p.root ==
-	   "" {fail("no %s found here or in any parent (use --root or `odx init`)", CONFIG_FILE)}
 	d: Doctor
+	if p.root == "" {
+		// no odx.json5: still useful (M4). Guarantees are reported against an empty flag set,
+		// so every one reads "off" with the default set named as the fix.
+		warn(
+			&d,
+			"no %s here or in any parent; `odx init` writes one with the default guarantees",
+			CONFIG_FILE,
+		)
+		p.root, _ = os.get_working_directory(context.allocator)
+		if o.root != "" {p.root = canonical(o.root)}
+		p.cfg.exclude = {".*", ".*/**", "build/**", "vendor/**"}
+		p.dirs = package_dirs(p.root, &p.cfg)
+	}
 	for e in p.errs {err(&d, "%s", e)} 	// `ext validate` folded in (M0.3): every config error, not the first
 	if d.errors > 0 {
 		fmt.printfln("%d errors, %d warnings", d.errors, d.warnings)

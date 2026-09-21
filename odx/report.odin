@@ -24,6 +24,7 @@ Violation :: struct {
 	why:       string,
 	subject:   string, // stable semantic key (M3.1); "" = not baselineable
 	baselined: bool, // listed in odx.baseline: printed, never fails the build
+	blocking:  bool, // P4: the hook may block on it; notes (odin/*, odx/*) always are
 }
 
 Report :: struct {
@@ -46,6 +47,7 @@ note :: proc(r: ^Report, rule, check, file: string, line, col: int, message: str
 			rule = rule,
 			check = check,
 			message = message,
+			blocking = true,
 		},
 	)
 }
@@ -131,6 +133,14 @@ report_text :: proc(r: ^Report) -> string {
 	return strings.to_string(b)
 }
 
+// hook_blocks: does this report contain anything the hook should wall on (P4)? Advisory
+// rules and baselined findings are printed but never block.
+hook_blocks :: proc(r: ^Report) -> bool {
+	if len(r.tool_errors) > 0 {return true}
+	for v in r.violations {if v.blocking && !v.baselined {return true}}
+	return false
+}
+
 // hook_text is report_text for the model (M2.2): the first violation of each rule carries the
 // statement, the why, and the exact escape hatch (only when the rule takes one); later ones are
 // bare location lines. Compiler findings never have a body. M8 adds fires/silent here.
@@ -152,12 +162,22 @@ hook_text :: proc(r: ^Report) -> string {
 		seen[v.rule] = true
 		fmt.sbprintfln(&b, "  rule: %s\n  why: %s", v.statement, v.why)
 		if v.ignorable {
-			fmt.sbprintfln(
-				&b,
-				"  to suppress, on the line above it: // %s %s reason: <at least ten characters>",
-				IGNORE_PREFIX,
-				v.rule,
-			)
+			if strings.has_suffix(v.file, ".odin") {
+				fmt.sbprintfln(
+					&b,
+					"  to suppress, on the line above it: // %s %s reason: <at least ten characters>",
+					IGNORE_PREFIX,
+					v.rule,
+				)
+			} else {
+				fmt.sbprintfln(
+					&b,
+					"  to suppress, on line 1-3 of any file in %s/: // %s %s reason: <at least ten characters>",
+					v.file,
+					IGNORE_FILE_PREFIX,
+					v.rule,
+				)
+			}
 		}
 	}
 	if r.summary.omitted >

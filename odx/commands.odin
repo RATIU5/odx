@@ -58,7 +58,22 @@ cmd_explain :: proc(o: Opts) {
 		if r.check.kind == .manual {how = "check: manual (reviewer checklist)"}
 		if reason, dis := p.cfg.disabled[id];
 		   dis {how = strings.concatenate({how, "  DISABLED: ", reason}, context.temp_allocator)}
-		fmt.printfln("%-14s %s\n%-14s why: %s\n%-14s %s", id, r.statement, "", r.why, "", how)
+		fmt.printfln(
+			"%-14s %s\n%-14s why: %s\n%-14s instead of: %s\n%-14s evidence: %s\n%-14s cost: %s\n%-14s %s%s",
+			id,
+			r.statement,
+			"",
+			r.why,
+			"",
+			r.instead_of,
+			"",
+			r.evidence,
+			"",
+			r.cost,
+			"",
+			how,
+			"" if r.blocking else "  (advisory)",
+		)
 	}
 	if o.rule != "" {
 		if shown == 0 {fail("no rule %s in topic %s", o.rule, t.name)}
@@ -108,7 +123,36 @@ cmd_for :: proc(o: Opts) {
 	} else {
 		fmt.printfln("%s: role %s", shown, role)
 	}
-	for t in matched {fmt.printfln("  %-12s %s", t.name, t.summary)}
+	if o.brief {
+		for t in matched {fmt.printfln("  %-12s %s", t.name, t.summary)}
+	} else {
+		// the rules themselves (M5.1): one call is enough to write the file. Errors before
+		// warnings, blocking before advisory: the head of the list gets read.
+		for t in matched {
+			fmt.printfln("\n%s: %s", t.name, t.summary)
+			rs := slice.clone(t.rules, context.temp_allocator)
+			slice.sort_by(rs, proc(a, b: Rule) -> bool {
+				if a.severity != b.severity {return a.severity < b.severity}
+				return a.blocking && !b.blocking
+			})
+			for r in rs {
+				if r.retired {continue}
+				id := strings.concatenate({t.name, "/", r.id}, context.temp_allocator)
+				if reason, dis := p.cfg.disabled[id]; dis {
+					fmt.printfln("  %-14s disabled: %s", id, reason)
+					continue
+				}
+				fmt.printfln(
+					"  %-14s %s%s\n  %-14s why: %s",
+					id,
+					r.statement,
+					"" if r.blocking else " (advisory)",
+					"",
+					r.why,
+				)
+			}
+		}
+	}
 	if n == 0 {os.exit(EXIT_VIOLATION)}
 }
 

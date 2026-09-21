@@ -33,7 +33,7 @@ collect_ignores :: proc(
 			if !strings.has_prefix(text, IGNORE_PREFIX) {
 				// a near miss (`odx: ignore`, `odx:Ignore`, `odx-ignore`) fails loudly, never silently (M3.3)
 				if low := strings.to_lower(text, context.temp_allocator);
-				   strings.has_prefix(low, "odx") && strings.contains(low, "ignore") {
+				   strings.has_prefix(low, "odx") && is_near_miss(low) {
 					note(
 						r,
 						"odx/bad-ignore",
@@ -111,7 +111,7 @@ apply_ignores :: proc(c: ^Ctx, igs: []Ignore, ran: map[string]bool) {
 				// a package-level finding (v.file is a directory) takes a file-wide ignore in that package
 				if ig.rule == v.rule &&
 				   ((ig.file == v.file && (ig.target == 0 || ig.target == v.line)) ||
-						   (ig.target == 0 && dir_of(ig.file) == v.file)) {
+						   (ig.target == 0 && pkg_of(ig.file) == v.file)) {
 					ig.used = true
 					hit = true
 				}
@@ -142,4 +142,19 @@ apply_ignores :: proc(c: ^Ctx, igs: []Ignore, ran: map[string]bool) {
 dir_of :: proc(rel: string) -> string {
 	i := strings.last_index(rel, "/")
 	return "" if i < 0 else rel[:i]
+}
+
+// is_near_miss: `odx:ignore` misspelt by spacing, case or punctuation (`odx: ignore`, `odx-ignore`,
+// `odx Ignore`), not prose that happens to mention both words.
+is_near_miss :: proc(low: string) -> bool {
+	rest := strings.trim_left(low[len("odx"):], ":- ")
+	if len(low) - len("odx") - len(rest) > 2 {return false}
+	word, _, _ := strings.partition(rest, " ")
+	return word == "ignore" || word == "ignore-file"
+}
+
+// pkg_of: the package directory as violations name it ("." for the root package).
+pkg_of :: proc(rel: string) -> string {
+	d := dir_of(rel)
+	return "." if d == "" else d
 }

@@ -99,7 +99,8 @@ hook_edit :: proc(p: ^Project, file: string) {
 		block(report_text(c.r))
 	}
 	c.r^ = {}
-	if run_checks(&c, fo) != 0 {
+	run_checks(&c, fo)
+	if hook_blocks(c.r) {
 		print_tool_errors(c.r)
 		block(hook_text(c.r))
 	}
@@ -107,7 +108,8 @@ hook_edit :: proc(p: ^Project, file: string) {
 
 hook_stop :: proc(p: ^Project) {
 	c := make_ctx(p, nil)
-	code := run_checks(&c, Opts{max_violations = HOOK_MAX_VIOLATIONS})
+	run_checks(&c, Opts{max_violations = HOOK_MAX_VIOLATIONS})
+	code := EXIT_VIOLATION if hook_blocks(c.r) else 0 // advisory rules never enter the loop (P4)
 	text := hook_text(c.r)
 	// debt stays visible (M3.1, M3.3): one line each, only when non-zero
 	if n := c.r.summary.baselined;

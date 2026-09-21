@@ -38,9 +38,13 @@ outside edge, each with a reason and an escape hatch.
 
 ## 3. The rulebook
 
-Three built-in topics (`errors`, `allocators`, `layering`) with eleven rules. Each rule has a
-statement, a why, and either a mechanical check or a reviewer checklist entry. A project adds
-`.odx/topics/<name>/` in the same format; the same name overrides the built-in.
+Three built-in topics (`errors`, `allocators`, `layering`) with eleven rules. Every rule carries
+its statement, `why`, `instead_of` (compared to what?), `evidence` (what hard evidence?), `cost`
+(at what cost?), a severity and `blocking: true|false`. A rule missing any of them fails to
+load, so no rule reaches a user without its justification. Advisory (`blocking: false`) rules
+are printed but never block the hook. `odx for <path>` prints the rules that apply to a file,
+most important first, so one call is enough to write it; `--brief` gives topic names only. A
+project adds `.odx/topics/<name>/` in the same format; the same name overrides the built-in.
 
 ```
 odx check [<path>...]            run the checks (exit 1 on violations; odx.baseline softens, never hides)

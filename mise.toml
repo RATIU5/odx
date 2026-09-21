@@ -78,6 +78,11 @@ for f in tests/compiler/*.odin; do
 done
 '''
 
+[tasks.eval]
+description = "M6 pilot through claude -p (costs money; not in ci). Subset: mise run eval -- ring stack --topic hook"
+depends = ["build"]
+run = "$ODX eval"
+
 [tasks.ci]
 description = "Everything CI runs, in order"
 depends = ["build", "test", "fixtures", "exemplars", "audit", "self"]
