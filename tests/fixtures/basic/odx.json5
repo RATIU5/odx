@@ -1,10 +1,10 @@
 {
   version: 1,
   roles: { pure: ["core"], edge: ["platform"] },
-  layering: {
+  dependencies: {
     pure: { may_import: ["pure", "core:*"] },
     edge: { may_import: ["pure", "edge", "core:*", "vendor:*"] },
   },
-  disabled: { "layering/R4": "fixture: foreign placement is covered by the platform package" },
+  disabled: { "dependencies/R4": "fixture: foreign placement is covered by the platform package" },
   odin: { flags: ["-vet", "-warnings-as-errors"] },
 }

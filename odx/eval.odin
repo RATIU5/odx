@@ -205,7 +205,7 @@ run_eval :: proc(root, odx_bin, task_dir, task, cond: string) -> (row: Eval_Row)
 
 // ponytail: a plain constant, not a format string: Odin's fmt treats `{` as a verb (the first
 // pilot scored every row 0 violations against a config that read MISSING CLOSE BRACE).
-EVAL_CONFIG :: `{ version: 1, roles: { pure: ["task"] }, layering: { pure: { may_import: ["pure", "core:*"] } },
+EVAL_CONFIG :: `{ version: 1, roles: { pure: ["task"] }, dependencies: { pure: { may_import: ["pure", "core:*"] } },
   odin: { flags: ["-vet", "-vet-cast", "-strict-style"] } }
 `
 

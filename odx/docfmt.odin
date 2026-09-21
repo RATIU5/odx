@@ -10,9 +10,14 @@ import "core:strings"
 // Only `require_attribute` rules today. A package that fails to type-check writes no file;
 // family A already reported why, so it is marked doc_skipped and its ignores stay unjudged.
 
+// is_family_c: the kinds that need the type-checked entity table (skipped under --fast).
+is_family_c :: proc(k: Check_Kind) -> bool {
+	return k == .require_attribute || k == .foreign_error_type
+}
+
 run_family_c :: proc(c: ^Ctx) {
 	rules := make([dynamic]^Active_Rule)
-	for &a in c.rules {if a.rule.check.kind == .require_attribute {append(&rules, &a)}}
+	for &a in c.rules {if is_family_c(a.rule.check.kind) {append(&rules, &a)}}
 	if len(rules) == 0 {return}
 	tmp, terr := os.make_directory_temp("", "odx-doc-*", context.allocator)
 	if terr != nil {
@@ -58,7 +63,15 @@ doc_package :: proc(
 	args := make([dynamic]string, context.temp_allocator)
 	append(&args, "doc", p.dir, "-doc-format", strings.concatenate({"-out:", out}))
 	append(&args, ..flags)
-	code, _, ok := run_odin(c, ..args[:])
+	code: int
+	text: string
+	ok: bool
+	for _ in 0 ..< 3 {
+		code, text, ok = run_odin(c, ..args[:])
+		// ponytail: the 2026-09 nightly segfaults intermittently (exit 11, no output): retry,
+		// as family A does; a real type error always prints
+		if !(ok && code != 0 && text == "") {break}
+	}
 	if !ok {return nil, .Fatal}
 	if code != 0 || !os.exists(out) {return nil, .Skipped}
 	data, rerr := os.read_entire_file(out, context.allocator)
@@ -101,8 +114,35 @@ check_entities :: proc(c: ^Ctx, p: ^Package, h: ^doc.Header, rules: []^Active_Ru
 			if "test" in attrs {continue} 	// 17.13
 			last := last_result_name(h, types, e.type)
 			for a in rules {
-				if !role_applies(&a.rule.check, p.role) ||
-				   a.rule.check.attribute in attrs ||
+				if !role_applies(&a.rule.check, p.role) {continue}
+				if a.rule.check.kind == .foreign_error_type {
+					// M7.4: an error crosses the package boundary untranslated. The doc format records
+					// no position for a type defined outside the documented package, so "" means
+					// exactly "declared elsewhere".
+					if !has_suffix_any(last, a.rule.check.result_type_suffix) {continue}
+					if decl := last_result_pkg(h, types, files, e.type); decl != p.dir {
+						fname := doc.from_string(h, files[e.pos.file].name)
+						file, _ := rel_of(c.root, join({p.dir, filepath.base(fname)}))
+						drel := "another package"
+						if decl != "" {drel, _ = rel_of(c.root, decl)}
+						report(
+							c,
+							a,
+							file,
+							int(e.pos.line),
+							int(e.pos.column),
+							fmt.tprintf(
+								"%s returns %s declared in %s; translate it into this package's Error at the boundary",
+								doc.from_string(h, e.name),
+								last,
+								drel,
+							),
+							doc.from_string(h, e.name),
+						)
+					}
+					continue
+				}
+				if a.rule.check.attribute in attrs ||
 				   !has_suffix_any(last, a.rule.check.result_type_suffix) {continue}
 				fname := doc.from_string(h, files[e.pos.file].name)
 				file, _ := rel_of(c.root, join({p.dir, filepath.base(fname)}))
@@ -141,6 +181,29 @@ last_result_name :: proc(h: ^doc.Header, types: []doc.Type, ti: doc.Type_Index) 
 	ents := doc.from_array(h, h.entities)
 	last := types[ents[res_ents[len(res_ents) - 1]].type]
 	return doc.from_string(h, last.name) if last.kind == .Named else ""
+}
+
+// last_result_pkg: the directory of the package that declares the last result's named type.
+@(private = "file")
+last_result_pkg :: proc(
+	h: ^doc.Header,
+	types: []doc.Type,
+	files: []doc.File,
+	ti: doc.Type_Index,
+) -> string {
+	t := types[ti]
+	if t.kind != .Proc {return ""}
+	sub := doc.from_array(h, t.types)
+	if len(sub) < 2 || sub[1] == 0 {return ""}
+	res_ents := doc.from_array(h, types[sub[1]].entities)
+	if len(res_ents) == 0 {return ""}
+	ents := doc.from_array(h, h.entities)
+	last := types[ents[res_ents[len(res_ents) - 1]].type]
+	if last.kind != .Named {return ""}
+	defs := doc.from_array(h, last.entities)
+	if len(defs) == 0 {return ""}
+	pkgs := doc.from_array(h, h.pkgs)
+	return doc.from_string(h, pkgs[files[ents[defs[0]].pos.file].pkg].fullpath)
 }
 
 @(private = "file")

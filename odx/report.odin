@@ -25,6 +25,8 @@ Violation :: struct {
 	subject:   string, // stable semantic key (M3.1); "" = not baselineable
 	baselined: bool, // listed in odx.baseline: printed, never fails the build
 	blocking:  bool, // P4: the hook may block on it; notes (odin/*, odx/*) always are
+	fires:     string, // the rule's compiled violating and correct forms (M8), "" for notes
+	silent:    string,
 }
 
 Report :: struct {
@@ -161,6 +163,8 @@ hook_text :: proc(r: ^Report) -> string {
 		if v.statement == "" || v.rule in seen || v.baselined {continue}
 		seen[v.rule] = true
 		fmt.sbprintfln(&b, "  rule: %s\n  why: %s", v.statement, v.why)
+		if v.fires != "" {fmt.sbprintfln(&b, "  violates, like this:\n%s", indent(v.fires))}
+		if v.silent != "" {fmt.sbprintfln(&b, "  passes, like this:\n%s", indent(v.silent))}
 		if v.ignorable {
 			if strings.has_suffix(v.file, ".odin") {
 				fmt.sbprintfln(

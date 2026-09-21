@@ -32,17 +32,29 @@ when the compiler gained a flag the project has not adopted, so the set ratchets
 
 ## 2. Dependencies
 
-`odx.json5` maps package directories to roles (pure, service, edge) and says who may import
-whom. `odx check` reports forbidden imports, mutable globals outside edge, and foreign blocks
-outside edge, each with a reason and an escape hatch.
+With no configuration at all, `odx doctor` and `odx for <path>` report what every package
+transitively reaches: the OS, the network, threads, or a `foreign` block, and through which
+import. The graph is the compiler's own (`-show-import-graph`), not a taxonomy. Turning a reach
+into a rule is opt-in: `odx.json5` may assign roles (pure, service, edge) per package directory
+and say who may import whom; `odx check` then reports forbidden imports, mutable globals outside
+edge, foreign blocks outside edge, and an exported procedure that passes another package's error
+type through its boundary, each with a reason and an escape hatch. A package with no role gets
+the report and no rule.
 
 ## 3. The rulebook
 
-Three built-in topics (`errors`, `allocators`, `layering`) with eleven rules. Every rule carries
-its statement, `why`, `instead_of` (compared to what?), `evidence` (what hard evidence?), `cost`
-(at what cost?), a severity and `blocking: true|false`. A rule missing any of them fails to
-load, so no rule reaches a user without its justification. Advisory (`blocking: false`) rules
-are printed but never block the hook. `odx for <path>` prints the rules that apply to a file,
+Three built-in topics (`errors`, `allocators`, `dependencies`), ten active rules, one file per
+rule: `rules/<topic>/<id>.odx.md` is Markdown with restricted frontmatter (`key: value`, inline
+JSON5 for `check:`) and three fenced blocks. ` ```odin prelude ` is a sibling file of shared
+types; ` ```odin fires ` must produce that rule and no other finding; ` ```odin silent ` must
+compile and produce nothing. `odx self-test` compiles every block, so the documentation, the
+exemplar and the test are one artifact that cannot drift. The prose around them is the
+`odx explain` body and what the hook shows a blocked model, violating form beside the correct
+one. Every rule carries `why`, `instead_of`, `evidence`, `cost`, a severity and `blocking`; a
+rule missing any fails to load. `kind: example` rules have no check: they are compiled
+fires/silent pairs surfaced by `odx for`, `odx explain --checklist` and the block text, never
+blocking. There is no prose-only rule kind. `rules/<topic>/topic.md` carries the topic record
+in its frontmatter. `odx for <path>` prints the rules that apply to a file,
 most important first, so one call is enough to write it; `--brief` gives topic names only. A
 project adds `.odx/topics/<name>/` in the same format; the same name overrides the built-in.
 
@@ -105,8 +117,8 @@ doctor --relock`. This is visibility, not a security boundary.
 
 ## Layout
 
-- `odx/` the tool. `rules/<topic>/` built-in topics (`topic.json5` metadata + rules,
-  `topic.md` prose, `example/<pkg>/` a compiling exemplar), embedded into the binary.
+- `odx/` the tool. `rules/<topic>/` built-in topics (`topic.md` record + prose, one
+  `<id>.odx.md` per rule, `example/<pkg>/` a compiling exemplar), embedded into the binary.
 - `.odx/topics/<name>/` project topics in the same format.
 - `tests/fixtures/<name>/` small projects with `// want: topic/R2` markers, diffed both ways
   by `odx self-test`. `tests/compiler/` holds constructs the compiler now rejects on its own;

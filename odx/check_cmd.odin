@@ -39,7 +39,7 @@ run_checks :: proc(c: ^Ctx, o: Opts) -> int {
 		run_family_c(c)
 	}
 	ran := make(map[string]bool, context.temp_allocator)
-	for a in c.rules {if !(o.fast && a.rule.check.kind == .require_attribute) {ran[a.id] = true}}
+	for a in c.rules {if !(o.fast && is_family_c(a.rule.check.kind)) {ran[a.id] = true}}
 	apply_ignores(c, igs, ran)
 	if full {report_stale_config(c)}
 	apply_baseline(c, full, o.ci)

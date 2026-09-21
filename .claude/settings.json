@@ -1,7 +1,3 @@
 {
-  "hooks": {
-    "PostToolBatch": [{ "hooks": [{ "type": "command", "command": "build/odx hook edit" }] }],
-    "FileChanged": [{ "matcher": "rules/**|odx.json5|.odx/**|.claude/settings.json", "hooks": [{ "type": "command", "command": "build/odx hook changed" }] }],
-    "Stop": [{ "hooks": [{ "type": "command", "command": "build/odx hook stop" }] }]
-  }
+  "hooks": {}
 }

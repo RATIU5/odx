@@ -5,8 +5,8 @@ import "core:os"
 import "core:slice"
 import "core:strings"
 
-TOPIC_FILE :: "topic.json5"
-PROSE_FILE :: "topic.md"
+TOPIC_FILE :: "topic.md" // frontmatter: the topic record; body: the topic prose (M8)
+RULE_SUFFIX :: ".odx.md" // one file per rule: frontmatter + prose + prelude/fires/silent blocks
 PROJECT_TOPICS_DIR :: ".odx/topics"
 
 Topic :: struct {
@@ -40,21 +40,29 @@ Rule :: struct {
 	cost:         string,
 	blocking:     bool, // P4: blocks the hook; false = advisory, printed but never a wall
 	severity:     Severity, // mandatory
-	class:        string, // stable greppable name, e.g. "layering_hidden_state"
+	class:        string, // stable greppable name, e.g. "dependencies_hidden_state"
 	ignorable:    bool, // default true; set at load when absent
 	baselineable: bool, // 20.5: has a stable subject
 	retired:      bool,
-	check:        Check_Spec, // mandatory; `{ kind: "manual" }` for reviewer-only rules
+	role:         string, // role the fires/silent blocks are checked under (default edge)
+	check:        Check_Spec, // mandatory; `{ kind: "example" }` for example-only rules (M8.3)
+	// runtime only, from the .odx.md body
+	prose:        string,
+	prelude:      string, // sibling file for the two blocks
+	fires:        string, // must produce this rule and no other
+	silent:       string, // must compile and produce nothing
+	file:         string, // where it was loaded from, for messages
 }
 
 Check_Kind :: enum {
-	manual,
+	example, // never runs: a compiled fires/silent pair surfaced by `for`, explain and the block text (M8.3)
 	path_role,
 	banned_import,
 	banned_construct,
 	banned_call,
 	vet_tag,
 	require_attribute,
+	foreign_error_type, // family C: an exported proc's error result type declared in another package (M7.4)
 }
 
 Construct :: enum {
@@ -86,12 +94,12 @@ TOPIC_KEYS := []string {
 	"applies_to",
 	"related",
 	"example_roles",
-	"rules",
 }
 RULE_KEYS := []string {
 	"id",
 	"statement",
 	"why",
+	"role",
 	"instead_of",
 	"evidence",
 	"cost",
@@ -121,24 +129,25 @@ Rulebook :: struct {
 }
 
 // load_rulebook layers built-ins, then <root>/.odx/topics/* (17.17). root may be "".
+// A topic is a directory: topic.md (frontmatter + prose) and one <id>.odx.md per rule.
 load_rulebook :: proc(root: string, errs: ^[dynamic]string) -> (rb: Rulebook) {
 	for b in BUILTIN_TOPICS {
-		js, md: string
-		for f in b.files {
-			switch f.name {
-			case TOPIC_FILE:
-				js = string(f.data)
-			case PROSE_FILE:
-				md = string(f.data)
-			}
-		}
+		files := make(map[string]string, context.temp_allocator)
+		for f in b.files {files[f.name] = string(f.data)}
 		ex := make([dynamic]string)
 		for f in b.example {if strings.has_suffix(f.name, ".odin") {append(&ex, string(f.data))}}
-		add_topic(&rb, "builtin", b.name, js, md, strings.join(ex[:], "\n"), errs)
+		add_topic(&rb, "builtin", b.name, files, strings.join(ex[:], "\n"), errs)
 	}
 	for e in project_subdirs(root, PROJECT_TOPICS_DIR) {
-		js, _ := os.read_entire_file(join({e.fullpath, TOPIC_FILE}), context.allocator)
-		md, _ := os.read_entire_file(join({e.fullpath, PROSE_FILE}), context.allocator)
+		files := make(map[string]string, context.temp_allocator)
+		if entries, rerr := os.read_all_directory_by_path(e.fullpath, context.allocator);
+		   rerr == nil {
+			for fi in entries {
+				if fi.type != .Regular {continue}
+				if data, ferr := os.read_entire_file(fi.fullpath, context.allocator);
+				   ferr == nil {files[fi.name] = string(data)}
+			}
+		}
 		ex := make([dynamic]string)
 		for d in project_subdirs(e.fullpath, "example") {
 			w := os.walker_create_path(d.fullpath)
@@ -153,8 +162,7 @@ load_rulebook :: proc(root: string, errs: ^[dynamic]string) -> (rb: Rulebook) {
 			&rb,
 			join({PROJECT_TOPICS_DIR, e.name}),
 			e.name,
-			string(js),
-			string(md),
+			files,
 			strings.join(ex[:], "\n"),
 			errs,
 		)
@@ -177,39 +185,65 @@ project_subdirs :: proc(root, sub: string) -> []os.File_Info {
 @(private = "file")
 add_topic :: proc(
 	rb: ^Rulebook,
-	source, dir_name, js, md, exemplar: string,
+	source, dir_name: string,
+	files: map[string]string,
+	exemplar: string,
 	errs: ^[dynamic]string,
 ) {
-	at := join({source if source != "builtin" else join({"rules", dir_name}), TOPIC_FILE})
-	if js == "" {
+	dir := source if source != "builtin" else join({"rules", dir_name})
+	at := join({dir, TOPIC_FILE})
+	md, has_md := files[TOPIC_FILE]
+	if !has_md || md == "" {
 		errf(errs, "%s: missing", at)
+		return
+	}
+	tf, perr := parse_rule_file(md)
+	if perr != "" {
+		errf(errs, "%s: %s", at, perr)
 		return
 	}
 	t := Topic {
 		source   = source,
-		prose    = md,
+		prose    = tf.prose,
 		exemplar = exemplar,
 	}
-	tree, ok := unmarshal_json5(js, &t, at, TOPIC_KEYS, errs)
-	if !ok {return}
+	if _, ok := unmarshal_json5(tf.frontmatter, &t, at, TOPIC_KEYS, errs); !ok {return}
 	if t.name != dir_name {errf(errs, "%s: name %s does not match directory", at, t.name)}
 	if t.summary == "" {errf(errs, "%s: summary is required", at)}
-	if md == "" {errf(errs, "%s: %s is missing or empty", at, PROSE_FILE)}
-	// unmarshal keeps array order, so rules[i] and the i-th object in the tree agree
-	objs := json_array(tree, "rules")
+	if t.prose == "" {errf(errs, "%s: body prose is required", at)}
+	names := make([dynamic]string, context.temp_allocator)
+	for name in files {if strings.has_suffix(name, RULE_SUFFIX) {append(&names, name)}}
+	slice.sort(names[:])
+	rules := make([dynamic]Rule)
 	seen := make(map[string]bool, context.temp_allocator)
-	for &r, i in t.rules {
+	for name in names {
+		rat := join({dir, name})
+		rf, rerr := parse_rule_file(files[name])
+		if rerr != "" {
+			errf(errs, "%s: %s", rat, rerr)
+			continue
+		}
+		r := Rule {
+			prose   = rf.prose,
+			prelude = rf.prelude,
+			fires   = rf.fires,
+			silent  = rf.silent,
+			file    = rat,
+		}
+		obj, ok := unmarshal_json5(rf.frontmatter, &r, rat, RULE_KEYS, errs)
+		if !ok {continue}
 		if !strings.has_prefix(r.id, "R") ||
-		   r.id in seen {errf(errs, "%s: bad or duplicate rule id %s", at, r.id)}
+		   r.id in seen {errf(errs, "%s: bad or duplicate rule id %s", rat, r.id)}
+		if strings.trim_suffix(name, RULE_SUFFIX) !=
+		   r.id {errf(errs, "%s: file name does not match id %s", rat, r.id)}
 		seen[r.id] = true
-		obj: json.Object
-		if i < len(objs) {obj, _ = objs[i].(json.Object)}
-		check_keys(errs, at, "rule.", obj, RULE_KEYS)
 		if "ignorable" not_in obj {r.ignorable = true}
 		if "baselineable" not_in obj {r.baselineable = true}
-		if r.retired {continue}
-		validate_rule(&r, obj, strings.concatenate({at, " ", r.id}, context.temp_allocator), errs)
+		if r.role == "" {r.role = "edge"}
+		if !r.retired {validate_rule(&r, obj, rat, errs)}
+		append(&rules, r)
 	}
+	t.rules = rules[:]
 	// same name later in the layer order overrides (17.17)
 	for &old in rb.topics {
 		if old.name == t.name {
@@ -237,11 +271,15 @@ validate_rule :: proc(r: ^Rule, obj: json.Object, at: string, errs: ^[dynamic]st
 	check_enum(errs, at, obj, "severity", Severity)
 	spec, _ := obj["check"].(json.Object)
 	check_keys(errs, at, "check.", spec, CHECK_KEYS)
-	require_key(errs, at, spec, "kind") // the zero value is manual: a missing kind must not silently stop the check
+	require_key(errs, at, spec, "kind") // the zero value is example: a missing kind must not silently stop the check
 	check_enum(errs, at, spec, "kind", Check_Kind)
 	c := &r.check
 	switch c.kind {
-	case .manual, .path_role, .banned_import, .vet_tag:
+	case .path_role, .banned_import, .vet_tag, .foreign_error_type:
+	case .example:
+		if r.fires == "" ||
+		   r.silent ==
+			   "" {errf(errs, "%s: an example-only rule needs both a fires and a silent block", at)}
 	case .banned_construct:
 		require_key(errs, at, spec, "construct")
 		check_enum(errs, at, spec, "construct", Construct)
@@ -282,7 +320,7 @@ active_rules :: proc(p: ^Project, only_topics: []string) -> []Active_Rule {
 	for &t in p.rb.topics {
 		if len(only_topics) > 0 && !slice.contains(only_topics, t.name) {continue}
 		for &r in t.rules {
-			if r.check.kind == .manual || r.retired {continue}
+			if r.check.kind == .example || r.retired {continue}
 			id := strings.concatenate({t.name, "/", r.id})
 			if id in p.cfg.disabled {continue}
 			append(&out, Active_Rule{id, &r})
@@ -302,7 +340,7 @@ role_applies :: proc(spec: ^Check_Spec, role: string) -> bool {
 exemplar_config :: proc(t: ^Topic, base: ^Config) -> (cfg: Config) {
 	cfg = default_config()
 	cfg.odin = base.odin
-	if base.layering != nil {cfg.layering = base.layering}
+	if base.dependencies != nil {cfg.dependencies = base.dependencies}
 	cfg.exclude = {}
 	clear(&cfg.roles)
 	for dir, role in t.example_roles {

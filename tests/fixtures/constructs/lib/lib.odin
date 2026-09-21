@@ -1,12 +1,12 @@
 package lib
 
-import sys "core:os" // want: layering/R2
+import sys "core:os" // want: dependencies/R2
 
 Point :: struct {
 	x, y: int,
 }
 
-foreign import libc "system:c" // want: layering/R4
+foreign import libc "system:c" // want: dependencies/R4
 
 sum :: proc(p: Point) -> int {
 	return p.x + p.y

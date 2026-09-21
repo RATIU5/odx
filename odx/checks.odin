@@ -85,6 +85,8 @@ report :: proc(
 			why = a.rule.why,
 			subject = subject,
 			blocking = a.rule.blocking,
+			fires = a.rule.fires,
+			silent = a.rule.silent,
 		},
 	)
 }
@@ -130,8 +132,8 @@ run_family_b :: proc(c: ^Ctx) {
 				check_construct(c, &p, &a)
 			case .banned_call:
 				check_calls(c, &p, &a)
-			case .manual, .require_attribute:
-			// manual never runs; require_attribute is family C (docfmt.odin)
+			case .example, .require_attribute, .foreign_error_type:
+			// example never runs; the others are family C (docfmt.odin)
 			}
 		}
 	}
@@ -231,8 +233,8 @@ import_target :: proc(c: ^Ctx, p: ^Package, path: string) -> (label: string, rol
 }
 
 check_imports :: proc(c: ^Ctx, p: ^Package, a: ^Active_Rule) {
-	layer, has_layer := c.cfg.layering[p.role]
-	if !has_layer {return} 	// no layering entry = role imports freely
+	layer, has_layer := c.cfg.dependencies[p.role]
+	if !has_layer {return} 	// no dependencies entry = role imports freely
 	deny := layer.deny
 	for f in p.files {
 		is_test := strings.has_suffix(f.fullpath, "_test.odin")

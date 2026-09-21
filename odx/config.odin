@@ -18,7 +18,7 @@ Config :: struct {
 	default_role: string, // ponytail: plan says roles.default; a map field cannot hold it
 	exclude:      []string,
 	disabled:     map[string]string, // "topic/R2" -> reason (17.17)
-	layering:     map[string]Layer,
+	dependencies: map[string]Layer,
 	odin:         Odin_Cfg,
 }
 
@@ -52,7 +52,7 @@ CONFIG_KEYS := []string {
 	"default_role",
 	"exclude",
 	"disabled",
-	"layering",
+	"dependencies",
 	"odin",
 }
 ODIN_KEYS := []string {
@@ -108,12 +108,12 @@ load_config :: proc(root: string, errs: ^[dynamic]string) -> (cfg: Config) {
 	check_enum(errs, path, odin_obj, "odin.explicit_allocators", Explicit_Allocators)
 	// unmarshal leaves an empty array nil (17.20): presence in the tree is the real signal
 	if "exclude" not_in tree {cfg.exclude = DEFAULT_EXCLUDE}
-	layering_obj, _ := tree["layering"].(json.Object)
-	for role in sorted_keys(cfg.layering) {
-		obj, _ := layering_obj[role].(json.Object)
-		check_keys(errs, path, fmt.tprintf("layering.%s.", role), obj, LAYER_KEYS)
+	dependencies_obj, _ := tree["dependencies"].(json.Object)
+	for role in sorted_keys(cfg.dependencies) {
+		obj, _ := dependencies_obj[role].(json.Object)
+		check_keys(errs, path, fmt.tprintf("dependencies.%s.", role), obj, LAYER_KEYS)
 		if "deny" not_in obj {
-			l := &cfg.layering[role]
+			l := &cfg.dependencies[role]
 			l.deny = DEFAULT_DENY_PURE if role == "pure" else []string{}
 		}
 	}
@@ -127,14 +127,15 @@ load_config :: proc(root: string, errs: ^[dynamic]string) -> (cfg: Config) {
 			CONFIG_VERSION,
 		)
 	}
-	// layering keys and may_import role names must be declared roles; collections are `x:*`
-	for role in sorted_keys(cfg.layering) {
-		if role not_in cfg.roles {errf(errs, "%s: layering.%s is not a declared role", path, role)}
-		for m, i in cfg.layering[role].may_import {
+	// dependencies keys and may_import role names must be declared roles; collections are `x:*`
+	for role in sorted_keys(cfg.dependencies) {
+		if role not_in
+		   cfg.roles {errf(errs, "%s: dependencies.%s is not a declared role", path, role)}
+		for m, i in cfg.dependencies[role].may_import {
 			if !strings.contains(m, ":") && m not_in cfg.roles {
 				errf(
 					errs,
-					"%s: layering.%s.may_import[%d] %q is neither a role nor a collection glob",
+					"%s: dependencies.%s.may_import[%d] %q is neither a role nor a collection glob",
 					path,
 					role,
 					i,

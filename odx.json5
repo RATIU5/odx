@@ -4,8 +4,8 @@
   // Every package must match exactly one role. Detected package directories:
   //   odx
   //   rules/errors/example/core
-  //   rules/layering/example/core
-  //   rules/layering/example/platform
+  //   rules/dependencies/example/core
+  //   rules/dependencies/example/platform
   //   spikes/astwalk
   //   spikes/docfmt
   //   spikes/docshort
@@ -16,7 +16,7 @@
     service: [], // takes capabilities as parameters
     edge: ["odx", "odx/**", "spikes/**"], // os, foreign, I/O allowed
   },
-  layering: {
+  dependencies: {
     pure: { may_import: ["pure", "core:*"] },
     service: { may_import: ["pure", "service", "core:*"] },
     edge: { may_import: ["pure", "service", "edge", "core:*", "vendor:*"] },

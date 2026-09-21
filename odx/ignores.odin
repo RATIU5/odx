@@ -123,9 +123,7 @@ apply_ignores :: proc(c: ^Ctx, igs: []Ignore, ran: map[string]bool) {
 	for ig in igs {
 		if ig.used || ig.rule not_in ran {continue}
 		if rule := find_rule(c.rb, ig.rule);
-		   rule != nil &&
-		   rule.check.kind == .require_attribute &&
-		   dir_of(ig.file) in unchecked {continue}
+		   rule != nil && is_family_c(rule.check.kind) && dir_of(ig.file) in unchecked {continue}
 		note(
 			r,
 			"odx/stale-ignore",

@@ -37,7 +37,7 @@ USAGE :: `usage: odx <command> [args] [--json] [--root <dir>]
   baseline add | regen         freeze current violations into odx.baseline (shrinks on its own; never grows from check)
   for <path> [--brief]         the rules that apply to a file or package (--brief: topic names only)
   explain [<topic>] [--rule R3]   no topic: list topics; with one: rules, rationale, do/don't
-  explain [<topic>] --checklist   manual rules only, for an adversarial reviewer
+  explain [<topic>] --checklist   example-only rules, for an adversarial reviewer
   ignores [--added] [--stale]  every odx:ignore suppression; --added: not in HEAD; --stale: suppressing nothing
   doctor [--ci] [--verify-rulebook | --relock]   toolchain, flags, config errors, mise.toml drift, lock
   hook edit | stop | changed   Claude Code hook entry points (read the hook JSON on stdin)

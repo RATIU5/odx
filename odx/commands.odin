@@ -55,7 +55,8 @@ cmd_explain :: proc(o: Opts) {
 		shown += 1
 		id := strings.concatenate({t.name, "/", r.id}, context.temp_allocator)
 		how := fmt.tprintf("check: %v", r.check.kind)
-		if r.check.kind == .manual {how = "check: manual (reviewer checklist)"}
+		if r.check.kind ==
+		   .example {how = "check: example only (compiled, never blocks; reviewer checklist)"}
 		if reason, dis := p.cfg.disabled[id];
 		   dis {how = strings.concatenate({how, "  DISABLED: ", reason}, context.temp_allocator)}
 		fmt.printfln(
@@ -74,6 +75,10 @@ cmd_explain :: proc(o: Opts) {
 			how,
 			"" if r.blocking else "  (advisory)",
 		)
+		if r.prose != "" {fmt.printfln("\n%s", r.prose)}
+		if r.fires != "" {fmt.printfln("\nfires:\n%s", indent(r.fires))}
+		if r.silent != "" {fmt.printfln("\nsilent (compiles and passes):\n%s", indent(r.silent))}
+		fmt.println()
 	}
 	if o.rule != "" {
 		if shown == 0 {fail("no rule %s in topic %s", o.rule, t.name)}
@@ -83,13 +88,13 @@ cmd_explain :: proc(o: Opts) {
 	fmt.print(t.prose)
 }
 
-// cmd_checklist prints the manual rules (section 10): what a reviewer checks that odx check cannot.
+// cmd_checklist prints the example-only rules (section 10): what a reviewer checks that odx check cannot.
 cmd_checklist :: proc(o: Opts) {
 	p := must_load(o, false)
 	for t in p.rb.topics {
 		if len(o.args) > 0 && !slice.contains(o.args[:], t.name) {continue}
 		for r in t.rules {
-			if r.retired || r.check.kind != .manual {continue}
+			if r.retired || r.check.kind != .example {continue}
 			fmt.printfln("- [%s/%s] %s\n  why: %s", t.name, r.id, r.statement, r.why)
 		}
 	}
@@ -119,7 +124,10 @@ cmd_for :: proc(o: Opts) {
 	}
 	shown := rel if rel != "" else "."
 	if n == 0 {
-		fmt.printfln("%s: no role (layering/R1: add it to roles in %s)", shown, CONFIG_FILE)
+		fmt.printfln(
+			"%s: no role (roles are an optional preset; see `odx explain dependencies`)",
+			shown,
+		)
 	} else {
 		fmt.printfln("%s: role %s", shown, role)
 	}
@@ -153,7 +161,9 @@ cmd_for :: proc(o: Opts) {
 			}
 		}
 	}
-	if n == 0 {os.exit(EXIT_VIOLATION)}
+	// the derived reach, config-free (M7.2): the one fact every caller of this package wants
+	c := make_ctx(&p, {abs})
+	for &pk in c.pkgs {if pk.rel == rel && pk.pkg != nil {fmt.printfln("  %s", reach_line(&c, &pk))}}
 }
 
 // INIT_CONFIG is both what `odx init` writes and, parsed, the default Config.
@@ -167,7 +177,7 @@ INIT_CONFIG_BODY :: `  version: 1,
     service: [], // takes capabilities as parameters
     edge: [],    // os, foreign, I/O allowed
   },
-  layering: {
+  dependencies: {
     pure: { may_import: ["pure", "core:*"] },
     service: { may_import: ["pure", "service", "core:*"] },
     edge: { may_import: ["pure", "service", "edge", "core:*", "vendor:*"] },
@@ -305,4 +315,10 @@ write_hooks :: proc(root: string) {
 	if err := os.write_entire_file(md, strings.concatenate({string(data), INIT_CLAUDE_MD}));
 	   err != nil {fail("write %s: %v", md, err)}
 	fmt.println("appended odx section to", md)
+}
+
+indent :: proc(block: string) -> string {
+	out := make([dynamic]string, context.temp_allocator)
+	for l in strings.split_lines(block, context.temp_allocator) {append(&out, strings.concatenate({"    ", l}, context.temp_allocator))}
+	return strings.join(out[:], "\n", context.temp_allocator)
 }

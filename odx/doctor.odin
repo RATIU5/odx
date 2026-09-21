@@ -48,6 +48,7 @@ cmd_doctor :: proc(o: Opts) {
 	c := make_ctx(&p, nil)
 	check_toolchain(&d, &c, o.ci)
 	report_guarantees(&d, &c, odin_output(odin_exe(c.cfg), "help", "check"))
+	report_dependencies(&c)
 	check_task_files(&d, &p)
 	// one check path, three entry points (M4.3): hook, CI and mise all run this argv
 	fmt.println("check argv: odx check  (Stop hook, mise task, CI via `mise run ci`)")
