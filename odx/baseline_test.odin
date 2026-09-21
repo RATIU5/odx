@@ -1,7 +1,6 @@
 package odx
 
 import "core:os"
-import "core:strings"
 import "core:testing"
 
 // A `--since` run once emptied a baseline (full was computed without it); the file format and
@@ -10,9 +9,9 @@ import "core:testing"
 test_baseline_round_trip :: proc(t: ^testing.T) {
 	context.allocator = context.temp_allocator
 	defer free_all(context.temp_allocator)
-	dir := strings.concatenate({os.get_env("TMPDIR", context.temp_allocator), "/odx-baseline"})
-	os.remove_all(dir)
-	os.make_directory_all(dir)
+	// ponytail: not $TMPDIR, which Linux runners leave unset (the path became /odx-baseline)
+	dir, terr := os.make_directory_temp("", "odx-baseline-*", context.allocator)
+	testing.expect(t, terr == nil)
 	defer os.remove_all(dir)
 	write_baseline(
 		dir,
