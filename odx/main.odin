@@ -13,15 +13,12 @@ Opts :: struct {
 	json:           bool,
 	fast:           bool,
 	strict:         bool,
-	ci:             bool, // doctor: version drift is an error, lock is verified
-	verify:         bool, // doctor --verify-rulebook
-	relock:         bool,
+	ci:             bool, // doctor: version drift is an error
 	checklist:      bool,
 	max_violations: int,
 	hooks:          bool,
 	brief:          bool,
 	emit:           bool, // for --emit-claude-md
-	added:          bool,
 	stale:          bool,
 	count:          bool,
 	file:           string,
@@ -44,8 +41,8 @@ USAGE :: `usage: odx <command> [args] [--json] [--root <dir>]
   for --emit-claude-md [<path>]   the same as a Markdown section for CLAUDE.md (no path: every topic)
   explain [<topic>] [--rule R3]   no topic: list topics; with one: rules, rationale, do/don't
   explain [<topic>] --checklist   example-only rules, for an adversarial reviewer
-  ignores [--added] [--stale]  every odx:ignore suppression; --added: not in HEAD; --stale: suppressing nothing
-  doctor [--ci] [--verify-rulebook | --relock]   toolchain, flags, config errors, mise.toml drift, lock
+  ignores [--stale]            every odx:ignore suppression; --stale: suppressing nothing
+  doctor [--ci]                toolchain, flags, config errors, mise.toml drift
   hook edit                    Claude Code PostToolBatch hook: reads the hook JSON on stdin, reports, exits 0
   init [--hooks]               write odx.json5 and mise.toml (--hooks: .claude/settings.json, CLAUDE.md)
   self-test                    run every tests/fixtures/* and diff its // want: markers
@@ -79,10 +76,6 @@ parse_opts :: proc(args: []string) -> (o: Opts) {
 			o.strict = true
 		case "--ci":
 			o.ci = true
-		case "--verify-rulebook":
-			o.verify = true
-		case "--relock":
-			o.relock = true
 		case "--checklist":
 			o.checklist = true
 		case "--hooks":
@@ -91,8 +84,6 @@ parse_opts :: proc(args: []string) -> (o: Opts) {
 			o.emit = true
 		case "--brief":
 			o.brief = true
-		case "--added":
-			o.added = true
 		case "--stale":
 			o.stale = true
 		case "--count":

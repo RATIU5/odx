@@ -126,10 +126,6 @@ run_family_b :: proc(c: ^Ctx) {
 				check_explicit_allocators(c, &p, &a)
 			case .banned_import:
 				check_imports(c, &p, &a)
-			case .banned_construct:
-				check_construct(c, &p, &a)
-			case .banned_call:
-				check_calls(c, &p, &a)
 			case .pattern:
 				check_pattern(c, &p, &a)
 			case .example, .require_attribute, .foreign_error_type:
@@ -277,72 +273,10 @@ import_matches :: proc(globs: []string, path: string) -> bool {
 	return false
 }
 
-// `using` as a statement is a compiler error by default, so it is not a construct here.
-check_construct :: proc(c: ^Ctx, p: ^Package, a: ^Active_Rule) {
-	in_role := strings.concatenate({" in a ", p.role, " package"}, context.temp_allocator)
-	for f in p.files {
-		switch a.rule.check.construct {
-		case .mutable_global:
-			for d in f.decls {
-				if vd, ok := d.derived.(^ast.Value_Decl); ok && vd.is_mutable {
-					report_at(
-						c,
-						a,
-						&vd.node,
-						strings.concatenate({"mutable package-level variable", in_role}),
-						ident_name(vd.names[0]),
-					)
-				}
-			}
-		case .foreign_decl:
-			for d in f.decls {
-				#partial switch fd in d.derived {
-				case ^ast.Foreign_Import_Decl:
-					report_at(
-						c,
-						a,
-						&fd.node,
-						strings.concatenate({"foreign import", in_role}),
-						ident_name(fd.name),
-					)
-				case ^ast.Foreign_Block_Decl:
-					report_at(
-						c,
-						a,
-						&fd.node,
-						strings.concatenate({"foreign block", in_role}),
-						ident_name(fd.foreign_library),
-					)
-				}
-			}
-		case .no_bounds_check:
-			walk := Walk{c, a, nil}
-			v := ast.Visitor {
-				visit = visit_construct,
-				data  = &walk,
-			}
-			ast.walk(&v, f)
-		}
-	}
-}
-
 Walk :: struct {
 	c:       ^Ctx,
 	a:       ^Active_Rule,
-	aliases: map[string]string, // banned_call: local import name -> import path
-}
-
-visit_construct :: proc(v: ^ast.Visitor, n: ^ast.Node) -> ^ast.Visitor {
-	if n == nil {return nil}
-	w := cast(^Walk)v.data
-	hit := false
-	#partial switch w.a.rule.check.construct {
-	case .no_bounds_check:
-		pl, is_proc := n.derived.(^ast.Proc_Lit)
-		hit = .No_Bounds_Check in n.state_flags || (is_proc && .No_Bounds_Check in pl.tags)
-	}
-	if hit {report_at(w.c, w.a, n, fmt.tprint(w.a.rule.check.construct))}
-	return v
+	aliases: map[string]string, // local import name -> import path
 }
 
 // Matches `pkg.name` or bare `name` calls; aliases resolved per file, best effort.

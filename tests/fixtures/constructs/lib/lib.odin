@@ -13,7 +13,7 @@ sum :: proc(p: Point) -> int {
 }
 
 first :: proc(xs: []int) -> int {
-	#no_bounds_check { // want: local/R2
+	#no_bounds_check {
 		return xs[0]
 	}
 }

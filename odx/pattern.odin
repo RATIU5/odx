@@ -6,8 +6,7 @@ import "core:strings"
 
 // Pattern checks: `match` picks the AST node class, the other keys narrow it.
 // No regex over source text, ever.
-// ponytail: call reuses banned_call's alias-resolving visitor (name folds into names at load);
-// metavariable templates (stage 2) wait until an idiom this cannot express is written down.
+// ponytail: metavariable templates wait until an idiom this cannot express is written down.
 
 check_pattern :: proc(c: ^Ctx, p: ^Package, a: ^Active_Rule) {
 	spec := &a.rule.check
@@ -22,6 +21,18 @@ check_pattern :: proc(c: ^Ctx, p: ^Package, a: ^Active_Rule) {
 				path := strings.trim(imp.relpath.text, `"`)
 				if import_glob(spec.name, path) {
 					report_at(c, a, &imp.node, strings.concatenate({"import of ", path}), path)
+				}
+			}
+		}
+	case "foreign":
+		in_role := strings.concatenate({" in a ", p.role, " package"}, context.temp_allocator)
+		for f in p.files {
+			for d in f.decls {
+				#partial switch fd in d.derived {
+				case ^ast.Foreign_Import_Decl:
+					report_at(c, a, &fd.node, strings.concatenate({"foreign import", in_role}), ident_name(fd.name))
+				case ^ast.Foreign_Block_Decl:
+					report_at(c, a, &fd.node, strings.concatenate({"foreign block", in_role}), ident_name(fd.foreign_library))
 				}
 			}
 		}

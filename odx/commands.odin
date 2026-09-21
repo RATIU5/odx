@@ -167,8 +167,6 @@ cmd_for :: proc(o: Opts) {
 			}
 		}
 	}
-	c := make_ctx(&p, {abs})
-	for &pk in c.pkgs {if pk.rel == rel && pk.pkg != nil {fmt.printfln("  %s", reach_line(&c, &pk))}}
 }
 
 // INIT_CONFIG_HEAD + BODY is both what `odx init` writes and, parsed, the default Config.
@@ -285,12 +283,7 @@ CLAUDE_MD_HEAD ::
 	` must pass before you stop; ` +
 	"`odx check --json`" +
 	` carries a fix_hint and ignore_syntax per finding.
-- Never edit rules/, .odx/, odx.json5, mise.toml, tests/fixtures/ or .claude/settings.json without asking.
-  They are hash-locked; ` +
-	"`odx doctor --verify-rulebook`" +
-	` names any change and a human approves it with ` +
-	"`ODX_ALLOW_PROTECTED=1 odx doctor --relock`" +
-	`.
+- Ask before editing rules/, odx.json5 or tests/fixtures/: they are the contract, reviewed by a human.
 - Reviewing a diff: ` +
 	"`odx explain --checklist`" +
 	` lists the rules only a reader can check.

@@ -44,7 +44,7 @@ rule_try :: proc(o: Opts) {
 		if len(o.args) < 2 {fail("usage: odx rule try '<check json5>' [<path>...] [--count]")}
 		paths = o.args[2:]
 		// bare words are strings, as in the frontmatter: `{ kind: pattern, match: call }`
-		if obj, ok := unmarshal_json5(quote_bare_values(o.args[1]), &r.check, "check", CHECK_KEYS, &errs);
+		if obj, ok := unmarshal_json5(o.args[1], &r.check, "check", CHECK_KEYS, &errs);
 		   ok {validate_check(&r.check, obj, "check", &errs)}
 	}
 	for e in errs {fmt.eprintln("odx:", e)}
@@ -69,24 +69,23 @@ rule_try :: proc(o: Opts) {
 }
 
 RULE_STUB :: `---
-id: @ID@
-statement: 
-why: 
-instead_of: 
-evidence: 
-cost: 
-severity: error
-blocking: true
-role: edge
-check: { kind: example }
+id: "@ID@",
+statement: "",
+why: "",
+instead_of: "",
+evidence: "",
+cost: "",
+severity: "error",
+blocking: true,
+role: "edge",
+check: { kind: "example" },
 ---
 
 Why this idiom exists, in a paragraph a reader can act on.
 
 ` + "```odin prelude\n```\n\n```odin fires\n```\n\n```odin silent\n```\n"
 
-// rule_add: built-in topics live under rules/, project topics under .odx/topics/; both are
-// lock-protected, so the human who runs this also relocks.
+// rule_add: built-in topics live under rules/, project topics under .odx/topics/.
 rule_add :: proc(o: Opts) {
 	if len(o.args) < 2 {fail("usage: odx rule add <topic> [--id R5]")}
 	p := must_load(o, true)

@@ -5,7 +5,7 @@ import "core:os"
 import "core:strings"
 
 // `odx doctor`: the toolchain and task-file drift report.
-// Errors exit 2: config broken, odin missing, a forbidden flag in use, a dirty lock.
+// Errors exit 2: config broken, odin missing, a forbidden flag in use.
 // Everything else is a warning, except version drift under --ci.
 
 Doctor :: struct {
@@ -65,7 +65,6 @@ cmd_doctor :: proc(o: Opts) {
 	c := make_ctx(&p, nil)
 	check_toolchain(&d, &c, o.ci)
 	report_guarantees(&d, &c, odin_output(odin_exe(c.cfg), "help", "check"))
-	if !d.json {report_dependencies(&c)}
 	check_task_files(&d, &p)
 	say(&d, "check argv: odx check  (mise task, CI via `mise run ci`)")
 	say(
@@ -75,17 +74,6 @@ cmd_doctor :: proc(o: Opts) {
 		strings.join(p.cfg.odin.required_flags, " ", context.temp_allocator),
 	)
 	check_attachment(&d, &c)
-	if o.relock {write_lock(p.root)}
-	if o.verify || o.ci {
-		switch state, text := lock_check(p.root); state {
-		case .missing:
-			warn(&d, "no %s; %s", LOCK_FILE, LOCK_HINT)
-		case .dirty:
-			err(&d, "%s", text)
-		case .clean:
-			say(&d, "lock: ok")
-		}
-	}
 	for t in p.rb.topics {if t.overrides {warn(&d, "topic %s is overridden by %s", t.name, t.source)}}
 	for id in sorted_keys(p.cfg.disabled) {say(&d, "disabled: %s (%s)", id, p.cfg.disabled[id])}
 	doctor_exit(&d)

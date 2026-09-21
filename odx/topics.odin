@@ -58,8 +58,6 @@ Check_Kind :: enum {
 	example, // never runs: a compiled fires/silent pair surfaced by `for`, explain and the block text
 	path_role,
 	banned_import,
-	banned_construct,
-	banned_call,
 	vet_tag,
 	require_attribute,
 	foreign_error_type, // family C: an exported proc's error result type declared in another package
@@ -72,17 +70,12 @@ PATTERN_MATCHES := []string {
 	"import", // name: an import glob (`core:fmt`, `core:sys/*`)
 	"proc", // exported / requires_param: package-level procedures
 	"decl", // at: package_scope, mutable: package-level value declarations
+	"foreign", // foreign import and foreign block declarations
 }
 
 Param_Req :: struct {
 	index:       int,
 	type_suffix: string,
-}
-
-Construct :: enum {
-	mutable_global,
-	foreign_decl,
-	no_bounds_check,
 }
 
 // One field bag for every kind because core:encoding/json cannot pick a union variant by a
@@ -93,8 +86,7 @@ Check_Spec :: struct {
 	on:                 string, // require_attribute: "" | "exported_procs"
 	result_type_suffix: []string, // require_attribute; defaults to ["Error"]
 	from:               string, // banned_import: documentation only
-	construct:          Construct, // banned_construct
-	names:              []string, // banned_call
+	names:              []string, // call: canonical `pkg.name` or bare `name`
 	roles:              []string,
 	except_roles:       []string,
 	// pattern
@@ -138,7 +130,6 @@ CHECK_KEYS := []string {
 	"on",
 	"result_type_suffix",
 	"from",
-	"construct",
 	"names",
 	"roles",
 	"except_roles",
@@ -320,14 +311,10 @@ validate_check :: proc(c: ^Check_Spec, spec: json.Object, at: string, errs: ^[dy
 			if "requires_param" in spec && c.requires_param.type_suffix == "" {errf(errs, "%s: requires_param.type_suffix is required", at)}
 		case "decl":
 			if c.at != "package_scope" {errf(errs, "%s: match: decl needs at: package_scope", at)}
+		case "foreign":
 		}
 	case .path_role, .banned_import, .vet_tag, .foreign_error_type:
 	case .example:
-	case .banned_construct:
-		require_key(errs, at, spec, "construct")
-		check_enum(errs, at, spec, "construct", Construct)
-	case .banned_call:
-		if len(c.names) == 0 {errf(errs, "%s: check.names is required", at)}
 	case .require_attribute:
 		if c.attribute == "" {errf(errs, "%s: check.attribute is required", at)}
 		if c.on != "" &&

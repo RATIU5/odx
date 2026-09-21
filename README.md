@@ -1,8 +1,8 @@
 # odx
 
-odx is a secondary vet pass: it turns on every guarantee the Odin compiler already offers,
-enforces the conventions a project has explicitly agreed on, and reports what each package
-actually depends on, with a reason for every rule and an escape hatch for every reason.
+odx is a secondary vet pass: it turns on every guarantee the Odin compiler already offers
+and enforces the conventions a project has explicitly agreed on, with a reason for every
+rule and an escape hatch for every reason.
 
 It does not make code good. It applies conventions a team already agreed on, consistently, to
 agents and to CI.
@@ -94,20 +94,18 @@ when the compiler gained a flag the project has not adopted, so the set ratchets
 
 ## 2. Dependencies
 
-With no configuration at all, `odx doctor` and `odx for <path>` report what every package
-transitively reaches: the OS, the network, threads, or a `foreign` block, and through which
-import. The graph is the compiler's own (`-show-import-graph`), not a taxonomy. Turning a reach
-into a rule is opt-in: `odx.json5` may assign roles (pure, service, edge) per package directory
+Roles are opt-in: `odx.json5` may assign roles (pure, service, edge) per package directory
 and say who may import whom; `odx check` then reports forbidden imports, mutable globals outside
 edge, foreign blocks outside edge, and an exported procedure that passes another package's error
 type through its boundary, each with a reason and an escape hatch. A package with no role gets
-the report and no rule.
+no rule. The forbidden-import check reads direct import lines; for the transitive picture the
+compiler's own `odin check -show-import-graph` is the source, not odx.
 
 ## 3. The rulebook
 
 Three built-in topics (`errors`, `allocators`, `dependencies`), ten active rules, one file per
-rule: `rules/<topic>/<id>.odx.md` is Markdown with restricted frontmatter (`key: value`, inline
-JSON5 for `check:`) and three fenced blocks. ` ```odin prelude ` is a sibling file of shared
+rule: `rules/<topic>/<id>.odx.md` is Markdown whose frontmatter is the members of one JSON5
+object (`key: "value",` per line, no dialect) and three fenced blocks. ` ```odin prelude ` is a sibling file of shared
 types; ` ```odin fires ` must produce that rule and no other finding; ` ```odin silent ` must
 compile and produce nothing. `odx self-test` compiles every block, so the documentation, the
 exemplar and the test are one artifact that cannot drift. The prose around them is the
@@ -135,9 +133,9 @@ odx for <path>                   topics that apply to a file or package (by role
 odx for --emit-claude-md [<path>]   the same as a Markdown section for CLAUDE.md (no path: every topic)
 odx explain [<topic>] [--rule R3]   no topic: list topics; with one: rules, rationale, do/don't
 odx explain --checklist          manual rules only, for an adversarial reviewer
-odx ignores [--added] [--stale]  every odx:ignore suppression; --added: not in HEAD; --stale: suppressing nothing
+odx ignores [--stale]            every odx:ignore suppression; --stale: suppressing nothing
 odx baseline add | regen         freeze current violations by semantic key (shrinks on its own)
-odx doctor [--ci]                guarantees, toolchain, config errors, task-file drift, protected-path lock
+odx doctor [--ci]                guarantees, toolchain, config errors, task-file drift
 odx hook edit                    Claude Code PostToolBatch hook: report after an edit, exit 0
 odx init [--hooks]               write odx.json5 and mise.toml (--hooks: the edit hook and a CLAUDE.md section)
 odx self-test                    odx's own fixture runner
@@ -181,14 +179,13 @@ the packages with changes since a git ref.
 end of the line, suppresses one finding; `odx:ignore-file` on lines 1-3 suppresses it for the
 file. A near miss (`odx: ignore`, a missing rule id, a short reason) is `odx/bad-ignore`, never
 silently ignored. An ignore that suppresses nothing is `odx/stale-ignore`; nothing deletes it
-for you. `odx ignores --added` lists the suppressions not present in `HEAD`. Every rule is
-ignorable. Nothing in odx refuses an edit.
+for you. Suppressions added on a branch are a git question:
+`git diff -U0 HEAD | grep '^+.*odx:ignore'`. Every rule is ignorable. Nothing in odx refuses
+an edit.
 
-Protected paths (`rules/`, `.odx/`, `odx.json5`, `mise.toml`, `tests/fixtures/`,
-`.claude/settings.json`, `CLAUDE.md`) are hash-locked in `.odx/lock`. `odx doctor
---verify-rulebook` (implied by `--ci`) names every changed file and CI fails on drift; the
-hooks print it and let the edit stand. A human approves with `ODX_ALLOW_PROTECTED=1 odx
-doctor --relock`. This is visibility, not a security boundary.
+The rulebook (`rules/`, `odx.json5`, `tests/fixtures/`) is reviewed the way any other source
+is: `git status --porcelain -- rules/ odx.json5 tests/fixtures/` says what changed, and the
+generated `CLAUDE.md` section tells an agent to ask before editing them. There is no lock.
 
 ## Formats and output
 
@@ -196,8 +193,8 @@ Two formats, total. `odx.json5` is project configuration only: `version: 1`, `ro
 `default_role`, `exclude`, `disabled`, `dependencies`, `odin` (flags, collections, allowed
 vet disables, explicit-allocators policy); one schema, and an unknown key is a load error.
 `.odx.md` is everything a human writes about rules: `topic.md` for the topic record and
-`<id>.odx.md` per rule, frontmatter plus fenced blocks. The lock file and `odx.baseline` are
-written by odx, never by hand.
+`<id>.odx.md` per rule, frontmatter plus fenced blocks. `odx.baseline` is written by odx,
+never by hand.
 
 `--json` on `check` and `ignores` is the machine contract, `schema: 1`; fields are only
 added under that number and `schema` bumps on any break. Each violation carries `file`,

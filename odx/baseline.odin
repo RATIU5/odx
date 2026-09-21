@@ -109,3 +109,9 @@ cmd_baseline :: proc(o: Opts) {
 	write_baseline(p.root, es[:])
 	fmt.printfln("%s: %d entries (%d added)", BASELINE_FILE, len(es), added)
 }
+
+write_atomic :: proc(path, text: string) {
+	tmp := strings.concatenate({path, ".tmp"}, context.temp_allocator)
+	if err := os.write_entire_file(tmp, text); err != nil {fail("write %s: %v", tmp, err)}
+	if err := os.rename(tmp, path); err != nil {fail("rename %s: %v", path, err)}
+}

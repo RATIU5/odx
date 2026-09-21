@@ -1,12 +1,12 @@
 ---
-name: allocators
-summary: Explicit allocator parameters in pure code; each allocation's lifetime is chosen at the call site
-tags: ["allocators", "memory", "arena", "defer", "leaks"]
-aliases: ["memory management", "allocation", "context.allocator"]
-example_questions: ["who frees this slice", "should this proc take an allocator parameter", "how do I avoid leaks in tests"]
-applies_to: { roles: ["pure", "service"] }
-related: ["errors", "dependencies"]
-example_roles: { "example/core": "pure" }
+name: "allocators",
+summary: "Explicit allocator parameters in pure code; each allocation's lifetime is chosen at the call site",
+tags: ["allocators", "memory", "arena", "defer", "leaks"],
+aliases: ["memory management", "allocation", "context.allocator"],
+example_questions: ["who frees this slice", "should this proc take an allocator parameter", "how do I avoid leaks in tests"],
+applies_to: { roles: ["pure", "service"] },
+related: ["errors", "dependencies"],
+example_roles: { "example/core": "pure" },
 ---
 
 Memory ownership is part of a procedure's contract. In pure and service code the allocator is

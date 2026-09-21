@@ -64,7 +64,6 @@ cmd_ignores :: proc(o: Opts) {
 		return
 	}
 	igs := project_ignores(&c)
-	if o.added {igs = added_ignores(p.root, igs)}
 	sort_violations(c.r.violations[:])
 	if o.json {
 		print_json(struct {

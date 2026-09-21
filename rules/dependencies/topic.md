@@ -1,12 +1,12 @@
 ---
-name: dependencies
-summary: What each package reaches (OS, network, threads, foreign) is reported from the compiler's import graph; roles are an optional preset that turns a reach into a rule
-tags: ["dependencies", "imports", "globals", "foreign", "capabilities", "packages"]
-aliases: ["package structure", "layering", "import rules", "modules", "what does this depend on"]
-example_questions: ["which package should this code go in", "does this package reach the OS", "where do foreign bindings live"]
-applies_to: { roles: ["pure", "service", "edge"] }
-related: ["errors"]
-example_roles: { "example/core": "pure", "example/platform": "edge" }
+name: "dependencies",
+summary: "What each package reaches (OS, network, threads, foreign) is reported from the compiler's import graph; roles are an optional preset that turns a reach into a rule",
+tags: ["dependencies", "imports", "globals", "foreign", "capabilities", "packages"],
+aliases: ["package structure", "layering", "import rules", "modules", "what does this depend on"],
+example_questions: ["which package should this code go in", "does this package reach the OS", "where do foreign bindings live"],
+applies_to: { roles: ["pure", "service", "edge"] },
+related: ["errors"],
+example_roles: { "example/core": "pure", "example/platform": "edge" },
 ---
 
 Know what you depend on. `odx doctor` and `odx for` report, for every package and with no
