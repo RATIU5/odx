@@ -58,6 +58,15 @@ in its frontmatter. `odx for <path>` prints the rules that apply to a file,
 most important first, so one call is enough to write it; `--brief` gives topic names only. A
 project adds `.odx/topics/<name>/` in the same format; the same name overrides the built-in.
 
+Adding an idiom is a text edit, not a recompile. `check: { kind: pattern, match: <class>, ... }`
+selects an AST node class (`call`, `import`, `proc`, `decl`) and filters it: `name`/`names`
+for calls and import globs, `exported` and `requires_param: { index, type_suffix }` for
+procedures, `at: package_scope, mutable: true` for declarations, plus `roles`/`except_roles`.
+No regex over source text. `odx rule try '<check json5>' [paths]` prints every match of a
+candidate spec with its count before any file exists (`--file <rule.odx.md>` dry-runs a
+draft); `odx rule add <topic>` scaffolds the next free id; `odx rule test <topic>/<id>`
+compiles just that rule's blocks.
+
 ```
 odx check [<path>...]            run the checks (exit 1 on violations; odx.baseline softens, never hides)
 odx for <path>                   topics that apply to a file or package (by role)
@@ -69,6 +78,7 @@ odx doctor [--ci]                guarantees, toolchain, config errors, task-file
 odx hook edit | stop | changed   Claude Code hook entry points
 odx init [--hooks]               write odx.json5 and mise.toml for a project
 odx self-test                    odx's own fixture runner
+odx rule try | add | test        measure a candidate check, scaffold a rule file, run one rule's blocks
 ```
 
 Global flags: `--json`, `--root <dir>`. Exit codes: 0 clean, 1 violations, 2 tool/config error.

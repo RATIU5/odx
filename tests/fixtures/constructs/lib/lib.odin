@@ -1,6 +1,6 @@
 package lib
 
-import sys "core:os" // want: dependencies/R2
+import sys "core:os" // want: dependencies/R2 local/R4
 
 Point :: struct {
 	x, y: int,

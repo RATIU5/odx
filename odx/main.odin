@@ -23,6 +23,9 @@ Opts :: struct {
 	report:         bool, // eval --report
 	added:          bool, // ignores --added
 	stale:          bool, // ignores --stale
+	count:          bool, // rule try --count
+	file:           string, // rule try --file <rule.odx.md>
+	id:             string, // rule add --id
 	since:          string, // check --since <ref>
 	root:           string, // --root override; "" = walk up from cwd
 	rule:           string, // explain --rule
@@ -43,6 +46,10 @@ USAGE :: `usage: odx <command> [args] [--json] [--root <dir>]
   hook edit | stop | changed   Claude Code hook entry points (read the hook JSON on stdin)
   init [--hooks]               write odx.json5 and mise.toml (--hooks: .claude/settings.json, CLAUDE.md)
   self-test                    run every tests/fixtures/* and diff its // want: markers
+  rule try '<check json5>' [<path>...] [--count]   run an inline check spec, print every match (nothing written)
+  rule try --file <rule.odx.md> [<path>...]        dry-run a drafted rule file the same way
+  rule add <topic> [--id R5]   scaffold <topic>/<id>.odx.md with the next free id
+  rule test <topic>/<id>       compile just that rule's fires/silent blocks
   eval [<task>...] [--topic bare|for|hook] [--report]   M6 pilot: run evals/<task>/ through claude -p and score mechanically
 `
 
@@ -87,6 +94,8 @@ parse_opts :: proc(args: []string) -> (o: Opts) {
 			o.added = true
 		case "--stale":
 			o.stale = true
+		case "--count":
+			o.count = true
 		case "--max-violations":
 			if has_eq == "" {
 				if i + 1 >= len(args) {fail("%s needs a value", a)}
@@ -96,7 +105,7 @@ parse_opts :: proc(args: []string) -> (o: Opts) {
 			n, ok := strconv.parse_int(value)
 			if !ok || n < 0 {fail("--max-violations needs a non-negative integer")}
 			o.max_violations = n
-		case "--root", "--rule", "--topic", "--exemplar", "--since":
+		case "--root", "--rule", "--topic", "--exemplar", "--since", "--file", "--id":
 			if has_eq == "" {
 				if i + 1 >= len(args) {fail("%s needs a value", a)}
 				i += 1
@@ -113,6 +122,10 @@ parse_opts :: proc(args: []string) -> (o: Opts) {
 				o.exemplar = value
 			case "--since":
 				o.since = value
+			case "--file":
+				o.file = value
+			case "--id":
+				o.id = value
 			}
 		case:
 			fail("unknown flag %s", a)
@@ -144,6 +157,8 @@ main :: proc() {
 		cmd_eval(o)
 	case "self-test":
 		cmd_selftest(o)
+	case "rule":
+		cmd_rule(o)
 	case "hook":
 		cmd_hook(o)
 	case "init":

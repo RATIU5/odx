@@ -32,7 +32,7 @@ cmd_selftest :: proc(o: Opts) {
 		fmt.printfln("%s %s/%s", "ok  " if bad == 0 else "FAIL", FIXTURES_DIR, e.name)
 		failed += bad
 	}
-	failed += check_rule_blocks(root)
+	failed += check_rule_blocks(root, "")
 	if failed > 0 {os.exit(EXIT_VIOLATION)}
 }
 
@@ -40,13 +40,18 @@ cmd_selftest :: proc(o: Opts) {
 // and no other finding, and `silent` must compile and produce nothing. Example-only rules
 // must compile both. Each block becomes a one-file package (plus the prelude as a sibling)
 // under a scratch project whose only role is the rule's `role`.
-check_rule_blocks :: proc(root: string) -> (failed: int) {
+// only narrows to one "topic/Rn" (`odx rule test`); "" runs them all.
+check_rule_blocks :: proc(root: string, only: string) -> (failed: int) {
 	p := load_project(root)
-	if len(p.errs) > 0 {return}
+	if len(p.errs) > 0 {
+		for e in p.errs {fmt.println("  config:", e)}
+		return len(p.errs)
+	}
 	for t in p.rb.topics {
 		for r in t.rules {
 			if r.retired || (r.fires == "" && r.silent == "") {continue}
 			id := strings.concatenate({t.name, "/", r.id}, context.temp_allocator)
+			if only != "" && id != only {continue}
 			for block, which in ([]string{r.fires, r.silent}) {
 				name := "fires" if which == 0 else "silent"
 				if block == "" {

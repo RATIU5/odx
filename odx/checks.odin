@@ -132,6 +132,8 @@ run_family_b :: proc(c: ^Ctx) {
 				check_construct(c, &p, &a)
 			case .banned_call:
 				check_calls(c, &p, &a)
+			case .pattern:
+				check_pattern(c, &p, &a)
 			case .example, .require_attribute, .foreign_error_type:
 			// example never runs; the others are family C (docfmt.odin)
 			}

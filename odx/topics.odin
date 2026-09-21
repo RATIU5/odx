@@ -63,6 +63,21 @@ Check_Kind :: enum {
 	vet_tag,
 	require_attribute,
 	foreign_error_type, // family C: an exported proc's error result type declared in another package (M7.4)
+	pattern, // M9.1: a selector over the AST walk (pattern.odin); the open-ended kind
+}
+
+// PATTERN_MATCHES are the AST node classes a pattern rule selects; the other keys filter it.
+// ponytail: strings, because `import` and `proc` are keywords and cannot name enum variants.
+PATTERN_MATCHES := []string {
+	"call", // names: canonical `pkg.name` or bare `name` calls
+	"import", // name: an import glob (`core:fmt`, `core:sys/*`)
+	"proc", // exported / requires_param: package-level procedures
+	"decl", // at: package_scope, mutable: package-level value declarations
+}
+
+Param_Req :: struct {
+	index:       int,
+	type_suffix: string,
 }
 
 Construct :: enum {
@@ -83,6 +98,13 @@ Check_Spec :: struct {
 	names:              []string, // banned_call
 	roles:              []string, // only these roles
 	except_roles:       []string, // all but these roles
+	// pattern (M9.1)
+	match:              string, // one of PATTERN_MATCHES
+	name:               string, // call: one name (sugar for names); import: an import glob
+	exported:           bool, // proc: only exported (not @(private)) procedures
+	requires_param:     Param_Req, // proc: report a proc whose param at index lacks type_suffix
+	at:                 string, // decl: "package_scope" (the only scope today)
+	mutable:            bool, // decl: only `x: T` / `x := v`, not `::`
 }
 
 TOPIC_KEYS := []string {
@@ -121,6 +143,12 @@ CHECK_KEYS := []string {
 	"names",
 	"roles",
 	"except_roles",
+	"match",
+	"name",
+	"exported",
+	"requires_param",
+	"at",
+	"mutable",
 }
 DEFAULT_RESULT_SUFFIX := []string{"Error"}
 
@@ -270,16 +298,33 @@ validate_rule :: proc(r: ^Rule, obj: json.Object, at: string, errs: ^[dynamic]st
 	require_key(errs, at, obj, "check")
 	check_enum(errs, at, obj, "severity", Severity)
 	spec, _ := obj["check"].(json.Object)
+	validate_check(&r.check, spec, at, errs)
+	if r.check.kind == .example && (r.fires == "" || r.silent == "") {
+		errf(errs, "%s: an example-only rule needs both a fires and a silent block", at)
+	}
+}
+
+// validate_check is the per-kind shape of a check spec; `odx rule try` runs it on an inline spec.
+validate_check :: proc(c: ^Check_Spec, spec: json.Object, at: string, errs: ^[dynamic]string) {
 	check_keys(errs, at, "check.", spec, CHECK_KEYS)
 	require_key(errs, at, spec, "kind") // the zero value is example: a missing kind must not silently stop the check
 	check_enum(errs, at, spec, "kind", Check_Kind)
-	c := &r.check
 	switch c.kind {
+	case .pattern:
+		if !slice.contains(PATTERN_MATCHES, c.match) {errf(errs, "%s: check.match must be one of %v", at, PATTERN_MATCHES)}
+		if c.name != "" && c.match == "call" {c.names = slice.concatenate([][]string{c.names, {c.name}})}
+		switch c.match {
+		case "call":
+			if len(c.names) == 0 {errf(errs, "%s: match: call needs name or names", at)}
+		case "import":
+			if c.name == "" {errf(errs, "%s: match: import needs name (an import glob)", at)}
+		case "proc":
+			if "requires_param" in spec && c.requires_param.type_suffix == "" {errf(errs, "%s: requires_param.type_suffix is required", at)}
+		case "decl":
+			if c.at != "package_scope" {errf(errs, "%s: match: decl needs at: package_scope", at)}
+		}
 	case .path_role, .banned_import, .vet_tag, .foreign_error_type:
 	case .example:
-		if r.fires == "" ||
-		   r.silent ==
-			   "" {errf(errs, "%s: an example-only rule needs both a fires and a silent block", at)}
 	case .banned_construct:
 		require_key(errs, at, spec, "construct")
 		check_enum(errs, at, spec, "construct", Construct)
