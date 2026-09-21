@@ -3,8 +3,8 @@
 {
   version: 1,
   roles: {
-    pure: ["allocators_r1", "dependencies_r2", "dependencies_r3", "dependencies_r4"],
-    edge: ["errors_r3", "errors_r5"],
+    pure: ["allocators_r1", "dependencies_r2", "dependencies_r3"],
+    edge: ["errors_r3"],
   },
   dependencies: {
     pure: { may_import: ["pure", "core:*"] },

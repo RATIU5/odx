@@ -103,20 +103,23 @@ compiler's own `odin check -show-import-graph` is the source, not odx.
 
 ## 3. The rulebook
 
-Three built-in topics (`errors`, `allocators`, `dependencies`), ten active rules, one file per
-rule: `rules/<topic>/<id>.odx.md` is Markdown whose frontmatter is the members of one JSON5
-object (`key: "value",` per line, no dialect) and three fenced blocks. ` ```odin prelude ` is a sibling file of shared
-types; ` ```odin fires ` must produce that rule and no other finding; ` ```odin silent ` must
-compile and produce nothing. `odx self-test` compiles every block, so the documentation, the
-exemplar and the test are one artifact that cannot drift. The prose around them is the
-`odx explain` body and what the hook shows a blocked model, violating form beside the correct
-one. Every rule carries `why`, `instead_of`, `evidence`, `cost`, a severity and `blocking`; a
-rule missing any fails to load. `kind: example` rules have no check: they are compiled
-fires/silent pairs surfaced by `odx for`, `odx explain --checklist` and the block text, never
-blocking. There is no prose-only rule kind. `rules/<topic>/topic.md` carries the topic record
-in its frontmatter. `odx for <path>` prints the rules that apply to a file,
-most important first, so one call is enough to write it; `--brief` gives topic names only. A
-project adds `.odx/topics/<name>/` in the same format; the same name overrides the built-in.
+Three built-in topics (`errors`, `allocators`, `dependencies`), four active rules
+(`allocators/R1`, `dependencies/R2`, `dependencies/R3`, `errors/R3`), one file per rule:
+`rules/<topic>/<id>.odx.md` is Markdown whose frontmatter is the members of one JSON5 object
+(`key: "value",` per line, no dialect) and three fenced blocks. ` ```odin prelude ` is a
+sibling file of shared types; ` ```odin fires ` must produce that rule and no other finding;
+` ```odin silent ` must compile and produce nothing. `odx self-test` compiles every block, so
+the documentation, the exemplar and the test are one artifact that cannot drift. The prose
+around them is the `odx explain` body and what the hook shows the model, violating form beside
+the correct one. Every rule carries `why`, `instead_of`, `evidence`, `cost` and a severity; a
+rule missing any fails to load. Every rule is mechanical and every finding counts; there is no
+advisory tier. Conventions only a reader can enforce live in `rules/<topic>/topic.md` under a
+`## Reader checks` heading, statement and why plus a fires/silent pair; `odx self-test`
+compiles those blocks too, `odx explain --checklist` prints them, and `odx for` and the
+generated `CLAUDE.md` section carry their statements. `topic.md` also carries the topic record
+in its frontmatter. `odx for <path>` prints the rules that apply to a file, so one call is
+enough to write it; `--brief` gives topic names only. A project adds `.odx/topics/<name>/` in
+the same format; the same name overrides the built-in.
 
 Adding an idiom is a text edit, not a recompile. `check: { kind: pattern, match: <class>, ... }`
 selects an AST node class (`call`, `import`, `proc`, `decl`) and filters it: `name`/`names`
@@ -132,7 +135,7 @@ odx check [<path>...]            run the checks (exit 1 on violations; odx.basel
 odx for <path>                   topics that apply to a file or package (by role)
 odx for --emit-claude-md [<path>]   the same as a Markdown section for CLAUDE.md (no path: every topic)
 odx explain [<topic>] [--rule R3]   no topic: list topics; with one: rules, rationale, do/don't
-odx explain --checklist          manual rules only, for an adversarial reviewer
+odx explain --checklist          the reader checks from every topic.md, for an adversarial reviewer
 odx ignores [--stale]            every odx:ignore suppression; --stale: suppressing nothing
 odx baseline add | regen         freeze current violations by semantic key (shrinks on its own)
 odx doctor [--ci]                guarantees, toolchain, config errors, task-file drift
@@ -199,7 +202,7 @@ never by hand.
 `--json` on `check` and `ignores` is the machine contract, `schema: 1`; fields are only
 added under that number and `schema` bumps on any break. Each violation carries `file`,
 `line`, `col`, `rule`, `severity`, `check`, `message`, `class` (the rule's stable greppable
-name), `subject` (the baseline key), `baselined`, `blocking`, `ignorable`, `statement`,
+name), `subject` (the baseline key), `baselined`, `blocking` (always true; kept for schema 1), `ignorable`, `statement`,
 `why`, `fires`, `silent`, `fix_hint` (the rule's `instead_of`) and `ignore_syntax` (the
 suppression comment, `""` when the rule takes none). `summary` carries `errors`,
 `warnings` (baselined findings count in neither), `ignored`, `files`, `baselined` and

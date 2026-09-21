@@ -35,9 +35,10 @@ cmd_selftest :: proc(o: Opts) {
 	if failed > 0 {os.exit(EXIT_VIOLATION)}
 }
 
-// check_rule_blocks: `fires` must produce that rule and no other finding, `silent` nothing;
-// example-only rules must compile both. Each block is a one-file package (prelude as a
-// sibling) under a scratch project whose only role is the rule's `role`.
+// check_rule_blocks: a rule's `fires` must produce that rule and no other finding, its
+// `silent` nothing; every fires/silent block in topic.md (the reader checks) must compile and
+// produce nothing. Each block is a one-file package (prelude as a sibling) under a scratch
+// project whose only role is the rule's `role` (edge for topic blocks).
 // only narrows to one "topic/Rn"; "" runs them all.
 check_rule_blocks :: proc(root: string, only: string) -> (failed: int) {
 	p := load_project(root)
@@ -47,7 +48,7 @@ check_rule_blocks :: proc(root: string, only: string) -> (failed: int) {
 	}
 	for t in p.rb.topics {
 		for r in t.rules {
-			if r.retired || (r.fires == "" && r.silent == "") {continue}
+			if r.retired {continue}
 			id := strings.concatenate({t.name, "/", r.id}, context.temp_allocator)
 			if only != "" && id != only {continue}
 			for block, which in ([]string{r.fires, r.silent}) {
@@ -57,17 +58,24 @@ check_rule_blocks :: proc(root: string, only: string) -> (failed: int) {
 					failed += 1
 					continue
 				}
-				bad := run_block(&p, t, r, block, which == 0)
+				bad := run_block(&p, r.role, r.prelude, block, id if which == 0 else "")
 				fmt.printfln("%s %s %s", "ok  " if bad == 0 else "FAIL", id, name)
 				failed += bad
 			}
+		}
+		if only != "" {continue}
+		for block, i in t.blocks {
+			bad := run_block(&p, "edge", "", block, "")
+			fmt.printfln("%s %s/topic.md block %d", "ok  " if bad == 0 else "FAIL", t.name, i + 1)
+			failed += bad
 		}
 	}
 	return
 }
 
+// expect is the one rule id the block must produce; "" means it must be clean.
 @(private = "file")
-run_block :: proc(base: ^Project, t: Topic, r: Rule, block: string, fires: bool) -> (bad: int) {
+run_block :: proc(base: ^Project, role, prelude, block, expect: string) -> (bad: int) {
 	tmp, terr := os.make_directory_temp("", "odx-rule-*", context.allocator)
 	if terr != nil {fail("cannot create temp dir")}
 	defer os.remove_all(tmp)
@@ -75,12 +83,11 @@ run_block :: proc(base: ^Project, t: Topic, r: Rule, block: string, fires: bool)
 	os.make_directory_all(pkg)
 	// generated names never start with `_` (the compiler skips those)
 	write_or_fail(join({pkg, "block.odin"}), block_source(block, "sample"))
-	if r.prelude !=
-	   "" {write_or_fail(join({pkg, "prelude.odin"}), block_source(r.prelude, "sample"))}
+	if prelude != "" {write_or_fail(join({pkg, "prelude.odin"}), block_source(prelude, "sample"))}
 	cfg := fmt.tprintf(
 		`{{ version: 1, roles: {{ %q: ["sample"] }}, dependencies: {{ %q: {{ may_import: ["core:*", "vendor:*"] }} }}, odin: {{ flags: ["-vet", "-vet-cast", "-strict-style"] }} }}`,
-		r.role,
-		r.role,
+		role,
+		role,
 	)
 	write_or_fail(join({tmp, CONFIG_FILE}), cfg)
 	sp := load_project(tmp)
@@ -89,29 +96,21 @@ run_block :: proc(base: ^Project, t: Topic, r: Rule, block: string, fires: bool)
 	if len(sp.errs) > 0 {return 1}
 	c := make_ctx(&sp, nil)
 	run_checks(&c, Opts{})
-	id := strings.concatenate({t.name, "/", r.id}, context.temp_allocator)
 	hit := false
 	for v in c.r.violations {
-		if v.rule == id && fires && r.check.kind != .example {
+		if expect != "" && v.rule == expect {
 			hit = true
 			continue
 		}
-		fmt.printfln(
-			"  %s block: unexpected %s:%d: %s %s",
-			"fires" if fires else "silent",
-			v.file,
-			v.line - 1,
-			v.rule,
-			v.message,
-		)
+		fmt.printfln("  unexpected %s:%d: %s %s", v.file, v.line - 1, v.rule, v.message)
 		bad += 1
 	}
 	for e in c.r.tool_errors {
 		fmt.println("  tool error:", e)
 		bad += 1
 	}
-	if fires && r.check.kind != .example && !hit {
-		fmt.printfln("  fires block did not produce %s", id)
+	if expect != "" && !hit {
+		fmt.printfln("  fires block did not produce %s", expect)
 		bad += 1
 	}
 	return

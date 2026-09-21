@@ -1,6 +1,6 @@
 package a
 
-@(deprecated = "errors/R1: return an Error instead of a bool")
+@(deprecated = "errors/R3: add @(require_results)")
 old :: proc() -> bool {
 	return true
 }

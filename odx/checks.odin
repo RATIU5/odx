@@ -81,7 +81,7 @@ report :: proc(
 			statement = a.rule.statement,
 			why = a.rule.why,
 			subject = subject,
-			blocking = a.rule.blocking,
+			blocking = true,
 			fires = a.rule.fires,
 			silent = a.rule.silent,
 			fix_hint = a.rule.instead_of,
@@ -128,8 +128,8 @@ run_family_b :: proc(c: ^Ctx) {
 				check_imports(c, &p, &a)
 			case .pattern:
 				check_pattern(c, &p, &a)
-			case .example, .require_attribute, .foreign_error_type:
-			// example never runs; the others are family C (docfmt.odin)
+			case .require_attribute:
+			// family C (docfmt.odin)
 			}
 		}
 	}

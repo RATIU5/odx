@@ -54,12 +54,10 @@ cmd_explain :: proc(o: Opts) {
 		shown += 1
 		id := strings.concatenate({t.name, "/", r.id}, context.temp_allocator)
 		how := fmt.tprintf("check: %v", r.check.kind)
-		if r.check.kind ==
-		   .example {how = "check: example only (compiled, never blocks; reviewer checklist)"}
 		if reason, dis := p.cfg.disabled[id];
 		   dis {how = strings.concatenate({how, "  DISABLED: ", reason}, context.temp_allocator)}
 		fmt.printfln(
-			"%-14s %s\n%-14s why: %s\n%-14s instead of: %s\n%-14s evidence: %s\n%-14s cost: %s\n%-14s %s%s",
+			"%-14s %s\n%-14s why: %s\n%-14s instead of: %s\n%-14s evidence: %s\n%-14s cost: %s\n%-14s %s",
 			id,
 			r.statement,
 			"",
@@ -72,7 +70,6 @@ cmd_explain :: proc(o: Opts) {
 			r.cost,
 			"",
 			how,
-			"" if r.blocking else "  (advisory)",
 		)
 		if r.prose != "" {fmt.printfln("\n%s", r.prose)}
 		if r.fires != "" {fmt.printfln("\nfires:\n%s", indent(r.fires))}
@@ -87,14 +84,19 @@ cmd_explain :: proc(o: Opts) {
 	fmt.print(t.prose)
 }
 
+READER_CHECKS_HEADING :: "\n## Reader checks\n"
+
+// reader_checks: the part of topic.md a reviewer enforces by hand; "" when the topic has none.
+reader_checks :: proc(t: Topic) -> string {
+	_, found, rest := strings.partition(t.prose, READER_CHECKS_HEADING)
+	return strings.trim_space(rest) if found != "" else ""
+}
+
 cmd_checklist :: proc(o: Opts) {
 	p := must_load(o, false)
 	for t in p.rb.topics {
 		if len(o.args) > 0 && !slice.contains(o.args[:], t.name) {continue}
-		for r in t.rules {
-			if r.retired || r.check.kind != .example {continue}
-			fmt.printfln("- [%s/%s] %s\n  why: %s", t.name, r.id, r.statement, r.why)
-		}
+		if rc := reader_checks(t); rc != "" {fmt.printfln("## %s\n\n%s\n", t.name, rc)}
 	}
 }
 
@@ -141,32 +143,36 @@ cmd_for :: proc(o: Opts) {
 	if o.brief {
 		for t in matched {fmt.printfln("  %-12s %s", t.name, t.summary)}
 	} else {
-		// Errors before warnings, blocking before advisory: the head of the list gets read.
 		for t in matched {
 			fmt.printfln("\n%s: %s", t.name, t.summary)
-			rs := slice.clone(t.rules, context.temp_allocator)
-			slice.sort_by(rs, proc(a, b: Rule) -> bool {
-				if a.severity != b.severity {return a.severity < b.severity}
-				return a.blocking && !b.blocking
-			})
-			for r in rs {
+			for r in t.rules {
 				if r.retired {continue}
 				id := strings.concatenate({t.name, "/", r.id}, context.temp_allocator)
 				if reason, dis := p.cfg.disabled[id]; dis {
 					fmt.printfln("  %-14s disabled: %s", id, reason)
 					continue
 				}
-				fmt.printfln(
-					"  %-14s %s%s\n  %-14s why: %s",
-					id,
-					r.statement,
-					"" if r.blocking else " (advisory)",
-					"",
-					r.why,
-				)
+				fmt.printfln("  %-14s %s\n  %-14s why: %s", id, r.statement, "", r.why)
 			}
+			if rc := reader_checks(t); rc != "" {fmt.printfln("\n  reader checks (odx explain --checklist %s):\n%s", t.name, indent(strip_fences(rc)))}
 		}
 	}
+}
+
+// strip_fences drops fenced code blocks: the prose keeps its statements, a summary its length.
+strip_fences :: proc(md: string) -> string {
+	b := strings.builder_make(context.temp_allocator)
+	in_fence := false
+	for l in strings.split_lines(md, context.temp_allocator) {
+		if strings.has_prefix(l, "```") {
+			in_fence = !in_fence
+			continue
+		}
+		if in_fence {continue}
+		strings.write_string(&b, l)
+		strings.write_byte(&b, '\n')
+	}
+	return strings.trim_space(strings.to_string(b))
 }
 
 // INIT_CONFIG_HEAD + BODY is both what `odx init` writes and, parsed, the default Config.
@@ -312,13 +318,15 @@ claude_md :: proc(p: ^Project, topics: []Topic) -> string {
 			if id in p.cfg.disabled {continue}
 			fmt.sbprintfln(
 				&b,
-				"- **%s** %s%s\n  Why: %s\n  Instead of: %s",
+				"- **%s** %s\n  Why: %s\n  Instead of: %s",
 				id,
 				r.statement,
-				"" if r.blocking else " (advisory)",
 				r.why,
 				r.instead_of,
 			)
+		}
+		if rc := reader_checks(t); rc != "" {
+			fmt.sbprintfln(&b, "\nReader checks for %s (not enforced by `odx check`):\n\n%s", t.name, strip_fences(rc))
 		}
 	}
 	return strings.to_string(b)

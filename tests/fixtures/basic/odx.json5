@@ -5,6 +5,5 @@
     pure: { may_import: ["pure", "core:*"] },
     edge: { may_import: ["pure", "edge", "core:*", "vendor:*"] },
   },
-  disabled: { "dependencies/R4": "fixture: foreign placement is covered by the platform package" },
   odin: { flags: ["-vet", "-warnings-as-errors"] },
 }

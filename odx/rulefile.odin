@@ -12,9 +12,12 @@ Rule_File :: struct {
 	prelude:     string,
 	fires:       string,
 	silent:      string,
+	blocks:      [dynamic]string, // every fires/silent block, in order (topic.md carries several)
 }
 
-parse_rule_file :: proc(text: string) -> (rf: Rule_File, err: string) {
+// keep_blocks: topic.md keeps its fires/silent blocks in the prose (they are the reader
+// checks' text), rule files lift theirs out.
+parse_rule_file :: proc(text: string, keep_blocks := false) -> (rf: Rule_File, err: string) {
 	body := text
 	if strings.has_prefix(text, "---\n") {
 		rest := text[len("---\n"):]
@@ -44,10 +47,15 @@ parse_rule_file :: proc(text: string) -> (rf: Rule_File, err: string) {
 			switch kind {
 			case "prelude":
 				rf.prelude = strings.clone(block)
-			case "fires":
-				rf.fires = strings.clone(block)
-			case "silent":
-				rf.silent = strings.clone(block)
+			case "fires", "silent":
+				code := strings.clone(block)
+				append(&rf.blocks, code)
+				if kind == "fires" && rf.fires == "" {rf.fires = code}
+				if kind == "silent" && rf.silent == "" {rf.silent = code}
+				if keep_blocks {
+					strings.write_string(&prose, strings.join(lines[i:j + 1], "\n", context.temp_allocator))
+					strings.write_byte(&prose, '\n')
+				}
 			case "":
 				strings.write_string(
 					&prose,

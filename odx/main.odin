@@ -40,7 +40,7 @@ USAGE :: `usage: odx <command> [args] [--json] [--root <dir>]
   for <path> [--brief]         the rules that apply to a file or package (--brief: topic names only)
   for --emit-claude-md [<path>]   the same as a Markdown section for CLAUDE.md (no path: every topic)
   explain [<topic>] [--rule R3]   no topic: list topics; with one: rules, rationale, do/don't
-  explain [<topic>] --checklist   example-only rules, for an adversarial reviewer
+  explain [<topic>] --checklist   the reader checks from topic.md, for an adversarial reviewer
   ignores [--stale]            every odx:ignore suppression; --stale: suppressing nothing
   doctor [--ci]                toolchain, flags, config errors, mise.toml drift
   hook edit                    Claude Code PostToolBatch hook: reads the hook JSON on stdin, reports, exits 0

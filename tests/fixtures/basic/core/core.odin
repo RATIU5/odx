@@ -16,8 +16,8 @@ parse :: proc(s: string) -> (n: int, err: Error) { // want: errors/R3
 	return len(s), .None
 }
 
-// passes os's error type through the package boundary: errors/R5 (and no attribute: R3)
-read :: proc(path: string) -> ([]byte, os.Error) { // want: errors/R3 errors/R5
+// no attribute on a proc returning another package's error type: still errors/R3
+read :: proc(path: string) -> ([]byte, os.Error) { // want: errors/R3
 	return os.read_entire_file(path, context.allocator)
 }
 

@@ -11,9 +11,15 @@ Applies to roles pure, service (odx.json5).
 - **allocators/R1** Every file in a pure or service package starts with `#+vet explicit-allocators`.
   Why: So each allocation's lifetime is chosen at the call site by a specific allocator rather than inherited implicitly; the compiler then rejects make/new/append that forgot to say. context.temp_allocator scratch use and files that set the context are exempt: context exists precisely to be intercepted.
   Instead of: Relying on the implicit context.allocator at every call site and auditing leaks after the fact.
-- **allocators/R2** A procedure that allocates takes `allocator := context.allocator` as its last parameter and documents who frees. (advisory)
-  Why: Callers pick arenas or trackers ('a good API offers a way to specify the allocator to use'); the doc comment says who frees because a signature cannot. Inside a tagged file the default is unreachable from other tagged files, so it serves untagged callers; R1 and R2 do not conflict.
-  Instead of: Allocating internally with whatever context.allocator holds and documenting nothing.
+
+Reader checks for allocators (not enforced by `odx check`):
+
+Conventions a reader enforces in review; `odx explain --checklist` lists them and
+`odx self-test` compiles every block below, so the examples cannot rot. Nothing here fires.
+
+### A procedure that allocates takes `allocator := context.allocator` as its last parameter and documents who frees.
+
+Callers pick arenas or trackers ('a good API offers a way to specify the allocator to use'); the doc comment says who frees because a signature cannot. Inside a tagged file the default is unreachable from other tagged files, so it serves untagged callers; R1 and R2 do not conflict.
 
 ### dependencies: What each package reaches (OS, network, threads, foreign) is reported from the compiler's import graph; roles are an optional preset that turns a reach into a rule
 Applies to roles pure, service, edge (odx.json5).
@@ -23,24 +29,36 @@ Applies to roles pure, service, edge (odx.json5).
 - **dependencies/R3** No mutable package-level variables in pure or service packages; pass state as a parameter.
   Why: 'Globals and/or thread local variables... are just dreadful solutions.' Hidden state makes two calls with the same arguments give different answers. Edge packages own the process and are the one place a global may live.
   Instead of: Package-level state read and written from several procedures.
-- **dependencies/R4** foreign imports and foreign blocks live only in edge packages.
-  Why: The FFI boundary is where the ABI and calling convention change; keep it in one place. This is a mechanical justification, not a taxonomic one.
-  Instead of: Foreign blocks wherever the binding is first needed.
 
 ### errors: Typed errors, @(require_results), or_return; never discard a failure
 Applies to roles pure, service, edge (odx.json5).
-- **errors/R1** Exported procedures that can fail return an error type as the last result, not a bool. (advisory)
-  Why: A bool, and equally a single universal error type, is 'all the same degenerate value: error or not... a fancy boolean'. Callers cannot branch on it or report it.
-  Instead of: Returning (T, bool) or an ok flag from a procedure with more than one failure mode.
-- **errors/R2** Each package declares one Error enum or union; no string or any errors. (advisory)
-  Why: 'Having an error value type defined per package is absolutely fine (and ergonomic too)'. A typed error is exhaustively switchable and greppable; strings and any are neither.
-  Instead of: Propagating string, any, or another package's error type across the package boundary.
 - **errors/R3** Exported procedures whose last result is an error type carry @(require_results).
   Why: Only the attribute makes the compiler reject a discarded failure; -vet does not (`x, _ := f()` and a bare `g()` both pass). This is odx's convention, not a documented Odin one.
   Instead of: Trusting callers to check the error result by convention.
-- **errors/R4** Handle an error where it occurs when you can; when a package's operations genuinely chain, prefer or_return over hand-written `if err != nil { return }`. (advisory)
-  Why: 'You make your mess; you clean it.' Local handling is the default; or_return is a per-package tool ('when a package needs it, it REALLY needs it') that keeps a chained happy path linear.
-  Instead of: Blanket or_return everywhere, or blanket hand-written if err != nil blocks.
-- **errors/R5** An exported procedure's error result is this package's own Error type; a dependency's error is translated at the boundary, never passed through.
-  Why: 'I am not against error value propagation within a library, but I am pretty much always against it across library boundaries.' A foreign error is a degenerate state with high entropy and a lack of specific information for this package's callers.
-  Instead of: Returning os.Error, mem.Allocator_Error or another package's Error straight from your exported API.
+
+Reader checks for errors (not enforced by `odx check`):
+
+Conventions a reader enforces in review; `odx explain --checklist` lists them and
+`odx self-test` compiles every block below, so the examples cannot rot. Nothing here fires.
+
+### Exported procedures that can fail return an error type as the last result, not a bool.
+
+A bool, and equally a single universal error type, is 'all the same degenerate value: error or not... a fancy boolean'. Callers cannot branch on it or report it.
+
+A bool says that something failed, never what.
+
+
+
+### Each package declares one Error enum or union; no string or any errors.
+
+'Having an error value type defined per package is absolutely fine (and ergonomic too)'. A typed error is exhaustively switchable and greppable; strings and any are neither.
+
+One switchable type per package; a `union` when it wraps several dependencies.
+
+
+
+### Handle an error where it occurs when you can; when a package's operations genuinely chain, prefer or_return over hand-written `if err != nil { return }`.
+
+'You make your mess; you clean it.' Local handling is the default; or_return is a per-package tool ('when a package needs it, it REALLY needs it') that keeps a chained happy path linear.
+
+The hand-written form says the same thing in four lines that `or_return` says in one token.

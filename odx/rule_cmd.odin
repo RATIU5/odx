@@ -27,7 +27,6 @@ cmd_rule :: proc(o: Opts) {
 rule_try :: proc(o: Opts) {
 	r := new(Rule)
 	r.severity = .error
-	r.blocking = true
 	errs: [dynamic]string
 	paths := o.args[1:]
 	if o.file != "" {
@@ -49,7 +48,6 @@ rule_try :: proc(o: Opts) {
 	}
 	for e in errs {fmt.eprintln("odx:", e)}
 	if len(errs) > 0 {os.exit(EXIT_TOOL)}
-	if r.check.kind == .example {fail("an example rule has nothing to run")}
 	if r.id == "" {r.id = "try"}
 	r.ignorable = true
 	p := must_load(o, true)
@@ -76,9 +74,8 @@ instead_of: "",
 evidence: "",
 cost: "",
 severity: "error",
-blocking: true,
 role: "edge",
-check: { kind: "example" },
+check: { kind: "pattern", match: "decl", at: "package_scope", mutable: true },
 ---
 
 Why this idiom exists, in a paragraph a reader can act on.

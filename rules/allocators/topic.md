@@ -24,3 +24,29 @@ its intended lifetime is outside any static checker's reach.
   is unreachable from other tagged files, so it serves untagged callers.
 - Sanitized tests (`-sanitize:address -define:ODIN_TEST_FAIL_ON_BAD_MEMORY=true`) are a
   guarantee `odx doctor` checks in mise.toml, not a rule (the former R3, retired in M8.3).
+
+## Reader checks
+
+Conventions a reader enforces in review; `odx explain --checklist` lists them and
+`odx self-test` compiles every block below, so the examples cannot rot. Nothing here fires.
+
+### A procedure that allocates takes `allocator := context.allocator` as its last parameter and documents who frees.
+
+Callers pick arenas or trackers ('a good API offers a way to specify the allocator to use'); the doc comment says who frees because a signature cannot. Inside a tagged file the default is unreachable from other tagged files, so it serves untagged callers; R1 and R2 do not conflict.
+
+```odin fires
+words :: proc(s: string) -> []string {
+	out := make([dynamic]string)
+	append(&out, s)
+	return out[:]
+}
+```
+
+```odin silent
+// Caller owns the result; free with delete(result, allocator).
+words :: proc(s: string, allocator := context.allocator) -> []string {
+	out := make([dynamic]string, allocator)
+	append(&out, s)
+	return out[:]
+}
+```

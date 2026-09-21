@@ -23,6 +23,7 @@ Topic :: struct {
 	rules:             []Rule,
 	// runtime only, not frontmatter keys
 	prose:             string,
+	blocks:            []string, // fires/silent blocks in topic.md: reader checks, compiled by self-test
 	exemplar:          string, // example .odin sources concatenated
 	source:            string, // "builtin" or the directory it came from
 	overrides:         bool,
@@ -38,14 +39,13 @@ Rule :: struct {
 	instead_of:   string,
 	evidence:     string,
 	cost:         string,
-	blocking:     bool, // false = advisory, printed but never a wall
 	severity:     Severity,
 	class:        string, // stable greppable name, e.g. "dependencies_hidden_state"
 	ignorable:    bool, // default true; set at load when absent
 	baselineable: bool, // has a stable subject
 	retired:      bool,
 	role:         string, // role the fires/silent blocks are checked under (default edge)
-	check:        Check_Spec, // `{ kind: "example" }` for example-only rules
+	check:        Check_Spec,
 	// runtime only, from the .odx.md body
 	prose:        string,
 	prelude:      string, // setup shared by fires and silent
@@ -54,13 +54,13 @@ Rule :: struct {
 	file:         string,
 }
 
+// Every kind runs and every finding blocks; conventions a reader enforces live as prose and
+// compiled blocks in topic.md, not as rules.
 Check_Kind :: enum {
-	example, // never runs: a compiled fires/silent pair surfaced by `for`, explain and the block text
 	path_role,
 	banned_import,
 	vet_tag,
-	require_attribute,
-	foreign_error_type, // family C: an exported proc's error result type declared in another package
+	require_attribute, // family C: needs the compiler's entity table (docfmt.odin)
 	pattern, // a selector over the AST walk (pattern.odin); the open-ended kind
 }
 
@@ -116,7 +116,6 @@ RULE_KEYS := []string {
 	"instead_of",
 	"evidence",
 	"cost",
-	"blocking",
 	"severity",
 	"class",
 	"ignorable",
@@ -215,7 +214,7 @@ add_topic :: proc(
 		errf(errs, "%s: missing", at)
 		return
 	}
-	tf, perr := parse_rule_file(md)
+	tf, perr := parse_rule_file(md, keep_blocks = true)
 	if perr != "" {
 		errf(errs, "%s: %s", at, perr)
 		return
@@ -223,6 +222,7 @@ add_topic :: proc(
 	t := Topic {
 		source   = source,
 		prose    = tf.prose,
+		blocks   = tf.blocks[:],
 		exemplar = exemplar,
 	}
 	if _, ok := unmarshal_json5(tf.frontmatter, &t, at, TOPIC_KEYS, errs); !ok {return}
@@ -280,23 +280,17 @@ validate_rule :: proc(r: ^Rule, obj: json.Object, at: string, errs: ^[dynamic]st
 	if r.instead_of == "" {errf(errs, "%s: instead_of is required (compared to what?)", at)}
 	if r.evidence == "" {errf(errs, "%s: evidence is required (what hard evidence?)", at)}
 	if r.cost == "" {errf(errs, "%s: cost is required (at what cost?)", at)}
-	require_key(errs, at, obj, "blocking")
-	if r.blocking &&
-	   r.severity == .warning {errf(errs, "%s: an advisory (warning) rule cannot be blocking", at)}
 	require_key(errs, at, obj, "severity")
 	require_key(errs, at, obj, "check")
 	check_enum(errs, at, obj, "severity", Severity)
 	spec, _ := obj["check"].(json.Object)
 	validate_check(&r.check, spec, at, errs)
-	if r.check.kind == .example && (r.fires == "" || r.silent == "") {
-		errf(errs, "%s: an example-only rule needs both a fires and a silent block", at)
-	}
 }
 
 // `odx rule try` runs this on an inline spec.
 validate_check :: proc(c: ^Check_Spec, spec: json.Object, at: string, errs: ^[dynamic]string) {
 	check_keys(errs, at, "check.", spec, CHECK_KEYS)
-	require_key(errs, at, spec, "kind") // the zero value is example: a missing kind must not silently stop the check
+	require_key(errs, at, spec, "kind") // a missing kind would silently become the zero variant
 	check_enum(errs, at, spec, "kind", Check_Kind)
 	switch c.kind {
 	case .pattern:
@@ -313,8 +307,7 @@ validate_check :: proc(c: ^Check_Spec, spec: json.Object, at: string, errs: ^[dy
 			if c.at != "package_scope" {errf(errs, "%s: match: decl needs at: package_scope", at)}
 		case "foreign":
 		}
-	case .path_role, .banned_import, .vet_tag, .foreign_error_type:
-	case .example:
+	case .path_role, .banned_import, .vet_tag:
 	case .require_attribute:
 		if c.attribute == "" {errf(errs, "%s: check.attribute is required", at)}
 		if c.on != "" &&
@@ -349,7 +342,7 @@ active_rules :: proc(p: ^Project, only_topics: []string) -> []Active_Rule {
 	for &t in p.rb.topics {
 		if len(only_topics) > 0 && !slice.contains(only_topics, t.name) {continue}
 		for &r in t.rules {
-			if r.check.kind == .example || r.retired {continue}
+			if r.retired {continue}
 			id := strings.concatenate({t.name, "/", r.id})
 			if id in p.cfg.disabled {continue}
 			append(&out, Active_Rule{id, &r})

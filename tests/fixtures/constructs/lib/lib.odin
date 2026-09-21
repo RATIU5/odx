@@ -6,7 +6,7 @@ Point :: struct {
 	x, y: int,
 }
 
-foreign import libc "system:c" // want: dependencies/R4
+foreign import libc "system:c"
 
 sum :: proc(p: Point) -> int {
 	return p.x + p.y

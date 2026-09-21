@@ -23,7 +23,7 @@ Violation :: struct {
 	why:       string,
 	subject:   string, // stable semantic key; "" = not baselineable
 	baselined: bool, // listed in odx.baseline: printed, never fails the build
-	blocking:  bool, // the hook may block on it; notes (odin/*, odx/*) always are
+	blocking:  bool, // always true since the advisory tier went; kept for schema 1
 	fires:     string, // the rule's compiled violating and correct forms, "" for notes
 	silent:    string,
 	// the agent contract: what to write instead, and the exact suppression line, so a
