@@ -25,11 +25,21 @@ err :: proc(d: ^Doctor, f: string, args: ..any) {
 }
 
 cmd_doctor :: proc(o: Opts) {
-	p := must_load(o, true)
-	c := make_ctx(&p, nil)
+	p := load_project(o.root)
+	if p.root ==
+	   "" {fail("no %s found here or in any parent (use --root or `odx init`)", CONFIG_FILE)}
 	d: Doctor
+	for e in p.errs {err(&d, "%s", e)} 	// `ext validate` folded in (M0.3): every config error, not the first
+	if d.errors > 0 {
+		fmt.printfln("%d errors, %d warnings", d.errors, d.warnings)
+		os.exit(EXIT_TOOL)
+	}
+	c := make_ctx(&p, nil)
 	check_toolchain(&d, &c, o.ci)
+	report_guarantees(&d, &c, odin_output(odin_exe(c.cfg), "help", "check"))
 	check_task_files(&d, &p)
+	// one check path, three entry points (M4.3): hook, CI and mise all run this argv
+	fmt.println("check argv: odx check  (Stop hook, mise task, CI via `mise run ci`)")
 	// the canonical argv (20.3): the hook, CI and this all shell out to the same odin flags
 	fmt.printfln(
 		"expected test task: odin test . %s %s",
@@ -105,6 +115,11 @@ check_task_files :: proc(d: ^Doctor, p: ^Project) {
 		for f in p.cfg.odin.required_flags {
 			if f not_in tokens {warn(d, "mise.toml test task lacks required flag %s", f)}
 		}
+		if !strings.contains(string(mise), "odx check") &&
+		   !strings.contains(
+				   string(mise),
+				   "ODX check",
+			   ) {warn(d, "no mise.toml task runs `odx check`; CI and the hook would drift from it")}
 	} else {
 		warn(d, "no mise.toml (odx init writes one)")
 	}

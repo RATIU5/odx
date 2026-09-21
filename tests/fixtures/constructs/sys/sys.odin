@@ -1,4 +1,3 @@
-#+feature using-stmt
 package sys
 
 import "core:os"
@@ -16,6 +15,5 @@ Pair :: struct {
 
 quit :: proc(x: i32) {
 	p := Pair{1}
-	using p // want: local/R1
-	os.exit(int(abs(x)) + y)
+	os.exit(int(abs(x)) + p.y)
 }

@@ -122,6 +122,7 @@ check_entities :: proc(c: ^Ctx, p: ^Package, h: ^doc.Header, rules: []^Active_Ru
 							")",
 						},
 					),
+					doc.from_string(h, e.name),
 				)
 			}
 		}

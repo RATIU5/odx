@@ -1,6 +1,6 @@
 {
   name: "allocators",
-  summary: "Explicit allocator parameters in pure code; every allocation has a visible owner and a defer",
+  summary: "Explicit allocator parameters in pure code; each allocation's lifetime is chosen at the call site",
   tags: ["allocators", "memory", "arena", "defer", "leaks"],
   aliases: ["memory management", "allocation", "context.allocator"],
   example_questions: [
@@ -16,7 +16,7 @@
       id: "R1",
       class: "allocators_explicit_tag",
       statement: "Every file in a pure or service package starts with `#+vet explicit-allocators`.",
-      why: "The compiler then rejects make/new/append without an allocator argument; hidden context.allocator use is where leaks come from.",
+      why: "So each allocation's lifetime is chosen at the call site by a specific allocator rather than inherited implicitly; the compiler then rejects make/new/append that forgot to say. context.temp_allocator scratch use and files that set the context are exempt: context exists precisely to be intercepted.",
       severity: "error",
       check: { kind: "vet_tag" },
     },
@@ -24,7 +24,7 @@
       id: "R2",
       class: "allocators_owner_parameter",
       statement: "A procedure that allocates takes `allocator := context.allocator` as its last parameter and documents who frees.",
-      why: "Callers pick arenas or trackers; the proc stays testable and leak-free by construction.",
+      why: "Callers pick arenas or trackers ('a good API offers a way to specify the allocator to use'); the doc comment says who frees because a signature cannot. Inside a tagged file the default is unreachable from other tagged files, so it serves untagged callers; R1 and R2 do not conflict.",
       severity: "error",
       check: { kind: "manual" },
     },

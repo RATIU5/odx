@@ -20,6 +20,10 @@ Violation :: struct {
 	message:   string,
 	ignorable: bool,
 	class:     string, // stable greppable name from the rule's frontmatter (20.4); "" for odin/odx findings
+	statement: string, // the rule's statement and why (M2.2), so a block message is self-sufficient
+	why:       string,
+	subject:   string, // stable semantic key (M3.1); "" = not baselineable
+	baselined: bool, // listed in odx.baseline: printed, never fails the build
 }
 
 Report :: struct {
@@ -27,7 +31,7 @@ Report :: struct {
 	violations:  [dynamic]Violation,
 	tool_errors: [dynamic]string,
 	summary:     struct {
-		errors, warnings, ignored, files, omitted: int,
+		errors, warnings, ignored, files, omitted, baselined: int,
 	},
 }
 
@@ -64,6 +68,10 @@ finalize :: proc(r: ^Report, strict: bool, max_violations := 0) -> int {
 	r.schema = 1
 	sort_violations(r.violations[:])
 	for v in r.violations {
+		if v.baselined {
+			r.summary.baselined += 1
+			continue
+		}
 		switch v.severity {
 		case .error:
 			r.summary.errors += 1
@@ -97,6 +105,8 @@ print_tool_errors :: proc(r: ^Report) {
 	for e in r.tool_errors {fmt.eprintln("odx: tool error:", e)}
 }
 
+BASELINED_TAG :: " [baselined]"
+
 // report_text: one line per violation, the human format (17.11).
 report_text :: proc(r: ^Report) -> string {
 	b := strings.builder_make()
@@ -104,7 +114,51 @@ report_text :: proc(r: ^Report) -> string {
 		topic, _, rule := strings.partition(v.rule, "/")
 		hint :=
 			"" if topic == "odin" || topic == "odx" else fmt.tprintf("; see `odx explain %s --rule %s`", topic, rule)
-		fmt.sbprintfln(&b, "%s:%d:%d: %s %s%s", v.file, v.line, v.col, v.rule, v.message, hint)
+		fmt.sbprintfln(
+			&b,
+			"%s:%d:%d: %s %s%s%s",
+			v.file,
+			v.line,
+			v.col,
+			v.rule,
+			v.message,
+			hint,
+			BASELINED_TAG if v.baselined else "",
+		)
+	}
+	if r.summary.omitted >
+	   0 {fmt.sbprintfln(&b, "... %d more violations omitted (--max-violations)", r.summary.omitted)}
+	return strings.to_string(b)
+}
+
+// hook_text is report_text for the model (M2.2): the first violation of each rule carries the
+// statement, the why, and the exact escape hatch (only when the rule takes one); later ones are
+// bare location lines. Compiler findings never have a body. M8 adds fires/silent here.
+hook_text :: proc(r: ^Report) -> string {
+	b := strings.builder_make()
+	seen := make(map[string]bool, context.temp_allocator)
+	for v in r.violations {
+		fmt.sbprintfln(
+			&b,
+			"%s:%d:%d: %s %s%s",
+			v.file,
+			v.line,
+			v.col,
+			v.rule,
+			v.message,
+			BASELINED_TAG if v.baselined else "",
+		)
+		if v.statement == "" || v.rule in seen || v.baselined {continue}
+		seen[v.rule] = true
+		fmt.sbprintfln(&b, "  rule: %s\n  why: %s", v.statement, v.why)
+		if v.ignorable {
+			fmt.sbprintfln(
+				&b,
+				"  to suppress, on the line above it: // %s %s reason: <at least ten characters>",
+				IGNORE_PREFIX,
+				v.rule,
+			)
+		}
 	}
 	if r.summary.omitted >
 	   0 {fmt.sbprintfln(&b, "... %d more violations omitted (--max-violations)", r.summary.omitted)}

@@ -29,8 +29,23 @@ collect_ignores :: proc(
 	for g in f.comments {
 		for tok in g.list {
 			text := strings.trim_space(strings.trim_prefix(tok.text, "//"))
-			if !strings.has_prefix(tok.text, "//") ||
-			   !strings.has_prefix(text, IGNORE_PREFIX) {continue}
+			if !strings.has_prefix(tok.text, "//") {continue}
+			if !strings.has_prefix(text, IGNORE_PREFIX) {
+				// a near miss (`odx: ignore`, `odx:Ignore`, `odx-ignore`) fails loudly, never silently (M3.3)
+				if low := strings.to_lower(text, context.temp_allocator);
+				   strings.has_prefix(low, "odx") && strings.contains(low, "ignore") {
+					note(
+						r,
+						"odx/bad-ignore",
+						"ignores",
+						rel,
+						tok.pos.line,
+						tok.pos.column,
+						"malformed directive; the form is `// odx:ignore <topic>/<R> reason: <text>`",
+					)
+				}
+				continue
+			}
 			whole := strings.has_prefix(text, IGNORE_FILE_PREFIX)
 			text = strings.trim_space(
 				text[len(IGNORE_FILE_PREFIX) if whole else len(IGNORE_PREFIX):],
@@ -83,7 +98,7 @@ ignore_target :: proc(lines: []string, comment_line, col: int, whole: bool) -> i
 
 // apply_ignores drops suppressed violations and reports stale ignores (17.8). An ignore for a
 // rule that did not run this pass, or in a package family C could not type-check, is not
-// stale (20.2): a transient compile error must never make `odx fix` delete suppressions.
+// stale (20.2): a transient compile error must never report a suppression as stale.
 apply_ignores :: proc(c: ^Ctx, igs: []Ignore, ran: map[string]bool) {
 	r := c.r
 	unchecked := make(map[string]bool, context.temp_allocator)
@@ -93,9 +108,10 @@ apply_ignores :: proc(c: ^Ctx, igs: []Ignore, ran: map[string]bool) {
 		hit := false
 		if v.ignorable {
 			for &ig in igs {
-				if ig.file == v.file &&
-				   ig.rule == v.rule &&
-				   (ig.target == 0 || ig.target == v.line) {
+				// a package-level finding (v.file is a directory) takes a file-wide ignore in that package
+				if ig.rule == v.rule &&
+				   ((ig.file == v.file && (ig.target == 0 || ig.target == v.line)) ||
+						   (ig.target == 0 && dir_of(ig.file) == v.file)) {
 					ig.used = true
 					hit = true
 				}

@@ -11,6 +11,9 @@ import "core:strings"
 // the rulebook and its enforcement depend on. Editing them is allowed; doing it invisibly is
 // not. `odx doctor --verify-rulebook` names every changed file; a human rewrites the lock with
 // ODX_ALLOW_PROTECTED=1 `odx doctor --relock`, and that diff is the approval record.
+// Reports only, never refuses (M4.2): `doctor --ci` fails on drift, the hooks print it.
+// Kept over plain `git diff -- rules/` (decided in M4) for the case git cannot cover: drift
+// between a commit and the builtins embedded in the running binary, and repos without git.
 
 LOCK_FILE :: ".odx/lock"
 LOCK_HINT :: "a human approves with ODX_ALLOW_PROTECTED=1 odx doctor --relock"

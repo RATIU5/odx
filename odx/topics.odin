@@ -23,6 +23,7 @@ Topic :: struct {
 	rules:             []Rule,
 	// runtime only (not in topic.json5; TOPIC_KEYS rejects them there)
 	prose:             string, // topic.md
+	exemplar:          string, // example/*/*.odin concatenated; shown by the stop hook (M2.3)
 	source:            string, // "builtin" or the directory it came from
 	overrides:         bool, // project topic shadowing a builtin of the same name
 }
@@ -36,16 +37,10 @@ Rule :: struct {
 	why:          string,
 	severity:     Severity, // mandatory
 	class:        string, // stable greppable name, e.g. "layering_hidden_state"
-	fix:          Fix_Mode,
 	ignorable:    bool, // default true; set at load when absent
 	baselineable: bool, // 20.5: has a stable subject
 	retired:      bool,
 	check:        Check_Spec, // mandatory; `{ kind: "manual" }` for reviewer-only rules
-}
-
-Fix_Mode :: enum {
-	none,
-	safe,
 }
 
 Check_Kind :: enum {
@@ -61,7 +56,6 @@ Check_Kind :: enum {
 Construct :: enum {
 	mutable_global,
 	foreign_decl,
-	using_stmt,
 	no_bounds_check,
 }
 
@@ -96,7 +90,6 @@ RULE_KEYS := []string {
 	"why",
 	"severity",
 	"class",
-	"fix",
 	"ignorable",
 	"baselineable",
 	"retired",
@@ -131,12 +124,32 @@ load_rulebook :: proc(root: string, errs: ^[dynamic]string) -> (rb: Rulebook) {
 				md = string(f.data)
 			}
 		}
-		add_topic(&rb, "builtin", b.name, js, md, errs)
+		ex := make([dynamic]string)
+		for f in b.example {if strings.has_suffix(f.name, ".odin") {append(&ex, string(f.data))}}
+		add_topic(&rb, "builtin", b.name, js, md, strings.join(ex[:], "\n"), errs)
 	}
 	for e in project_subdirs(root, PROJECT_TOPICS_DIR) {
 		js, _ := os.read_entire_file(join({e.fullpath, TOPIC_FILE}), context.allocator)
 		md, _ := os.read_entire_file(join({e.fullpath, PROSE_FILE}), context.allocator)
-		add_topic(&rb, join({PROJECT_TOPICS_DIR, e.name}), e.name, string(js), string(md), errs)
+		ex := make([dynamic]string)
+		for d in project_subdirs(e.fullpath, "example") {
+			w := os.walker_create_path(d.fullpath)
+			defer os.walker_destroy(&w)
+			for fi in os.walker_walk(&w) {
+				if fi.type != .Regular || !strings.has_suffix(fi.name, ".odin") {continue}
+				if src, rerr := os.read_entire_file(fi.fullpath, context.allocator);
+				   rerr == nil {append(&ex, string(src))}
+			}
+		}
+		add_topic(
+			&rb,
+			join({PROJECT_TOPICS_DIR, e.name}),
+			e.name,
+			string(js),
+			string(md),
+			strings.join(ex[:], "\n"),
+			errs,
+		)
 	}
 	slice.sort_by(rb.topics[:], proc(a, b: Topic) -> bool {return a.name < b.name})
 	return
@@ -154,15 +167,20 @@ project_subdirs :: proc(root, sub: string) -> []os.File_Info {
 }
 
 @(private = "file")
-add_topic :: proc(rb: ^Rulebook, source, dir_name, js, md: string, errs: ^[dynamic]string) {
+add_topic :: proc(
+	rb: ^Rulebook,
+	source, dir_name, js, md, exemplar: string,
+	errs: ^[dynamic]string,
+) {
 	at := join({source if source != "builtin" else join({"rules", dir_name}), TOPIC_FILE})
 	if js == "" {
 		errf(errs, "%s: missing", at)
 		return
 	}
 	t := Topic {
-		source = source,
-		prose  = md,
+		source   = source,
+		prose    = md,
+		exemplar = exemplar,
 	}
 	tree, ok := unmarshal_json5(js, &t, at, TOPIC_KEYS, errs)
 	if !ok {return}
@@ -180,6 +198,7 @@ add_topic :: proc(rb: ^Rulebook, source, dir_name, js, md: string, errs: ^[dynam
 		if i < len(objs) {obj, _ = objs[i].(json.Object)}
 		check_keys(errs, at, "rule.", obj, RULE_KEYS)
 		if "ignorable" not_in obj {r.ignorable = true}
+		if "baselineable" not_in obj {r.baselineable = true}
 		if r.retired {continue}
 		validate_rule(&r, obj, strings.concatenate({at, " ", r.id}, context.temp_allocator), errs)
 	}
@@ -201,7 +220,6 @@ validate_rule :: proc(r: ^Rule, obj: json.Object, at: string, errs: ^[dynamic]st
 	require_key(errs, at, obj, "severity")
 	require_key(errs, at, obj, "check")
 	check_enum(errs, at, obj, "severity", Severity)
-	check_enum(errs, at, obj, "fix", Fix_Mode)
 	spec, _ := obj["check"].(json.Object)
 	check_keys(errs, at, "check.", spec, CHECK_KEYS)
 	require_key(errs, at, spec, "kind") // the zero value is manual: a missing kind must not silently stop the check

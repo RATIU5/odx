@@ -1,4 +1,3 @@
-#+feature using-stmt
 package lib
 
 import sys "core:os" // want: layering/R2
@@ -10,8 +9,7 @@ Point :: struct {
 foreign import libc "system:c" // want: layering/R4
 
 sum :: proc(p: Point) -> int {
-	using p // want: local/R1
-	return x + y
+	return p.x + p.y
 }
 
 first :: proc(xs: []int) -> int {

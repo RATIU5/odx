@@ -9,11 +9,14 @@ import "core:strings"
 
 // Claude Code hooks (17.10, 20.3). Input JSON arrives on stdin; exit 2 with text on stderr
 // blocks and feeds the text back to the model, exit 0 lets it through.
-//   hook edit:    family B on the edited file's package only (--fast); parse errors first.
+//   hook edit:    the compiler first (M2.1): parse errors, then `odin check` on the edited
+//                 file's package; odx's own rules (--fast) only once that is clean.
 //   hook changed: a protected path changed on disk; the lock says whether that is approved.
 //   hook stop:    the full check plus the lock. It blocks on every Stop, including the ones
-//                 with stop_hook_active set, until clean. Loop guard: after ODX_STOP_GUARD_MAX
-//                 (default 3) consecutive blocks with the same output it gives up loudly.
+//                 with stop_hook_active set, until clean. Loop guard (M2.3): the block text
+//                 carries statement + why; a second identical block adds the topic exemplars;
+//                 the ODX_STOP_GUARD_MAX-th (default 3, stricter than the harness cap of 8)
+//                 states the outcome and stops. Lock drift is printed, never blocked (M4.2).
 
 Hook_Input :: struct {
 	tool_input:       struct {
@@ -50,7 +53,8 @@ cmd_hook :: proc(o: Opts) {
 	case .edit:
 		hook_edit(&p, in_.tool_input.file_path)
 	case .changed:
-		if state, text := lock_check(p.root); state == .dirty {block(text)}
+		// reports, never refuses (M4.2): the drift is visible, the edit stands
+		if state, text := lock_check(p.root); state == .dirty {fmt.eprintln(text)}
 	case .stop:
 		hook_stop(&p) // stop_hook_active is expected: the guard below bounds the loop, not the flag
 	}
@@ -62,7 +66,7 @@ block :: proc(text: string) {
 	os.exit(EXIT_HOOK_BLOCK)
 }
 
-// hook_edit: PostToolBatch carries no single file_path; then the whole project, family B only.
+// hook_edit: PostToolBatch carries no single file_path; then the whole project.
 hook_edit :: proc(p: ^Project, file: string) {
 	fo := Opts {
 		fast           = true,
@@ -74,21 +78,49 @@ hook_edit :: proc(p: ^Project, file: string) {
 		rel, inside := rel_of(p.root, filepath.dir(abs))
 		// a file outside the root or excluded narrows nothing: check the whole project (17.10)
 		if inside && !is_excluded(&p.cfg, rel) {append(&fo.args, abs)}
+	} else {
+		// PostToolBatch names no file: changed files since HEAD (M3.2); outside git, everything
+		if files, in_git := changed_odin_files(p.root, "HEAD"); in_git {
+			if len(files) == 0 {return}
+			append(&fo.args, ..files)
+		}
 	}
 	c := make_ctx(p, fo.args[:])
-	if run_checks(&c, fo) != 0 {
+	// the compiler is ground truth and never a false positive: it goes first, alone (M2.1)
+	for pk in c.pkgs {
+		for d in pk.diags {
+			rel, _ := rel_of(c.root, d.pos.file)
+			note(c.r, "odin/syntax", "parse", rel, d.pos.line, d.pos.column, d.msg)
+		}
+	}
+	if len(c.r.violations) == 0 {run_family_a(&c)}
+	if finalize(c.r, false, HOOK_MAX_VIOLATIONS) != 0 {
 		print_tool_errors(c.r)
 		block(report_text(c.r))
+	}
+	c.r^ = {}
+	if run_checks(&c, fo) != 0 {
+		print_tool_errors(c.r)
+		block(hook_text(c.r))
 	}
 }
 
 hook_stop :: proc(p: ^Project) {
 	c := make_ctx(p, nil)
 	code := run_checks(&c, Opts{max_violations = HOOK_MAX_VIOLATIONS})
-	text := report_text(c.r)
+	text := hook_text(c.r)
+	// debt stays visible (M3.1, M3.3): one line each, only when non-zero
+	if n := c.r.summary.baselined;
+	   n > 0 {text = fmt.tprintf("%sodx: %d baselined violations remain\n", text, n)}
+	if n := len(added_ignores(p.root, project_ignores(&c))); n > 0 {
+		text = fmt.tprintf(
+			"%sodx: %d suppressions added since HEAD (odx ignores --added)\n",
+			text,
+			n,
+		)
+	}
 	if state, lock_text := lock_check(p.root); state == .dirty {
-		text = strings.concatenate({text, lock_text, "\n"})
-		code = max(code, EXIT_VIOLATION)
+		fmt.eprintln(lock_text) // visible on every stop, never a block (M4.2)
 	}
 	guard := join({p.root, GUARD_FILE})
 	if code == 0 {
@@ -98,16 +130,40 @@ hook_stop :: proc(p: ^Project) {
 	limit := STOP_GUARD_DEFAULT
 	if v, ok := strconv.parse_int(os.get_env("ODX_STOP_GUARD_MAX", context.temp_allocator));
 	   ok {limit = max(v, 1)} 	// 0 would disable the backstop
-	if n := guard_count(guard, text); n > limit {
+	switch n := guard_count(guard, text); {
+	case n >= limit:
 		fmt.eprint(text)
 		fmt.eprintfln(
 			"odx: loop guard exhausted after %d blocks; remaining violations are NOT fixed",
-			n - 1,
+			n,
 		)
 		os.remove(guard)
-		return
+	case n == 2:
+		// the same text again means the model is stuck: show what passing looks like (M2.3)
+		block(strings.concatenate({text, exemplars_for(&c)}))
+	case:
+		block(text)
 	}
-	block(text)
+}
+
+// exemplars_for: the compiling exemplar of every topic with a violation in the report.
+exemplars_for :: proc(c: ^Ctx) -> string {
+	b := strings.builder_make()
+	seen := make(map[string]bool, context.temp_allocator)
+	for v in c.r.violations {
+		topic, _, _ := strings.partition(v.rule, "/")
+		if topic in seen {continue}
+		seen[topic] = true
+		if t := find_topic(c.rb, topic); t != nil && t.exemplar != "" {
+			fmt.sbprintfln(
+				&b,
+				"\n// this compiles and passes every %s rule:\n%s",
+				topic,
+				t.exemplar,
+			)
+		}
+	}
+	return strings.to_string(b)
 }
 
 // guard_count returns how many consecutive stop blocks (including this one) had this output.

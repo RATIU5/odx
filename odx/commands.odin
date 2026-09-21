@@ -13,8 +13,8 @@ print_json :: proc(v: any) {
 	fmt.println(string(out))
 }
 
-cmd_topics :: proc(o: Opts) {
-	p := must_load(o, false)
+// list_topics is `odx explain` with no topic (M0.3 folded `odx topics` in).
+list_topics :: proc(o: Opts, p: ^Project) {
 	if o.json {
 		print_json(p.rb.topics[:])
 		return
@@ -33,10 +33,14 @@ cmd_explain :: proc(o: Opts) {
 		cmd_checklist(o)
 		return
 	}
-	if len(o.args) != 1 {fail("usage: odx explain <topic> [--rule R3]")}
+	if len(o.args) > 1 {fail("usage: odx explain [<topic>] [--rule R3]")}
 	p := must_load(o, false)
+	if len(o.args) == 0 {
+		list_topics(o, &p)
+		return
+	}
 	t := find_topic(&p.rb, o.args[0])
-	if t == nil {fail("unknown topic %q (see `odx topics`)", o.args[0])}
+	if t == nil {fail("unknown topic %q (see `odx explain`)", o.args[0])}
 	if o.json {
 		print_json(t^)
 		return
@@ -106,42 +110,6 @@ cmd_for :: proc(o: Opts) {
 	}
 	for t in matched {fmt.printfln("  %-12s %s", t.name, t.summary)}
 	if n == 0 {os.exit(EXIT_VIOLATION)}
-}
-
-cmd_ext :: proc(o: Opts) {
-	if len(o.args) != 1 ||
-	   (o.args[0] != "list" &&
-			   o.args[0] != "validate") {fail("usage: odx ext list | odx ext validate")}
-	p := load_project(o.root)
-	failed := len(p.errs) > 0
-	// ext validate = the loader in dry-run mode, every error listed (17.19)
-	switch {
-	case o.args[0] == "validate" && o.json:
-		print_json(struct {
-			ok:     bool,
-			errors: []string,
-		}{!failed, p.errs[:]})
-	case o.args[0] == "validate":
-		for e in p.errs {fmt.println(e)}
-		if !failed {fmt.printfln("ok: %d topics, %d disabled rules", len(p.rb.topics), len(p.cfg.disabled))}
-	case o.json:
-		print_json(struct {
-			root:     string,
-			topics:   []Topic,
-			disabled: map[string]string,
-			errors:   []string,
-		}{p.root, p.rb.topics[:], p.cfg.disabled, p.errs[:]})
-	case:
-		fmt.printfln("root: %s", p.root if p.root != "" else "(none)")
-		for t in p.rb.topics {
-			fmt.printf("  %-12s %s", t.name, t.source)
-			if t.overrides {fmt.print("  (overrides builtin)")}
-			fmt.println()
-		}
-		for id in sorted_keys(p.cfg.disabled) {fmt.printfln("  disabled %-14s %s", id, p.cfg.disabled[id])}
-		for e in p.errs {fmt.printfln("  error: %s", e)}
-	}
-	if failed {os.exit(EXIT_TOOL)}
 }
 
 // INIT_CONFIG is both what `odx init` writes and, parsed, the default Config.
@@ -225,6 +193,11 @@ cmd_init :: proc(o: Opts) {
 		fmt.println("wrote", mise)
 	}
 	if o.hooks {write_hooks(root)}
+	if len(package_dirs(root, &skip)) > 0 {
+		fmt.println(
+			"existing packages found: after filling in roles, `odx baseline regen` freezes their current violations so unrelated edits are not blocked",
+		)
+	}
 	gi := join({root, ".gitignore"})
 	if data, rerr := os.read_entire_file(gi, context.allocator);
 	   rerr == nil && !strings.contains(string(data), ".odx/cache/") {

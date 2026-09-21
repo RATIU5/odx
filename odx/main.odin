@@ -17,14 +17,11 @@ Opts :: struct {
 	verify:         bool, // doctor --verify-rulebook
 	relock:         bool, // doctor --relock
 	checklist:      bool, // explain --checklist
-	dry_run:        bool, // fix --propose
 	max_violations: int,
-	allow_dirty:    bool, // fix --allow-dirty
 	hooks:          bool, // init --hooks
-	list:           bool, // new --list
-	explain:        bool, // ask --explain
-	eval:           bool, // ask --eval
-	dir:            string, // new --dir
+	added:          bool, // ignores --added
+	stale:          bool, // ignores --stale
+	since:          string, // check --since <ref>
 	root:           string, // --root override; "" = walk up from cwd
 	rule:           string, // explain --rule
 	exemplar:       string, // check --exemplar <topic>
@@ -34,21 +31,16 @@ Opts :: struct {
 
 USAGE :: `usage: odx <command> [args] [--json] [--root <dir>]
 
-  topics                       list topics
-  explain <topic> [--rule R3]  rules, rationale, do/don't
-  explain [<topic>] --checklist   manual rules only, for an adversarial reviewer
+  check [<path>...] [--topic t] [--fast] [--strict] [--since <ref>] [--ci]   run checks (odx.baseline softens, never hides)
+  baseline add | regen         freeze current violations into odx.baseline (shrinks on its own; never grows from check)
   for <path>                   topics that apply to a file or package
-  ask "<question>" [--explain] topics that answer a question (local BM25; --eval: recall@3 over rules/ask-eval.json5)
-  check [<path>...] [--topic t] [--fast] [--strict] [--max-violations n]   run checks
-  ignores                      list every odx:ignore suppression
-  api [<path>...]              public API snapshots in api/<pkg>.txt (ODX_UPDATE_SNAPSHOTS=1 re-blesses)
-  new <template> <Name> [--dir d]   scaffold a package from a template (--list: templates)
-  doctor [--ci] [--verify-rulebook | --relock]   toolchain, flags, mise.toml drift, protected-path lock
-  fix [<path>...] [--propose] [--allow-dirty]    delete stale odx:ignore directives (--propose: print only)
+  explain [<topic>] [--rule R3]   no topic: list topics; with one: rules, rationale, do/don't
+  explain [<topic>] --checklist   manual rules only, for an adversarial reviewer
+  ignores [--added] [--stale]  every odx:ignore suppression; --added: not in HEAD; --stale: suppressing nothing
+  doctor [--ci] [--verify-rulebook | --relock]   toolchain, flags, config errors, mise.toml drift, lock
   hook edit | stop | changed   Claude Code hook entry points (read the hook JSON on stdin)
-  self-test                    run every tests/fixtures/* and diff its // want: markers
-  ext list | ext validate      project extensions in .odx/ and odx.json5
   init [--hooks]               write odx.json5 and mise.toml (--hooks: .claude/settings.json, CLAUDE.md)
+  self-test                    run every tests/fixtures/* and diff its // want: markers
 `
 
 fail :: proc(f: string, args: ..any) -> ! {
@@ -82,18 +74,12 @@ parse_opts :: proc(args: []string) -> (o: Opts) {
 			o.relock = true
 		case "--checklist":
 			o.checklist = true
-		case "--propose", "--dry-run":
-			o.dry_run = true
-		case "--allow-dirty":
-			o.allow_dirty = true
 		case "--hooks":
 			o.hooks = true
-		case "--list":
-			o.list = true
-		case "--explain":
-			o.explain = true
-		case "--eval":
-			o.eval = true
+		case "--added":
+			o.added = true
+		case "--stale":
+			o.stale = true
 		case "--max-violations":
 			if has_eq == "" {
 				if i + 1 >= len(args) {fail("%s needs a value", a)}
@@ -103,7 +89,7 @@ parse_opts :: proc(args: []string) -> (o: Opts) {
 			n, ok := strconv.parse_int(value)
 			if !ok || n < 0 {fail("--max-violations needs a non-negative integer")}
 			o.max_violations = n
-		case "--root", "--rule", "--topic", "--exemplar", "--dir":
+		case "--root", "--rule", "--topic", "--exemplar", "--since":
 			if has_eq == "" {
 				if i + 1 >= len(args) {fail("%s needs a value", a)}
 				i += 1
@@ -118,8 +104,8 @@ parse_opts :: proc(args: []string) -> (o: Opts) {
 				append(&o.topics, value)
 			case "--exemplar":
 				o.exemplar = value
-			case "--dir":
-				o.dir = value
+			case "--since":
+				o.since = value
 			}
 		case:
 			fail("unknown flag %s", a)
@@ -135,32 +121,22 @@ main :: proc() {
 	}
 	o := parse_opts(os.args[2:])
 	switch os.args[1] {
-	case "topics":
-		cmd_topics(o)
 	case "explain":
 		cmd_explain(o)
 	case "for":
 		cmd_for(o)
-	case "ask":
-		cmd_ask(o)
 	case "check":
 		cmd_check(o)
+	case "baseline":
+		cmd_baseline(o)
 	case "ignores":
 		cmd_ignores(o)
 	case "doctor":
 		cmd_doctor(o)
 	case "self-test":
 		cmd_selftest(o)
-	case "fix":
-		cmd_fix(o)
-	case "api":
-		cmd_api(o)
-	case "new":
-		cmd_new(o)
 	case "hook":
 		cmd_hook(o)
-	case "ext":
-		cmd_ext(o)
 	case "init":
 		cmd_init(o)
 	case "help", "--help", "-h":

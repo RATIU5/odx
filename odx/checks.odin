@@ -59,7 +59,16 @@ pos_of :: proc(c: ^Ctx, n: ^ast.Node) -> (file: string, line, col: int) {
 }
 
 // report is the one way a check emits a finding for a rule.
-report :: proc(c: ^Ctx, a: ^Active_Rule, file: string, line, col: int, msg: string) {
+// subject is the rule's semantic key for the baseline (M3.1): an import path, a symbol, a
+// declaration name. "" means this finding has no stable identity and cannot be baselined.
+report :: proc(
+	c: ^Ctx,
+	a: ^Active_Rule,
+	file: string,
+	line, col: int,
+	msg: string,
+	subject := "",
+) {
 	append(
 		&c.r.violations,
 		Violation {
@@ -72,14 +81,17 @@ report :: proc(c: ^Ctx, a: ^Active_Rule, file: string, line, col: int, msg: stri
 			message = msg,
 			ignorable = a.rule.ignorable,
 			class = a.rule.class,
+			statement = a.rule.statement,
+			why = a.rule.why,
+			subject = subject,
 		},
 	)
 }
 
 // report_at is report for an AST node.
-report_at :: proc(c: ^Ctx, a: ^Active_Rule, n: ^ast.Node, msg: string) {
+report_at :: proc(c: ^Ctx, a: ^Active_Rule, n: ^ast.Node, msg: string, subject := "") {
 	file, line, col := pos_of(c, n)
-	report(c, a, file, line, col, msg)
+	report(c, a, file, line, col, msg, subject)
 }
 
 run_family_b :: proc(c: ^Ctx) {
@@ -106,6 +118,7 @@ run_family_b :: proc(c: ^Ctx) {
 						1,
 						1,
 						"package directory has no role in odx.json5",
+						p.rel if p.rel != "" else ".",
 					)
 				}
 			case .vet_tag:
@@ -137,6 +150,28 @@ vet_tag_names :: proc(f: ^ast.File) -> []string {
 
 // 17.2: `#+vet !x` silently defeats -vet; never ignorable, only allow-listable in config.
 check_vet_disables :: proc(c: ^Ctx, f: ^ast.File) {
+	lines := strings.split_lines(f.src, context.temp_allocator)
+	for tok in f.tags {
+		t := strings.trim_space(strings.trim_prefix(tok.text, "#+"))
+		if !strings.has_prefix(t, "feature") {continue}
+		if strings.contains(lines[tok.pos.line - 1], "// reason:") {continue} 	// a stated reason
+		file, _ := rel_of(c.root, f.fullpath)
+		note(
+			c.r,
+			"odx/feature-optout",
+			"vet_tags",
+			file,
+			tok.pos.line,
+			1,
+			strings.concatenate(
+				{
+					"`",
+					tok.text,
+					"` opts out of a compiler guarantee; add `// reason: <why>` on that line",
+				},
+			),
+		)
+	}
 	for name in vet_tag_names(f) {
 		if !strings.has_prefix(name, "!") {continue}
 		if i, ok := slice.linear_search(c.cfg.odin.allowed_vet_disables, name[1:]); ok {
@@ -175,7 +210,7 @@ check_explicit_allocators :: proc(c: ^Ctx, p: ^Package, a: ^Active_Rule) {
 	for f in p.files {
 		if slice.contains(vet_tag_names(f), "explicit-allocators") {continue}
 		file, _ := rel_of(c.root, f.fullpath)
-		report(c, a, file, 1, 1, "file must start with `#+vet explicit-allocators`")
+		report(c, a, file, 1, 1, "file must start with `#+vet explicit-allocators`", file)
 	}
 }
 
@@ -219,6 +254,7 @@ check_imports :: proc(c: ^Ctx, p: ^Package, a: ^Active_Rule) {
 				a,
 				&imp.node,
 				strings.concatenate({p.role, " package may not import ", what}),
+				path,
 			)
 		}
 	}
@@ -239,8 +275,8 @@ import_matches :: proc(globs: []string, path: string) -> bool {
 	return false
 }
 
-// banned_construct: mutable_global and foreign are declaration-level; using and
-// no_bounds_check need a full walk.
+// banned_construct: mutable_global and foreign are declaration-level; no_bounds_check needs a
+// full walk. `using` as a statement is a compiler error by default (M1.1), so odx does not own it.
 check_construct :: proc(c: ^Ctx, p: ^Package, a: ^Active_Rule) {
 	in_role := strings.concatenate({" in a ", p.role, " package"}, context.temp_allocator)
 	for f in p.files {
@@ -253,6 +289,7 @@ check_construct :: proc(c: ^Ctx, p: ^Package, a: ^Active_Rule) {
 						a,
 						&vd.node,
 						strings.concatenate({"mutable package-level variable", in_role}),
+						ident_name(vd.names[0]),
 					)
 				}
 			}
@@ -260,12 +297,24 @@ check_construct :: proc(c: ^Ctx, p: ^Package, a: ^Active_Rule) {
 			for d in f.decls {
 				#partial switch fd in d.derived {
 				case ^ast.Foreign_Import_Decl:
-					report_at(c, a, &fd.node, strings.concatenate({"foreign import", in_role}))
+					report_at(
+						c,
+						a,
+						&fd.node,
+						strings.concatenate({"foreign import", in_role}),
+						ident_name(fd.name),
+					)
 				case ^ast.Foreign_Block_Decl:
-					report_at(c, a, &fd.node, strings.concatenate({"foreign block", in_role}))
+					report_at(
+						c,
+						a,
+						&fd.node,
+						strings.concatenate({"foreign block", in_role}),
+						ident_name(fd.foreign_library),
+					)
 				}
 			}
-		case .using_stmt, .no_bounds_check:
+		case .no_bounds_check:
 			walk := Walk{c, a, nil}
 			v := ast.Visitor {
 				visit = visit_construct,
@@ -288,8 +337,6 @@ visit_construct :: proc(v: ^ast.Visitor, n: ^ast.Node) -> ^ast.Visitor {
 	w := cast(^Walk)v.data
 	hit := false
 	#partial switch w.a.rule.check.construct {
-	case .using_stmt:
-		_, hit = n.derived.(^ast.Using_Stmt)
 	case .no_bounds_check:
 		pl, is_proc := n.derived.(^ast.Proc_Lit)
 		hit = .No_Bounds_Check in n.state_flags || (is_proc && .No_Bounds_Check in pl.tags)
@@ -342,7 +389,7 @@ visit_call :: proc(v: ^ast.Visitor, n: ^ast.Node) -> ^ast.Visitor {
 		}
 	}
 	if name != "" && slice.contains(w.a.rule.check.names, name) {
-		report_at(w.c, w.a, n, strings.concatenate({"call to ", name}))
+		report_at(w.c, w.a, n, strings.concatenate({"call to ", name}), name)
 	}
 	return v
 }
@@ -365,4 +412,11 @@ report_stale_config :: proc(c: ^Ctx) {
 			strings.concatenate({key, " matched nothing"}),
 		)
 	}
+}
+
+// ident_name: the identifier's name, "" for nil or a non-identifier expression.
+ident_name :: proc(e: ^ast.Expr) -> string {
+	if e == nil {return ""}
+	if id, ok := e.derived.(^ast.Ident); ok {return id.name}
+	return ""
 }

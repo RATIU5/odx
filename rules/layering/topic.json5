@@ -15,7 +15,6 @@
     {
       id: "R1",
       class: "layering_unroled_package",
-      ignorable: false,
       statement: "Every package directory maps to exactly one role in odx.json5.",
       why: "Unmapped code has no rules; doubly mapped code has contradictory ones.",
       severity: "error",
@@ -32,16 +31,16 @@
     {
       id: "R3",
       class: "layering_hidden_state",
-      statement: "No mutable package-level variables in pure packages; pass state as a parameter.",
-      why: "Hidden state makes two calls with the same arguments give different answers.",
+      statement: "No mutable package-level variables in pure or service packages; pass state as a parameter.",
+      why: "'Globals and/or thread local variables... are just dreadful solutions.' Hidden state makes two calls with the same arguments give different answers. Edge packages own the process and are the one place a global may live.",
       severity: "error",
-      check: { kind: "banned_construct", construct: "mutable_global", roles: ["pure"] },
+      check: { kind: "banned_construct", construct: "mutable_global", roles: ["pure", "service"] },
     },
     {
       id: "R4",
       class: "layering_foreign_placement",
       statement: "foreign imports and foreign blocks live only in edge packages.",
-      why: "The FFI boundary is where memory and calling conventions change; keep it in one place.",
+      why: "The FFI boundary is where the ABI and calling convention change; keep it in one place. This is a mechanical justification, not a taxonomic one.",
       severity: "error",
       check: { kind: "banned_construct", construct: "foreign_decl", except_roles: ["edge"] },
     },
