@@ -4,7 +4,7 @@ import "core:fmt"
 import "core:os"
 import "core:strings"
 
-// `odx doctor`: the toolchain and task-file drift report (sections 3, 17.11, 17.15, 20.3).
+// `odx doctor`: the toolchain and task-file drift report.
 // Errors exit 2: config broken, odin missing, a forbidden flag in use, a dirty lock.
 // Everything else is a warning, except version drift under --ci.
 
@@ -28,8 +28,7 @@ cmd_doctor :: proc(o: Opts) {
 	p := load_project(o.root)
 	d: Doctor
 	if p.root == "" {
-		// no odx.json5: still useful (M4). Guarantees are reported against an empty flag set,
-		// so every one reads "off" with the default set named as the fix.
+		// no odx.json5: guarantees are reported against an empty flag set, so all read "off"
 		warn(
 			&d,
 			"no %s here or in any parent; `odx init` writes one with the default guarantees",
@@ -40,7 +39,7 @@ cmd_doctor :: proc(o: Opts) {
 		p.cfg.exclude = {".*", ".*/**", "build/**", "vendor/**"}
 		p.dirs = package_dirs(p.root, &p.cfg)
 	}
-	for e in p.errs {err(&d, "%s", e)} 	// `ext validate` folded in (M0.3): every config error, not the first
+	for e in p.errs {err(&d, "%s", e)}
 	if d.errors > 0 {
 		fmt.printfln("%d errors, %d warnings", d.errors, d.warnings)
 		os.exit(EXIT_TOOL)
@@ -50,9 +49,7 @@ cmd_doctor :: proc(o: Opts) {
 	report_guarantees(&d, &c, odin_output(odin_exe(c.cfg), "help", "check"))
 	report_dependencies(&c)
 	check_task_files(&d, &p)
-	// one check path, three entry points (M4.3): hook, CI and mise all run this argv
 	fmt.println("check argv: odx check  (Stop hook, mise task, CI via `mise run ci`)")
-	// the canonical argv (20.3): the hook, CI and this all shell out to the same odin flags
 	fmt.printfln(
 		"expected test task: odin test . %s %s",
 		strings.join(odin_flags(&c), " ", context.temp_allocator),
@@ -76,7 +73,6 @@ cmd_doctor :: proc(o: Opts) {
 	if d.errors > 0 {os.exit(EXIT_TOOL)}
 }
 
-// check_toolchain: odin runs, its version matches, and `odin check` accepts every config flag.
 check_toolchain :: proc(d: ^Doctor, c: ^Ctx, ci: bool) {
 	exe := odin_exe(c.cfg)
 	version := odin_output(exe, "version")
@@ -110,8 +106,6 @@ check_toolchain :: proc(d: ^Doctor, c: ^Ctx, ci: bool) {
 	}
 }
 
-// check_task_files: mise.toml carries the required flags and none of the forbidden ones; the
-// hook config and CI workflow call odx rather than a copy of it (20.3).
 check_task_files :: proc(d: ^Doctor, p: ^Project) {
 	if mise, rerr := os.read_entire_file(join({p.root, "mise.toml"}), context.allocator);
 	   rerr == nil {
@@ -154,7 +148,7 @@ check_task_files :: proc(d: ^Doctor, p: ^Project) {
 	}
 }
 
-// check_attachment: a topic whose roles no package has never attaches (20.10).
+// check_attachment: a topic whose roles no package has never attaches.
 check_attachment :: proc(d: ^Doctor, c: ^Ctx) {
 	roles_in_use := make(map[string]bool, context.temp_allocator)
 	for pk in c.pkgs {if pk.role_count == 1 {roles_in_use[pk.role] = true}}
@@ -165,7 +159,7 @@ check_attachment :: proc(d: ^Doctor, c: ^Ctx) {
 	}
 }
 
-// odin_output runs odin with args and returns stdout+stderr trimmed, "" if it cannot run.
+// odin_output returns stdout+stderr trimmed, "" if odin cannot run.
 odin_output :: proc(exe: string, args: ..string) -> string {
 	cmd := make([dynamic]string, context.temp_allocator)
 	append(&cmd, exe)

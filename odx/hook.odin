@@ -7,16 +7,8 @@ import "core:path/filepath"
 import "core:strconv"
 import "core:strings"
 
-// Claude Code hooks (17.10, 20.3). Input JSON arrives on stdin; exit 2 with text on stderr
-// blocks and feeds the text back to the model, exit 0 lets it through.
-//   hook edit:    the compiler first (M2.1): parse errors, then `odin check` on the edited
-//                 file's package; odx's own rules (--fast) only once that is clean.
-//   hook changed: a protected path changed on disk; the lock says whether that is approved.
-//   hook stop:    the full check plus the lock. It blocks on every Stop, including the ones
-//                 with stop_hook_active set, until clean. Loop guard (M2.3): the block text
-//                 carries statement + why; a second identical block adds the topic exemplars;
-//                 the ODX_STOP_GUARD_MAX-th (default 3, stricter than the harness cap of 8)
-//                 states the outcome and stops. Lock drift is printed, never blocked (M4.2).
+// Claude Code hooks: input JSON arrives on stdin; exit 2 with text on stderr blocks and
+// feeds the text back to the model, exit 0 lets it through.
 
 Hook_Input :: struct {
 	tool_input:       struct {
@@ -33,7 +25,7 @@ Hook :: enum {
 
 EXIT_HOOK_BLOCK :: 2 // Claude Code's "block and show stderr to the model"
 GUARD_FILE :: ".odx/cache/stop-guard"
-STOP_GUARD_DEFAULT :: 3 // stricter than the harness cap of 8, deliberately (20.3)
+STOP_GUARD_DEFAULT :: 3
 HOOK_MAX_VIOLATIONS :: 50
 
 cmd_hook :: proc(o: Opts) {
@@ -53,7 +45,7 @@ cmd_hook :: proc(o: Opts) {
 	case .edit:
 		hook_edit(&p, in_.tool_input.file_path)
 	case .changed:
-		// reports, never refuses (M4.2): the drift is visible, the edit stands
+		// a protected path changed on disk: report lock drift, never refuse
 		if state, text := lock_check(p.root); state == .dirty {fmt.eprintln(text)}
 	case .stop:
 		hook_stop(&p) // stop_hook_active is expected: the guard below bounds the loop, not the flag
@@ -66,7 +58,7 @@ block :: proc(text: string) {
 	os.exit(EXIT_HOOK_BLOCK)
 }
 
-// hook_edit: PostToolBatch carries no single file_path; then the whole project.
+// file is empty for PostToolBatch, which carries no single file_path.
 hook_edit :: proc(p: ^Project, file: string) {
 	fo := Opts {
 		fast           = true,
@@ -76,17 +68,17 @@ hook_edit :: proc(p: ^Project, file: string) {
 		if !strings.has_suffix(file, ".odin") {return}
 		abs := canonical(file)
 		rel, inside := rel_of(p.root, filepath.dir(abs))
-		// a file outside the root or excluded narrows nothing: check the whole project (17.10)
+		// a file outside the root or excluded narrows nothing: check the whole project
 		if inside && !is_excluded(&p.cfg, rel) {append(&fo.args, abs)}
 	} else {
-		// PostToolBatch names no file: changed files since HEAD (M3.2); outside git, everything
+		// changed files since HEAD; outside git, everything
 		if files, in_git := changed_odin_files(p.root, "HEAD"); in_git {
 			if len(files) == 0 {return}
 			append(&fo.args, ..files)
 		}
 	}
 	c := make_ctx(p, fo.args[:])
-	// the compiler is ground truth and never a false positive: it goes first, alone (M2.1)
+	// the compiler is ground truth and never a false positive: it goes first, alone
 	for pk in c.pkgs {
 		for d in pk.diags {
 			rel, _ := rel_of(c.root, d.pos.file)
@@ -106,12 +98,14 @@ hook_edit :: proc(p: ^Project, file: string) {
 	}
 }
 
+// Blocks on every Stop until clean. A repeat of identical output adds the topic exemplars;
+// ODX_STOP_GUARD_MAX identical blocks (default 3) states the outcome and stops. Lock drift is
+// printed, never blocked.
 hook_stop :: proc(p: ^Project) {
 	c := make_ctx(p, nil)
 	run_checks(&c, Opts{max_violations = HOOK_MAX_VIOLATIONS})
-	code := EXIT_VIOLATION if hook_blocks(c.r) else 0 // advisory rules never enter the loop (P4)
+	code := EXIT_VIOLATION if hook_blocks(c.r) else 0 // advisory rules never enter the loop
 	text := hook_text(c.r)
-	// debt stays visible (M3.1, M3.3): one line each, only when non-zero
 	if n := c.r.summary.baselined;
 	   n > 0 {text = fmt.tprintf("%sodx: %d baselined violations remain\n", text, n)}
 	if n := len(added_ignores(p.root, project_ignores(&c))); n > 0 {
@@ -122,7 +116,7 @@ hook_stop :: proc(p: ^Project) {
 		)
 	}
 	if state, lock_text := lock_check(p.root); state == .dirty {
-		fmt.eprintln(lock_text) // visible on every stop, never a block (M4.2)
+		fmt.eprintln(lock_text)
 	}
 	guard := join({p.root, GUARD_FILE})
 	if code == 0 {
@@ -141,14 +135,13 @@ hook_stop :: proc(p: ^Project) {
 		)
 		os.remove(guard)
 	case n == 2:
-		// the same text again means the model is stuck: show what passing looks like (M2.3)
+		// the same text again means the model is stuck: show what passing looks like
 		block(strings.concatenate({text, exemplars_for(&c)}))
 	case:
 		block(text)
 	}
 }
 
-// exemplars_for: the compiling exemplar of every topic with a violation in the report.
 exemplars_for :: proc(c: ^Ctx) -> string {
 	b := strings.builder_make()
 	seen := make(map[string]bool, context.temp_allocator)

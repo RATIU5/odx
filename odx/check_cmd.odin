@@ -3,11 +3,9 @@ package odx
 import "core:fmt"
 import "core:os"
 
-// cmd_check: `odx check [<path>...] [--topic t]... [--fast] [--exemplar <topic>]` (17.12).
 cmd_check :: proc(o: Opts) {
 	p := must_load(o, o.exemplar == "")
 	if o.exemplar != "" {
-		// CI mode (17.6): the topic's example/ directory is the project.
 		t := find_topic(&p.rb, o.exemplar)
 		if t == nil {fail("unknown topic %q", o.exemplar)}
 		if p.root == "" {p.root, _ = os.get_working_directory(context.allocator)}
@@ -21,7 +19,7 @@ cmd_check :: proc(o: Opts) {
 		in_git: bool
 		paths, in_git = changed_odin_files(p.root, o.since)
 		if !in_git {fail("--since needs a git worktree")}
-		if len(paths) == 0 {os.exit(0)} 	// nothing changed: nothing to check
+		if len(paths) == 0 {os.exit(0)}
 	}
 	c := make_ctx(&p, paths, o.topics[:])
 	code := run_checks(&c, o)
@@ -29,9 +27,8 @@ cmd_check :: proc(o: Opts) {
 	os.exit(code)
 }
 
-// run_checks is the whole pipeline (families B, A, C, ignores, stale config) on a context.
 run_checks :: proc(c: ^Ctx, o: Opts) -> int {
-	full := !o.fast && len(o.topics) == 0 && len(o.args) == 0 && o.since == "" // nothing narrowed (20.2)
+	full := !o.fast && len(o.topics) == 0 && len(o.args) == 0 && o.since == ""
 	run_family_b(c)
 	igs := project_ignores(c)
 	if !o.fast {
@@ -61,7 +58,7 @@ cmd_ignores :: proc(o: Opts) {
 	p := must_load(o, true)
 	c := make_ctx(&p, nil)
 	if o.stale {
-		// the stale set is a byproduct of a full check (M3.3), never a second pass
+		// the stale set is a byproduct of a full check, never a second pass
 		run_checks(&c, Opts{})
 		for v in c.r.violations {if v.rule == "odx/stale-ignore" {fmt.printfln("%s:%d:%d: %s", v.file, v.line, v.col, v.message)}}
 		return

@@ -1,4 +1,4 @@
-// M0 spike: parse `odin doc <pkg>` text into (kind, name, signature, doc) entries.
+// Spike: parse `odin doc <pkg>` text into (kind, name, signature, doc) entries.
 // `-short` drops doc comments, so the full form is parsed. Layout (tab-indented):
 //   package X / \tsection / \t\tNAME :: SIG [/* n!m */] / \t\t\tdoc line
 package docshort
@@ -17,7 +17,6 @@ parse_doc :: proc(text: string, allocator := context.allocator) -> []Entry {
 	text := text
 	for line in strings.split_lines_iterator(&text) {
 		if strings.has_prefix(line, "\t\t\t") {
-			// doc line, attach to last entry
 			if len(out) > 0 {
 				e := &out[len(out) - 1]
 				d := strings.trim_space(line)
@@ -26,7 +25,6 @@ parse_doc :: proc(text: string, allocator := context.allocator) -> []Entry {
 		} else if strings.has_prefix(line, "\t\t") {
 			l := strings.trim_space(line)
 			if section == "fullpath:" || section == "files:" || l == "" {continue}
-			// strip trailing `/* n!m */` marker
 			if i := strings.last_index(l, " /* "); i >= 0 {l = l[:i]}
 			name, _, sig := strings.partition(l, " :: ")
 			if sig == "" {name, _, sig = strings.partition(l, ": ")}
@@ -55,7 +53,6 @@ main :: proc() {
 	for e in entries {
 		fmt.printfln("%-10s %-8s %-45s %q", e.kind, e.name, e.sig, e.doc)
 	}
-	// self-check
 	assert(len(entries) == 6, "expected 6 entries from sample/lib")
 	assert(entries[3].name == "open" && entries[3].doc == "open opens a thing.")
 }

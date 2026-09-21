@@ -6,7 +6,7 @@ import "core:os"
 import "core:path/filepath"
 import "core:strings"
 
-// Family A: `odin check <pkg> -json-errors` per project package, re-emitted with rule ids (17.1).
+// Family A: `odin check <pkg> -json-errors` per project package, re-emitted with rule ids.
 
 Odin_Errors :: struct {
 	error_count: int,
@@ -26,8 +26,7 @@ odin_exe :: proc(cfg: ^Config) -> string {
 	return "odin"
 }
 
-// odin_flags: the flags every odin invocation shares: config flags plus the derived
-// -vet-packages / -collection / -custom-attribute set. Callers append their own.
+// odin_flags: config flags plus the derived -vet-packages / -collection / -custom-attribute.
 odin_flags :: proc(c: ^Ctx) -> []string {
 	out := make([dynamic]string)
 	append(&out, ..c.cfg.odin.flags)
@@ -52,7 +51,7 @@ odin_flags :: proc(c: ^Ctx) -> []string {
 	return out[:]
 }
 
-// run_odin executes odin with args; ok is false when it could not be started at all.
+// run_odin: ok is false when odin could not be started at all.
 run_odin :: proc(c: ^Ctx, args: ..string) -> (exit_code: int, stderr: string, ok: bool) {
 	cmd := make([dynamic]string, context.temp_allocator)
 	append(&cmd, odin_exe(c.cfg))
@@ -84,7 +83,7 @@ run_family_a :: proc(c: ^Ctx) {
 		if !ok {return}
 		if text == "" {
 			if code != 0 {tool_error(c.r, "odin check %s exited %d with no output", p.rel, code)}
-			continue // 17.1: nothing printed on a clean run
+			continue
 		}
 		oe: Odin_Errors
 		if uerr := json.unmarshal_string(text, &oe); uerr != nil {
@@ -94,7 +93,7 @@ run_family_a :: proc(c: ^Ctx) {
 		// odin type-checks dependencies too; each package reports only its own files, and a
 		// broken dependency becomes one summary line so the failure is never silent.
 		foreign_errors := 0
-		seen := make(map[string]bool, context.temp_allocator) // odin repeats some diagnostics (20.8)
+		seen := make(map[string]bool, context.temp_allocator) // odin repeats some diagnostics
 		for e in oe.errors {
 			key := fmt.tprintf("%s:%d:%d:%s", e.pos.file, e.pos.line, e.pos.column, e.msgs)
 			if key in seen {continue}
@@ -131,7 +130,7 @@ run_family_a :: proc(c: ^Ctx) {
 }
 
 // classify_odin_message maps a compiler diagnostic to a rule id: `@(deprecated="<topic>/<R>: …")`
-// re-emits under that rule (17.1), everything else is odin/error or odin/warning.
+// re-emits under that rule, everything else is odin/error or odin/warning.
 classify_odin_message :: proc(c: ^Ctx, type, msg: string) -> (rule, out: string) {
 	rule = "odin/error" if type == "error" else "odin/warning"
 	out = strings.join(strings.fields(msg, context.temp_allocator), " ") // collapse the tabbed follow-up notes

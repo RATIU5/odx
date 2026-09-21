@@ -3,7 +3,6 @@ package odx
 import "core:strings"
 import "core:testing"
 
-// The block message must be self-sufficient (M2.2): body once per rule, hatch only if ignorable.
 @(test)
 test_hook_text_dedups_by_rule :: proc(t: ^testing.T) {
 	context.allocator = context.temp_allocator
@@ -41,7 +40,6 @@ test_hook_text_dedups_by_rule :: proc(t: ^testing.T) {
 	testing.expect(t, strings.contains(out, "// odx:ignore x/R1 reason:"))
 }
 
-// The output contract (M10.2): baselined findings never count, truncation is reported.
 @(test)
 test_finalize_counts_and_omitted :: proc(t: ^testing.T) {
 	context.allocator = context.temp_allocator

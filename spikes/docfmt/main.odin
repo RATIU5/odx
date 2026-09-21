@@ -1,4 +1,4 @@
-// M0 spike: run `odin doc <pkg> -doc-format`, read it with core:odin/doc-format,
+// Spike: run `odin doc <pkg> -doc-format`, read it with core:odin/doc-format,
 // list every entity per non-runtime package, and join each to its AST Value_Decl
 // by (file, line, column).
 package docfmt
@@ -32,7 +32,7 @@ main :: proc() {
 		context.allocator,
 	)
 	if perr != nil || state.exit_code != 0 || !os.exists(out) {
-		// 19.2: type errors -> no file written; caller falls back to -json-errors
+		// type errors -> no file written; caller falls back to -json-errors
 		fmt.eprintfln("odin doc failed (exit %d), no output file: %s", state.exit_code, stderr)
 		os.exit(2)
 	}
@@ -65,7 +65,6 @@ main :: proc() {
 		if strings.contains(full, "/core/") || strings.contains(full, "/base/") {continue}
 		fmt.printfln("PKG %s  %s", doc.from_string(h, pkg.name), full)
 
-		// AST side: parse the package once, index decls by (file base, line, col)
 		Key :: struct {
 			file:      string,
 			line, col: int,

@@ -9,23 +9,22 @@ Severity :: enum {
 	warning,
 }
 
-// Violation is the one output record (17.11).
 Violation :: struct {
 	file:      string, // relative to root
 	line:      int,
 	col:       int,
 	rule:      string, // "topic/R3", "odin/error", "odx/bad-ignore"
 	severity:  Severity,
-	check:     string, // the check kind or family that produced it
+	check:     string,
 	message:   string,
 	ignorable: bool,
-	class:     string, // stable greppable name from the rule's frontmatter (20.4); "" for odin/odx findings
-	statement: string, // the rule's statement and why (M2.2), so a block message is self-sufficient
+	class:     string, // stable greppable name from the rule's frontmatter; "" for odin/odx findings
+	statement: string, // the rule's statement and why, so a block message is self-sufficient
 	why:       string,
-	subject:   string, // stable semantic key (M3.1); "" = not baselineable
+	subject:   string, // stable semantic key; "" = not baselineable
 	baselined: bool, // listed in odx.baseline: printed, never fails the build
-	blocking:  bool, // P4: the hook may block on it; notes (odin/*, odx/*) always are
-	fires:     string, // the rule's compiled violating and correct forms (M8), "" for notes
+	blocking:  bool, // the hook may block on it; notes (odin/*, odx/*) always are
+	fires:     string, // the rule's compiled violating and correct forms, "" for notes
 	silent:    string,
 }
 
@@ -67,7 +66,6 @@ sort_violations :: proc(vs: []Violation) {
 	})
 }
 
-// finalize sorts, tallies and returns the exit code (17.11).
 finalize :: proc(r: ^Report, strict: bool, max_violations := 0) -> int {
 	r.schema = 1
 	sort_violations(r.violations[:])
@@ -83,7 +81,6 @@ finalize :: proc(r: ^Report, strict: bool, max_violations := 0) -> int {
 			r.summary.warnings += 1
 		}
 	}
-	// truncation is reported, never silent (20.8)
 	if max_violations > 0 && len(r.violations) > max_violations {
 		r.summary.omitted = len(r.violations) - max_violations
 		resize(&r.violations, max_violations)
@@ -111,7 +108,6 @@ print_tool_errors :: proc(r: ^Report) {
 
 BASELINED_TAG :: " [baselined]"
 
-// report_text: one line per violation, the human format (17.11).
 report_text :: proc(r: ^Report) -> string {
 	b := strings.builder_make()
 	for v in r.violations {
@@ -135,17 +131,16 @@ report_text :: proc(r: ^Report) -> string {
 	return strings.to_string(b)
 }
 
-// hook_blocks: does this report contain anything the hook should wall on (P4)? Advisory
-// rules and baselined findings are printed but never block.
+// hook_blocks: advisory rules and baselined findings are printed but never block.
 hook_blocks :: proc(r: ^Report) -> bool {
 	if len(r.tool_errors) > 0 {return true}
 	for v in r.violations {if v.blocking && !v.baselined {return true}}
 	return false
 }
 
-// hook_text is report_text for the model (M2.2): the first violation of each rule carries the
+// hook_text is report_text for the model: the first violation of each rule carries the
 // statement, the why, and the exact escape hatch (only when the rule takes one); later ones are
-// bare location lines. Compiler findings never have a body. M8 adds fires/silent here.
+// bare location lines. Compiler findings never have a body.
 hook_text :: proc(r: ^Report) -> string {
 	b := strings.builder_make()
 	seen := make(map[string]bool, context.temp_allocator)

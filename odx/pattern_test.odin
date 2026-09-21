@@ -4,8 +4,6 @@ import "core:odin/ast"
 import "core:odin/parser"
 import "core:testing"
 
-// The proc filters behind `match: proc`: exported-ness from attributes, the parameter at an
-// index by name count, the type identifier through pointers and selectors.
 @(test)
 test_pattern_proc_filters :: proc(t: ^testing.T) {
 	context.allocator = context.temp_allocator

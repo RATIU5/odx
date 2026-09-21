@@ -13,7 +13,6 @@ print_json :: proc(v: any) {
 	fmt.println(string(out))
 }
 
-// list_topics is `odx explain` with no topic (M0.3 folded `odx topics` in).
 list_topics :: proc(o: Opts, p: ^Project) {
 	if o.json {
 		print_json(p.rb.topics[:])
@@ -88,7 +87,6 @@ cmd_explain :: proc(o: Opts) {
 	fmt.print(t.prose)
 }
 
-// cmd_checklist prints the example-only rules (section 10): what a reviewer checks that odx check cannot.
 cmd_checklist :: proc(o: Opts) {
 	p := must_load(o, false)
 	for t in p.rb.topics {
@@ -134,8 +132,7 @@ cmd_for :: proc(o: Opts) {
 	if o.brief {
 		for t in matched {fmt.printfln("  %-12s %s", t.name, t.summary)}
 	} else {
-		// the rules themselves (M5.1): one call is enough to write the file. Errors before
-		// warnings, blocking before advisory: the head of the list gets read.
+		// Errors before warnings, blocking before advisory: the head of the list gets read.
 		for t in matched {
 			fmt.printfln("\n%s: %s", t.name, t.summary)
 			rs := slice.clone(t.rules, context.temp_allocator)
@@ -161,12 +158,11 @@ cmd_for :: proc(o: Opts) {
 			}
 		}
 	}
-	// the derived reach, config-free (M7.2): the one fact every caller of this package wants
 	c := make_ctx(&p, {abs})
 	for &pk in c.pkgs {if pk.rel == rel && pk.pkg != nil {fmt.printfln("  %s", reach_line(&c, &pk))}}
 }
 
-// INIT_CONFIG is both what `odx init` writes and, parsed, the default Config.
+// INIT_CONFIG_HEAD + BODY is both what `odx init` writes and, parsed, the default Config.
 INIT_CONFIG_HEAD :: `{
   // Package roles: each glob is a directory path relative to this file (17.5).
   // Every package must match exactly one role. Detected package directories:
@@ -222,11 +218,10 @@ cmd_init :: proc(o: Opts) {
 	cfg_path := join({root, CONFIG_FILE})
 	if os.exists(cfg_path) {
 		if !o.hooks {fail("%s already exists", cfg_path)}
-		write_hooks(root) // existing project: --hooks adds only the hook files
+		write_hooks(root)
 		return
 	}
 
-	// the detected package directories go into the header comment as a hint for the human
 	b := strings.builder_make()
 	strings.write_string(&b, INIT_CONFIG_HEAD)
 	skip := Config {
@@ -261,7 +256,6 @@ cmd_init :: proc(o: Opts) {
 	}
 }
 
-// Claude Code hooks (17.10): the binary reads the hook JSON itself, so no jq and no wrapper script.
 // The FileChanged matcher is PROTECTED verbatim, so the two can never drift.
 INIT_HOOKS_HEAD :: `{
   "hooks": {

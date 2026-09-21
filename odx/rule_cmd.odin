@@ -6,9 +6,6 @@ import "core:os"
 import "core:strconv"
 import "core:strings"
 
-// `odx rule try|add|test` (M9.2, M9.3): the authoring ramp. try measures a candidate check
-// against the project before any file exists; add scaffolds the file; test runs its blocks.
-
 cmd_rule :: proc(o: Opts) {
 	if len(o.args) == 0 {fail("usage: odx rule try|add|test ...")}
 	switch o.args[0] {
@@ -26,8 +23,7 @@ cmd_rule :: proc(o: Opts) {
 	}
 }
 
-// rule_try runs one inline check spec (or a drafted .odx.md) and prints every match. Nothing
-// is written; ignores, baseline and stale-config are skipped so the count is the raw one.
+// rule_try writes nothing; ignores, baseline and stale-config are skipped so the count is raw.
 rule_try :: proc(o: Opts) {
 	r := new(Rule)
 	r.severity = .error
@@ -89,9 +85,8 @@ Why this idiom exists, in a paragraph a reader can act on.
 
 ` + "```odin prelude\n```\n\n```odin fires\n```\n\n```odin silent\n```\n"
 
-// rule_add scaffolds <topic dir>/<id>.odx.md with the next free id. Built-in topics live under
-// rules/ (the odx repo), project topics under .odx/topics/; both are lock-protected, so the
-// human who runs this also relocks.
+// rule_add: built-in topics live under rules/, project topics under .odx/topics/; both are
+// lock-protected, so the human who runs this also relocks.
 rule_add :: proc(o: Opts) {
 	if len(o.args) < 2 {fail("usage: odx rule add <topic> [--id R5]")}
 	p := must_load(o, true)

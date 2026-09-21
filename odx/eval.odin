@@ -9,14 +9,8 @@ import "core:strconv"
 import "core:strings"
 import "core:time"
 
-// `odx eval` (M6.1): does any of this work? Each evals/<task>/ holds prompt.md, score_test.odin
-// and an optional start/ tree. Every task runs under three conditions in a scratch project:
-//   bare   the prompt alone
-//   for    the prompt with `odx for task` output injected first
-//   hook   the prompt with the odx hooks wired into .claude/settings.json (the loop)
-// The model is `claude -p`; scoring is mechanical: compiles, tests pass, violations left, turns.
-// Results append to evals/results.tsv; --report aggregates them per condition.
-// ponytail: one model, one driver, one table. Enough to decide M6.2; not a benchmark suite.
+// Conditions: bare = the prompt alone; for = `odx for task` output injected first; hook = the
+// Stop hook wired into the scratch project's .claude/settings.json.
 
 EVALS_DIR :: "evals"
 RESULTS_FILE :: "evals/results.tsv"
@@ -77,8 +71,8 @@ run_eval :: proc(root, odx_bin, task_dir, task, cond: string) -> (row: Eval_Row)
 	os.remove_all(work)
 	os.make_directory_all(join({work, EVAL_PACKAGE}))
 	copy_dir(join({task_dir, "start"}), join({work, EVAL_PACKAGE}))
-	// an empty directory is not a package: the role glob would match nothing and every odx
-	// call in the work tree would fail. Seed the package clause; the model overwrites it.
+	// An empty directory is not a package: the role glob would match nothing and every odx
+	// call would fail. Seed the package clause; the model overwrites it.
 	if !os.exists(join({work, EVAL_PACKAGE, EVAL_PACKAGE + ".odin"})) {
 		if werr := os.write_entire_file(
 			join({work, EVAL_PACKAGE, EVAL_PACKAGE + ".odin"}),
@@ -153,9 +147,8 @@ run_eval :: proc(root, odx_bin, task_dir, task, cond: string) -> (row: Eval_Row)
 	}
 	if werr := os.write_entire_file(join({work, "transcript.json"}), out);
 	   werr != nil {fail("write: %v", werr)}
-	// score: odx's count first, on the model's files only (the scoring test is copied in after
-	// and would otherwise be counted against the model); then compile, then tests. The seeded
-	// placeholder, if the model wrote a differently named file and left it, is not the model's.
+	// Count odx violations before copying in the scoring test, which would be counted against
+	// the model. The seeded placeholder is not the model's if it wrote a differently named file.
 	if ph := join({work, EVAL_PACKAGE, EVAL_PACKAGE + ".odin"}); os.exists(ph) {
 		if data, rerr := os.read_entire_file(ph, context.allocator);
 		   rerr == nil && string(data) == "package " + EVAL_PACKAGE + "\n" {os.remove(ph)}
@@ -203,15 +196,13 @@ run_eval :: proc(root, odx_bin, task_dir, task, cond: string) -> (row: Eval_Row)
 	return
 }
 
-// ponytail: a plain constant, not a format string: Odin's fmt treats `{` as a verb (the first
-// pilot scored every row 0 violations against a config that read MISSING CLOSE BRACE).
+// Not a format string: Odin's fmt treats `{` as a verb and mangles the config.
 EVAL_CONFIG :: `{ version: 1, roles: { pure: ["task"] }, dependencies: { pure: { may_import: ["pure", "core:*"] } },
   odin: { flags: ["-vet", "-vet-cast", "-strict-style"] } }
 `
 
-// eval_hooks: the Stop hook only. In headless `claude -p` a PostToolBatch exit 2 ends the
-// session ("terminal_reason": "hook_stopped") instead of feeding the text back; the Stop hook
-// blocks and continues, which is the loop M6 measures.
+// Stop hook only: in headless `claude -p` a PostToolBatch exit 2 ends the session
+// ("terminal_reason": "hook_stopped") instead of feeding the text back.
 eval_hooks :: proc(odx_bin: string) -> string {
 	return fmt.tprintf(
 		`{"hooks": {"Stop": [{"hooks": [{"type": "command", "command": "%s hook stop"}]}]}}
@@ -220,8 +211,7 @@ eval_hooks :: proc(odx_bin: string) -> string {
 	)
 }
 
-// parse_check_json: the violation count from `odx check --json`; ok is false for anything
-// that is not a report (a tool error on stderr/stdout, an empty run).
+// ok is false for anything that is not a report (a tool error, an empty run).
 parse_check_json :: proc(out: []byte) -> (n: int, ok: bool) {
 	rep: Report
 	if json.unmarshal(out, &rep) != nil || rep.schema == 0 {return 0, false}

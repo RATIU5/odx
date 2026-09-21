@@ -3,8 +3,6 @@ package odx
 import "core:strings"
 import "core:testing"
 
-// The one parser behind every rule and topic file: frontmatter to JSON5, three named blocks
-// out, prose without them, plain code samples kept.
 @(test)
 test_parse_rule_file :: proc(t: ^testing.T) {
 	context.allocator = context.temp_allocator

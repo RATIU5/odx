@@ -4,8 +4,7 @@ import "core:os"
 import "core:strings"
 import "core:testing"
 
-// The pilot's first run scored every row 0 violations because the generated odx.json5 was
-// formatter garbage. The config must load through the real loader, and a tool error from
+// The generated odx.json5 must load through the real loader, and a tool error from
 // `odx check --json` must never read as "clean".
 @(test)
 test_eval_config_loads :: proc(t: ^testing.T) {

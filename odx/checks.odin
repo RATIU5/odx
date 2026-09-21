@@ -6,9 +6,8 @@ import "core:path/filepath"
 import "core:slice"
 import "core:strings"
 
-// Family B: syntax checks over the AST, one dispatch per active rule kind.
+// Family B: syntax checks over the AST.
 
-// Ctx is the one value every check, family and command works on; make_ctx builds it.
 Ctx :: struct {
 	root:  string,
 	cfg:   ^Config,
@@ -16,10 +15,9 @@ Ctx :: struct {
 	pkgs:  []Package,
 	rules: []Active_Rule,
 	r:     ^Report,
-	hits:  map[string]int, // config allow-list entries that matched something this run (20.2)
+	hits:  map[string]int, // config allow-list entries that matched something this run
 }
 
-// make_ctx selects and parses the packages under paths (all when empty) for a loaded project.
 make_ctx :: proc(p: ^Project, paths: []string, only_topics: []string = nil) -> Ctx {
 	c := Ctx {
 		root  = p.root,
@@ -38,7 +36,7 @@ make_ctx :: proc(p: ^Project, paths: []string, only_topics: []string = nil) -> C
 	return c
 }
 
-// DEFAULT_DENY_PURE is applied when a pure role has no explicit deny list (17.3).
+// Applied when a pure role has no explicit deny list.
 DEFAULT_DENY_PURE := []string {
 	"core:os",
 	"core:os/*",
@@ -58,9 +56,8 @@ pos_of :: proc(c: ^Ctx, n: ^ast.Node) -> (file: string, line, col: int) {
 	return file, n.pos.line, n.pos.column
 }
 
-// report is the one way a check emits a finding for a rule.
-// subject is the rule's semantic key for the baseline (M3.1): an import path, a symbol, a
-// declaration name. "" means this finding has no stable identity and cannot be baselined.
+// subject is the baseline key (an import path, symbol or declaration name); "" means no stable
+// identity, so the finding cannot be baselined.
 report :: proc(
 	c: ^Ctx,
 	a: ^Active_Rule,
@@ -91,7 +88,6 @@ report :: proc(
 	)
 }
 
-// report_at is report for an AST node.
 report_at :: proc(c: ^Ctx, a: ^Active_Rule, n: ^ast.Node, msg: string, subject := "") {
 	file, line, col := pos_of(c, n)
 	report(c, a, file, line, col, msg, subject)
@@ -99,7 +95,7 @@ report_at :: proc(c: ^Ctx, a: ^Active_Rule, n: ^ast.Node, msg: string, subject :
 
 run_family_b :: proc(c: ^Ctx) {
 	for &p in c.pkgs {
-		// parse errors first (17.10: the model fixes syntax before rules)
+		// parse errors first: the model fixes syntax before rules
 		for d in p.diags {
 			file, _ := rel_of(c.root, d.pos.file)
 			note(c.r, "odin/syntax", "parse", file, d.pos.line, d.pos.column, d.msg)
@@ -141,7 +137,7 @@ run_family_b :: proc(c: ^Ctx) {
 	}
 }
 
-// vet_tag_names lists the names on a file's `#+vet` tags (`!x` kept as written).
+// `!x` is kept as written.
 vet_tag_names :: proc(f: ^ast.File) -> []string {
 	out := make([dynamic]string, context.temp_allocator)
 	for tok in f.tags {
@@ -153,13 +149,13 @@ vet_tag_names :: proc(f: ^ast.File) -> []string {
 	return out[:]
 }
 
-// 17.2: `#+vet !x` silently defeats -vet; never ignorable, only allow-listable in config.
+// `#+feature` opt-outs need a same-line `// reason:`.
 check_vet_disables :: proc(c: ^Ctx, f: ^ast.File) {
 	lines := strings.split_lines(f.src, context.temp_allocator)
 	for tok in f.tags {
 		t := strings.trim_space(strings.trim_prefix(tok.text, "#+"))
 		if !strings.has_prefix(t, "feature") {continue}
-		if strings.contains(lines[tok.pos.line - 1], "// reason:") {continue} 	// a stated reason
+		if strings.contains(lines[tok.pos.line - 1], "// reason:") {continue}
 		file, _ := rel_of(c.root, f.fullpath)
 		note(
 			c.r,
@@ -177,6 +173,7 @@ check_vet_disables :: proc(c: ^Ctx, f: ^ast.File) {
 			),
 		)
 	}
+	// `#+vet !x` silently defeats -vet: never ignorable, only allow-listable in config.
 	for name in vet_tag_names(f) {
 		if !strings.has_prefix(name, "!") {continue}
 		if i, ok := slice.linear_search(c.cfg.odin.allowed_vet_disables, name[1:]); ok {
@@ -202,8 +199,7 @@ check_vet_disables :: proc(c: ^Ctx, f: ^ast.File) {
 	}
 }
 
-// vet_tag rule: the file must carry `#+vet explicit-allocators`. odin.explicit_allocators
-// widens ("all") or silences ("off") the rule's own role list.
+// odin.explicit_allocators: "all" extends the requirement beyond pure/service, "off" drops it.
 check_explicit_allocators :: proc(c: ^Ctx, p: ^Package, a: ^Active_Rule) {
 	switch c.cfg.odin.explicit_allocators {
 	case .off:
@@ -219,7 +215,6 @@ check_explicit_allocators :: proc(c: ^Ctx, p: ^Package, a: ^Active_Rule) {
 	}
 }
 
-// import_target describes what an import string points at: a collection path or a project role.
 import_target :: proc(c: ^Ctx, p: ^Package, path: string) -> (label: string, role: string) {
 	coll, _, rest := strings.partition(path, ":")
 	base, sub := p.dir, path // relative import
@@ -236,14 +231,14 @@ import_target :: proc(c: ^Ctx, p: ^Package, path: string) -> (label: string, rol
 
 check_imports :: proc(c: ^Ctx, p: ^Package, a: ^Active_Rule) {
 	layer, has_layer := c.cfg.dependencies[p.role]
-	if !has_layer {return} 	// no dependencies entry = role imports freely
+	if !has_layer {return}
 	deny := layer.deny
 	for f in p.files {
 		is_test := strings.has_suffix(f.fullpath, "_test.odin")
 		for d in f.decls {
 			imp, ok := d.derived.(^ast.Import_Decl)
 			if !ok {continue}
-			path := strings.trim(imp.relpath.text, `"`) // 17.20: text includes the quotes
+			path := strings.trim(imp.relpath.text, `"`) // text includes the quotes
 			label, target_role := import_target(c, p, path)
 			allowed :=
 				import_matches(ALWAYS_ALLOWED, path) ||
@@ -265,8 +260,8 @@ check_imports :: proc(c: ^Ctx, p: ^Package, a: ^Active_Rule) {
 	}
 }
 
-// import_glob: import strings are not paths; `core:*` means any core package, `core:sys/*` any
-// package under core:sys. A trailing `*` is a prefix match, anything else is exact.
+// Import strings are not paths: `core:*` means any core package, `core:sys/*` any package under
+// core:sys. A trailing `*` is a prefix match, anything else is exact.
 import_glob :: proc(pattern, path: string) -> bool {
 	if strings.has_suffix(
 		pattern,
@@ -280,8 +275,7 @@ import_matches :: proc(globs: []string, path: string) -> bool {
 	return false
 }
 
-// banned_construct: mutable_global and foreign are declaration-level; no_bounds_check needs a
-// full walk. `using` as a statement is a compiler error by default (M1.1), so odx does not own it.
+// `using` as a statement is a compiler error by default, so it is not a construct here.
 check_construct :: proc(c: ^Ctx, p: ^Package, a: ^Active_Rule) {
 	in_role := strings.concatenate({" in a ", p.role, " package"}, context.temp_allocator)
 	for f in p.files {
@@ -330,7 +324,6 @@ check_construct :: proc(c: ^Ctx, p: ^Package, a: ^Active_Rule) {
 	}
 }
 
-// Walk is the visitor payload shared by the node-level checks.
 Walk :: struct {
 	c:       ^Ctx,
 	a:       ^Active_Rule,
@@ -350,7 +343,7 @@ visit_construct :: proc(v: ^ast.Visitor, n: ^ast.Node) -> ^ast.Visitor {
 	return v
 }
 
-// banned_call: `pkg.name` or bare `name` calls, aliases resolved per file (17.3, best effort).
+// Matches `pkg.name` or bare `name` calls; aliases resolved per file, best effort.
 check_calls :: proc(c: ^Ctx, p: ^Package, a: ^Active_Rule) {
 	for f in p.files {
 		w := Walk{c, a, make(map[string]string, context.temp_allocator)}
@@ -368,7 +361,6 @@ check_calls :: proc(c: ^Ctx, p: ^Package, a: ^Active_Rule) {
 	}
 }
 
-// import_pkg_name: the default local name of an import path: "core:os" -> os, "../core" -> core.
 import_pkg_name :: proc(path: string) -> string {
 	_, _, rest := strings.partition(path, ":")
 	return filepath.base(rest if rest != "" else path)
@@ -399,14 +391,13 @@ visit_call :: proc(v: ^ast.Visitor, n: ^ast.Node) -> ^ast.Visitor {
 	return v
 }
 
-// report_stale_config: every exception-list entry with zero hits (20.2). Only on a full run: a
-// narrowed scan would report false staleness. may_import is policy, not an exception list, so
-// it is not counted.
+// Only on a full run: a narrowed scan would report false staleness. may_import is policy, not an
+// exception list, so it is not counted.
 report_stale_config :: proc(c: ^Ctx) {
 	for i in 0 ..< len(c.cfg.odin.allowed_vet_disables) {
 		key := fmt.tprintf("odin.allowed_vet_disables[%d]", i)
 		if c.hits[key] > 0 {continue}
-		// ponytail: key path, not a line number; core:encoding/json keeps no positions (20.7)
+		// ponytail: key path, not a line number; core:encoding/json keeps no positions
 		note(
 			c.r,
 			"odx/stale-config-entry",
@@ -419,7 +410,6 @@ report_stale_config :: proc(c: ^Ctx) {
 	}
 }
 
-// ident_name: the identifier's name, "" for nil or a non-identifier expression.
 ident_name :: proc(e: ^ast.Expr) -> string {
 	if e == nil {return ""}
 	if id, ok := e.derived.(^ast.Ident); ok {return id.name}

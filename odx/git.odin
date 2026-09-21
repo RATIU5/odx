@@ -3,8 +3,8 @@ package odx
 import "core:os"
 import "core:strings"
 
-// git_changed: files changed since ref plus untracked ones, root-relative; ok is false outside
-// a git worktree (callers then fall back to a full scan).
+// Files changed since ref plus untracked ones, root-relative; ok is false outside a git
+// worktree (callers then fall back to a full scan).
 git_changed :: proc(root, ref: string) -> (files: []string, ok: bool) {
 	out := make([dynamic]string)
 	for args in ([][]string{{"git", "-C", root, "diff", "--name-only", ref, "--"}, {"git", "-C", root, "ls-files", "--others", "--exclude-standard"}}) {
@@ -15,8 +15,7 @@ git_changed :: proc(root, ref: string) -> (files: []string, ok: bool) {
 	return out[:], true
 }
 
-// changed_odin_files: absolute paths of the changed .odin files, for make_ctx's package
-// selection. in_git is false outside a worktree; callers then scan everything.
+// Absolute paths; in_git is false outside a worktree, and callers then scan everything.
 changed_odin_files :: proc(root, ref: string) -> (files: []string, in_git: bool) {
 	rels, ok := git_changed(root, ref)
 	if !ok {return nil, false}
@@ -25,7 +24,7 @@ changed_odin_files :: proc(root, ref: string) -> (files: []string, in_git: bool)
 	return out[:], true
 }
 
-// added_ignores: the suppressions whose directive text is not in HEAD's copy of the file (M3.3).
+// Suppressions whose directive text is not in HEAD's copy of the file.
 added_ignores :: proc(root: string, igs: []Ignore) -> []Ignore {
 	out := make([dynamic]Ignore)
 	if st, _, _, err := os.process_exec(

@@ -5,10 +5,9 @@ import "core:os"
 import "core:path/filepath"
 import "core:strings"
 
-// `odx self-test`: every tests/fixtures/<name>/ with an odx.json5 is checked as a project and
-// its violations are diffed both ways against `// want: topic/R1 other/R2` markers (17.14).
-// A package-level violation (file is a directory) is satisfied by a marker on line 1 of any
-// file in that directory.
+// `odx self-test`: each tests/fixtures/<name>/ project's violations are diffed both ways
+// against `// want: topic/R1 other/R2` markers. A package-level violation is satisfied by a
+// marker on line 1 of any file in that directory.
 
 Want :: struct {
 	file: string, // relative to the fixture root
@@ -36,11 +35,10 @@ cmd_selftest :: proc(o: Opts) {
 	if failed > 0 {os.exit(EXIT_VIOLATION)}
 }
 
-// check_rule_blocks (M8.2): for every rule with fenced blocks, `fires` must produce that rule
-// and no other finding, and `silent` must compile and produce nothing. Example-only rules
-// must compile both. Each block becomes a one-file package (plus the prelude as a sibling)
-// under a scratch project whose only role is the rule's `role`.
-// only narrows to one "topic/Rn" (`odx rule test`); "" runs them all.
+// check_rule_blocks: `fires` must produce that rule and no other finding, `silent` nothing;
+// example-only rules must compile both. Each block is a one-file package (prelude as a
+// sibling) under a scratch project whose only role is the rule's `role`.
+// only narrows to one "topic/Rn"; "" runs them all.
 check_rule_blocks :: proc(root: string, only: string) -> (failed: int) {
 	p := load_project(root)
 	if len(p.errs) > 0 {
@@ -125,7 +123,7 @@ write_or_fail :: proc(path, text: string) {
 	   err != nil {fail("write %s: %v", path, err)}
 }
 
-// run_fixture returns the number of mismatches, printing each one.
+// run_fixture prints each mismatch.
 run_fixture :: proc(dir: string) -> (bad: int) {
 	p := load_project(dir)
 	if len(p.errs) > 0 {
@@ -171,8 +169,7 @@ match_want :: proc(wants: []Want, v: Violation) -> ^Want {
 	return nil
 }
 
-// collect_wants scans every .odin file (and odx.json5) under root for `// want:` markers.
-// Text, not AST, so files that fail to parse still carry expectations.
+// collect_wants reads markers as text, not AST, so files that fail to parse still carry them.
 collect_wants :: proc(root: string) -> (out: [dynamic]Want) {
 	w := os.walker_create_path(root)
 	defer os.walker_destroy(&w)

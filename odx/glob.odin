@@ -3,7 +3,7 @@ package odx
 import "core:path/filepath"
 import "core:strings"
 
-// glob_match matches a `/`-separated path against a pattern (17.20):
+// Matches a `/`-separated path against a pattern:
 // `**` = zero or more segments, `*` = one segment (may be partial: `*_test`),
 // anything else = literal segment. filepath.match has no `**`, hence this.
 glob_match :: proc(pattern, path: string) -> bool {
@@ -21,7 +21,7 @@ match_segs :: proc(pat, segs: []string) -> bool {
 		}
 		return false
 	}
-	if len(segs) == 0 || segs[0] == "" {return false} 	// an empty segment is not a segment
+	if len(segs) == 0 || segs[0] == "" {return false}
 	ok, _ := filepath.match(pat[0], segs[0])
 	return ok && match_segs(pat[1:], segs[1:])
 }

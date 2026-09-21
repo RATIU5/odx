@@ -9,18 +9,15 @@ import "core:path/filepath"
 import "core:slice"
 import "core:strings"
 
-// Project is everything loaded from disk before any command runs: root, rulebook, config.
-// Memory: odx is a short-lived process; loaders allocate on context.allocator and never free,
-// and per-call scratch goes on context.temp_allocator. Nothing runs long enough to matter.
+// odx is short-lived: loaders allocate on context.allocator and never free.
 Project :: struct {
 	root: string, // "" when no odx.json5 was found (topics/explain still work)
 	rb:   Rulebook,
 	cfg:  Config,
 	dirs: []string, // every package directory under root, minus exclude, sorted
-	errs: [dynamic]string, // config and topic problems, sorted
+	errs: [dynamic]string,
 }
 
-// load_project layers built-ins, .odx/topics and odx.json5 and validates them together.
 load_project :: proc(root_override: string) -> (p: Project) {
 	p.root = find_root(root_override)
 	p.rb = load_rulebook(p.root, &p.errs)
@@ -32,7 +29,6 @@ load_project :: proc(root_override: string) -> (p: Project) {
 	return
 }
 
-// validate_project: the checks that need both the rulebook and the tree on disk (20.7).
 validate_project :: proc(p: ^Project) {
 	for id in sorted_keys(p.cfg.disabled) {
 		if find_rule(&p.rb, id) ==
@@ -53,7 +49,6 @@ validate_project :: proc(p: ^Project) {
 	}
 }
 
-// must_load is load_project for commands that cannot proceed with a broken setup.
 must_load :: proc(o: Opts, need_config: bool) -> Project {
 	p := load_project(o.root)
 	if need_config &&
@@ -72,15 +67,14 @@ sorted_keys :: proc(m: map[string]$V) -> []string {
 	return keys
 }
 
-// Package is one directory of .odin files with its role and parsed AST (17.5, 17.7).
 Package :: struct {
-	dir:         string, // absolute
+	dir:         string,
 	rel:         string, // relative to root, "/" separators, "" for root itself
 	role:        string, // "" = unmapped
 	role_count:  int, // 0 unmapped, >1 conflict
 	pkg:         ^ast.Package, // nil if the directory failed to parse at all
-	files:       []^ast.File, // sorted by path
-	diags:       []Diag, // parse errors
+	files:       []^ast.File,
+	diags:       []Diag,
 	doc_skipped: bool, // family C found no .odin-doc (type error); its ignores are never stale
 }
 
@@ -89,7 +83,7 @@ Diag :: struct {
 	msg: string,
 }
 
-// Parser.err has no user-data slot (17.20); collect through a thread-local.
+// Parser.err has no user-data slot; collect through a thread-local.
 @(thread_local)
 parse_diags: [dynamic]Diag
 
@@ -97,7 +91,6 @@ collect_diag :: proc(pos: tokenizer.Pos, msg: string, args: ..any) {
 	append(&parse_diags, Diag{pos, fmt.aprintf(msg, ..args)})
 }
 
-// package_dirs lists every directory under root holding a .odin file, minus exclude, sorted.
 package_dirs :: proc(root: string, cfg: ^Config, errs: ^[dynamic]string = nil) -> []string {
 	dirs := make(map[string]bool)
 	w := os.walker_create_path(root)
@@ -120,7 +113,7 @@ package_dirs :: proc(root: string, cfg: ^Config, errs: ^[dynamic]string = nil) -
 	return sorted_keys(dirs)
 }
 
-// load_packages resolves roles and parses each package (all files, all platforms: 17.7).
+// load_packages parses every file of each package regardless of platform.
 load_packages :: proc(root: string, cfg: ^Config, rels: []string) -> []Package {
 	pkgs := make([]Package, len(rels))
 	for rel, i in rels {
@@ -143,7 +136,6 @@ load_packages :: proc(root: string, cfg: ^Config, rels: []string) -> []Package {
 	return pkgs
 }
 
-// select_packages narrows package dirs to those at or below the given paths (a file selects its dir).
 select_packages :: proc(root: string, rels: []string, paths: []string) -> []string {
 	want := make([dynamic]string, context.temp_allocator)
 	for a in paths {

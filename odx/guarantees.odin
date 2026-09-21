@@ -5,7 +5,7 @@ import "core:os"
 import "core:slice"
 import "core:strings"
 
-// Guarantees (M4.1): the checks the installed compiler can enforce that only an external tool
+// Guarantees: the checks the installed compiler can enforce that only an external tool
 // can verify are switched on. Doctor reports; check enforces (allocators/R1, odx/feature-optout).
 // The default set is what `odx init` writes into odin.flags; a project overrides by editing it.
 
@@ -35,9 +35,8 @@ compiler_guarantees :: proc(help: string) -> (flags, implied: []string) {
 	return out[:], imp[:]
 }
 
-// report_guarantees prints on/off per compiler guarantee, the per-file opt-outs, and the
-// explicit-allocators coverage. Missing defaults and un-adopted compiler flags are warnings:
-// doctor never refuses (P5); check turns the per-file ones into violations.
+// Missing defaults and un-adopted compiler flags are warnings; `check` turns the per-file
+// opt-outs into violations.
 report_guarantees :: proc(d: ^Doctor, c: ^Ctx, help: string) {
 	flags, implied := compiler_guarantees(help)
 	on := make(map[string]bool, context.temp_allocator)

@@ -3,10 +3,9 @@ package odx
 import "core:odin/ast"
 import "core:strings"
 
-// Ignore is one `// odx:ignore <topic>/<R> reason: <text>` comment (17.8).
 Ignore :: struct {
 	file:   string,
-	line:   int, // comment line
+	line:   int,
 	col:    int, // column of the `//`
 	target: int, // line it applies to; 0 = whole file
 	rule:   string,
@@ -17,7 +16,7 @@ Ignore :: struct {
 IGNORE_PREFIX :: "odx:ignore"
 IGNORE_FILE_PREFIX :: IGNORE_PREFIX + "-file"
 
-// collect_ignores scans a file's comment groups. Bad ones become odx/bad-ignore violations.
+// Malformed directives become odx/bad-ignore violations.
 collect_ignores :: proc(
 	r: ^Report,
 	rb: ^Rulebook,
@@ -31,7 +30,7 @@ collect_ignores :: proc(
 			text := strings.trim_space(strings.trim_prefix(tok.text, "//"))
 			if !strings.has_prefix(tok.text, "//") {continue}
 			if !strings.has_prefix(text, IGNORE_PREFIX) {
-				// a near miss (`odx: ignore`, `odx:Ignore`, `odx-ignore`) fails loudly, never silently (M3.3)
+				// a near miss (`odx: ignore`, `odx:Ignore`, `odx-ignore`) fails loudly, never silently
 				if low := strings.to_lower(text, context.temp_allocator);
 				   strings.has_prefix(low, "odx") && is_near_miss(low) {
 					note(
@@ -82,7 +81,6 @@ collect_ignores :: proc(
 	}
 }
 
-// ignore_target: whole file = 0; end-of-line comment = that line; own line = next code line.
 // An own-line directive with no code after it targets itself, so it reads as stale rather
 // than silently widening to the whole file.
 @(private = "file")
@@ -96,9 +94,8 @@ ignore_target :: proc(lines: []string, comment_line, col: int, whole: bool) -> i
 	return comment_line
 }
 
-// apply_ignores drops suppressed violations and reports stale ignores (17.8). An ignore for a
-// rule that did not run this pass, or in a package family C could not type-check, is not
-// stale (20.2): a transient compile error must never report a suppression as stale.
+// An ignore for a rule that did not run, or in a package family C could not type-check, is
+// never stale: a transient compile error must not report a suppression as stale.
 apply_ignores :: proc(c: ^Ctx, igs: []Ignore, ran: map[string]bool) {
 	r := c.r
 	unchecked := make(map[string]bool, context.temp_allocator)
@@ -136,14 +133,14 @@ apply_ignores :: proc(c: ^Ctx, igs: []Ignore, ran: map[string]bool) {
 	}
 }
 
-// dir_of: the package directory of a root-relative file path ("" for a root-level file).
+// "" for a root-level file.
 dir_of :: proc(rel: string) -> string {
 	i := strings.last_index(rel, "/")
 	return "" if i < 0 else rel[:i]
 }
 
-// is_near_miss: `odx:ignore` misspelt by spacing, case or punctuation (`odx: ignore`, `odx-ignore`,
-// `odx Ignore`), not prose that happens to mention both words.
+// `odx:ignore` misspelt by spacing, case or punctuation (`odx: ignore`, `odx-ignore`), not
+// prose that mentions both words.
 is_near_miss :: proc(low: string) -> bool {
 	rest := strings.trim_left(low[len("odx"):], ":- ")
 	if len(low) - len("odx") - len(rest) > 2 {return false}

@@ -5,8 +5,8 @@ import "core:os"
 import "core:slice"
 import "core:strings"
 
-TOPIC_FILE :: "topic.md" // frontmatter: the topic record; body: the topic prose (M8)
-RULE_SUFFIX :: ".odx.md" // one file per rule: frontmatter + prose + prelude/fires/silent blocks
+TOPIC_FILE :: "topic.md"
+RULE_SUFFIX :: ".odx.md"
 PROJECT_TOPICS_DIR :: ".odx/topics"
 
 Topic :: struct {
@@ -21,52 +21,51 @@ Topic :: struct {
 	related:           []string,
 	example_roles:     map[string]string,
 	rules:             []Rule,
-	// runtime only (not in topic.md frontmatter; TOPIC_KEYS rejects them there)
-	prose:             string, // topic.md
-	exemplar:          string, // example/*/*.odin concatenated; shown by the stop hook (M2.3)
+	// runtime only, not frontmatter keys
+	prose:             string,
+	exemplar:          string, // example .odin sources concatenated
 	source:            string, // "builtin" or the directory it came from
-	overrides:         bool, // project topic shadowing a builtin of the same name
+	overrides:         bool,
 }
 
-// Rule is one entry of a topic's frontmatter, the only registry of rule metadata (20.4).
-// Enum fields unmarshal from their lowercase names; validate_rule checks presence and spelling
-// against the parsed tree because json.unmarshal leaves an unknown name at the zero value.
+// Metadata comes from the <id>.odx.md frontmatter. Enum fields unmarshal from lowercase names;
+// validate_rule checks presence and spelling against the parsed tree because json.unmarshal
+// leaves an unknown name at the zero value.
 Rule :: struct {
 	id:           string,
 	statement:    string,
 	why:          string,
-	instead_of:   string, // admission criteria 3-5 (M5.2): compared to what, what evidence, at what cost
+	instead_of:   string,
 	evidence:     string,
 	cost:         string,
-	blocking:     bool, // P4: blocks the hook; false = advisory, printed but never a wall
-	severity:     Severity, // mandatory
+	blocking:     bool, // false = advisory, printed but never a wall
+	severity:     Severity,
 	class:        string, // stable greppable name, e.g. "dependencies_hidden_state"
 	ignorable:    bool, // default true; set at load when absent
-	baselineable: bool, // 20.5: has a stable subject
+	baselineable: bool, // has a stable subject
 	retired:      bool,
 	role:         string, // role the fires/silent blocks are checked under (default edge)
-	check:        Check_Spec, // mandatory; `{ kind: "example" }` for example-only rules (M8.3)
+	check:        Check_Spec, // `{ kind: "example" }` for example-only rules
 	// runtime only, from the .odx.md body
 	prose:        string,
-	prelude:      string, // sibling file for the two blocks
+	prelude:      string, // setup shared by fires and silent
 	fires:        string, // must produce this rule and no other
 	silent:       string, // must compile and produce nothing
-	file:         string, // where it was loaded from, for messages
+	file:         string,
 }
 
 Check_Kind :: enum {
-	example, // never runs: a compiled fires/silent pair surfaced by `for`, explain and the block text (M8.3)
+	example, // never runs: a compiled fires/silent pair surfaced by `for`, explain and the block text
 	path_role,
 	banned_import,
 	banned_construct,
 	banned_call,
 	vet_tag,
 	require_attribute,
-	foreign_error_type, // family C: an exported proc's error result type declared in another package (M7.4)
-	pattern, // M9.1: a selector over the AST walk (pattern.odin); the open-ended kind
+	foreign_error_type, // family C: an exported proc's error result type declared in another package
+	pattern, // a selector over the AST walk (pattern.odin); the open-ended kind
 }
 
-// PATTERN_MATCHES are the AST node classes a pattern rule selects; the other keys filter it.
 // ponytail: strings, because `import` and `proc` are keywords and cannot name enum variants.
 PATTERN_MATCHES := []string {
 	"call", // names: canonical `pkg.name` or bare `name` calls
@@ -86,8 +85,8 @@ Construct :: enum {
 	no_bounds_check,
 }
 
-// Check_Spec is one field bag for every kind because core:encoding/json cannot pick a union
-// variant by a discriminator field. validate_rule enforces the per-kind shape at load time.
+// One field bag for every kind because core:encoding/json cannot pick a union variant by a
+// discriminator field. validate_rule enforces the per-kind shape at load time.
 Check_Spec :: struct {
 	kind:               Check_Kind,
 	attribute:          string, // require_attribute
@@ -96,9 +95,9 @@ Check_Spec :: struct {
 	from:               string, // banned_import: documentation only
 	construct:          Construct, // banned_construct
 	names:              []string, // banned_call
-	roles:              []string, // only these roles
-	except_roles:       []string, // all but these roles
-	// pattern (M9.1)
+	roles:              []string,
+	except_roles:       []string,
+	// pattern
 	match:              string, // one of PATTERN_MATCHES
 	name:               string, // call: one name (sugar for names); import: an import glob
 	exported:           bool, // proc: only exported (not @(private)) procedures
@@ -156,8 +155,8 @@ Rulebook :: struct {
 	topics: [dynamic]Topic, // sorted by name
 }
 
-// load_rulebook layers built-ins, then <root>/.odx/topics/* (17.17). root may be "".
-// A topic is a directory: topic.md (frontmatter + prose) and one <id>.odx.md per rule.
+// Built-ins first, then <root>/.odx/topics/*; root may be "".
+// A topic is a directory: topic.md plus one <id>.odx.md per rule.
 load_rulebook :: proc(root: string, errs: ^[dynamic]string) -> (rb: Rulebook) {
 	for b in BUILTIN_TOPICS {
 		files := make(map[string]string, context.temp_allocator)
@@ -199,7 +198,7 @@ load_rulebook :: proc(root: string, errs: ^[dynamic]string) -> (rb: Rulebook) {
 	return
 }
 
-// project_subdirs lists the directories under <root>/<sub>, sorted by name; none if root is "".
+// Sorted by name; none if root is "".
 project_subdirs :: proc(root, sub: string) -> []os.File_Info {
 	if root == "" {return nil}
 	entries, err := os.read_all_directory_by_path(join({root, sub}), context.allocator)
@@ -272,7 +271,6 @@ add_topic :: proc(
 		append(&rules, r)
 	}
 	t.rules = rules[:]
-	// same name later in the layer order overrides (17.17)
 	for &old in rb.topics {
 		if old.name == t.name {
 			t.overrides = true
@@ -287,7 +285,7 @@ add_topic :: proc(
 validate_rule :: proc(r: ^Rule, obj: json.Object, at: string, errs: ^[dynamic]string) {
 	if r.statement == "" {errf(errs, "%s: statement is required", at)}
 	if r.why == "" {errf(errs, "%s: why is required (20.4)", at)}
-	// a rule cannot reach a user without its justification (M5.2)
+	// a rule cannot reach a user without its justification
 	if r.instead_of == "" {errf(errs, "%s: instead_of is required (compared to what?)", at)}
 	if r.evidence == "" {errf(errs, "%s: evidence is required (what hard evidence?)", at)}
 	if r.cost == "" {errf(errs, "%s: cost is required (at what cost?)", at)}
@@ -304,7 +302,7 @@ validate_rule :: proc(r: ^Rule, obj: json.Object, at: string, errs: ^[dynamic]st
 	}
 }
 
-// validate_check is the per-kind shape of a check spec; `odx rule try` runs it on an inline spec.
+// `odx rule try` runs this on an inline spec.
 validate_check :: proc(c: ^Check_Spec, spec: json.Object, at: string, errs: ^[dynamic]string) {
 	check_keys(errs, at, "check.", spec, CHECK_KEYS)
 	require_key(errs, at, spec, "kind") // the zero value is example: a missing kind must not silently stop the check
@@ -345,7 +343,6 @@ find_topic :: proc(rb: ^Rulebook, name: string) -> ^Topic {
 	return nil
 }
 
-// find_rule resolves a "topic/Rn" id.
 find_rule :: proc(rb: ^Rulebook, id: string) -> ^Rule {
 	topic, _, rule := strings.partition(id, "/")
 	if t := find_topic(rb, topic); t != nil {
@@ -354,7 +351,7 @@ find_rule :: proc(rb: ^Rulebook, id: string) -> ^Rule {
 	return nil
 }
 
-// Active_Rule is a checkable rule after the retired / --topic / disabled filters (computed once).
+// A rule that survives the retired / example-only / --topic / disabled filters.
 Active_Rule :: struct {
 	id:   string, // "topic/Rn"
 	rule: ^Rule,
@@ -380,8 +377,7 @@ role_applies :: proc(spec: ^Check_Spec, role: string) -> bool {
 	return true
 }
 
-// exemplar_config builds the config for `odx check --exemplar <topic>` (17.6): the topic's
-// example/ directory is the root and example_roles supplies the role map.
+// Config for `odx check --exemplar <topic>`: the topic's example/ directory is the root.
 exemplar_config :: proc(t: ^Topic, base: ^Config) -> (cfg: Config) {
 	cfg = default_config()
 	cfg.odin = base.odin

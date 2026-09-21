@@ -13,27 +13,27 @@ CONFIG_VERSION :: 1
 
 // Config mirrors odx.json5 exactly; nothing runtime-only lives here.
 Config :: struct {
-	version:      int, // must equal CONFIG_VERSION (20.7)
-	roles:        map[string][]string, // role -> dir globs, relative to root (17.5)
-	default_role: string, // ponytail: plan says roles.default; a map field cannot hold it
+	version:      int,
+	roles:        map[string][]string, // role -> dir globs, relative to root
+	default_role: string, // ponytail: a map field cannot hold `roles.default`
 	exclude:      []string,
-	disabled:     map[string]string, // "topic/R2" -> reason (17.17)
+	disabled:     map[string]string, // "topic/R2" -> reason
 	dependencies: map[string]Layer,
 	odin:         Odin_Cfg,
 }
 
 Layer :: struct {
 	may_import: []string, // roles or import globs (`core:*`)
-	deny:       []string, // import globs; absent on pure = DEFAULT_DENY_PURE (17.3), filled at load
+	deny:       []string, // import globs; absent on pure = DEFAULT_DENY_PURE, filled at load
 }
 
 Odin_Cfg :: struct {
 	flags:                []string,
 	forbidden_flags:      []string,
-	required_flags:       []string, // must appear in the mise.toml test task (17.15)
+	required_flags:       []string, // must appear in the mise.toml test task
 	collections:          map[string]string,
 	custom_attributes:    []string,
-	allowed_vet_disables: []string, // 17.2
+	allowed_vet_disables: []string,
 	explicit_allocators:  Explicit_Allocators,
 	version:              string,
 	path:                 string,
@@ -81,7 +81,7 @@ canonical :: proc(path: string) -> string {
 	return abs
 }
 
-// find_root walks up from cwd to the nearest odx.json5 (17.5). "" if none.
+// "" when no odx.json5 is found above cwd.
 find_root :: proc(override: string) -> string {
 	if override != "" {return canonical(override)}
 	dir, _ := os.get_working_directory(context.allocator)
@@ -93,7 +93,6 @@ find_root :: proc(override: string) -> string {
 	}
 }
 
-// load_config reads and validates <root>/odx.json5.
 load_config :: proc(root: string, errs: ^[dynamic]string) -> (cfg: Config) {
 	path := join({root, CONFIG_FILE})
 	data, rerr := os.read_entire_file(path, context.allocator)
@@ -106,7 +105,7 @@ load_config :: proc(root: string, errs: ^[dynamic]string) -> (cfg: Config) {
 	odin_obj, _ := tree["odin"].(json.Object)
 	check_keys(errs, path, "odin.", odin_obj, ODIN_KEYS)
 	check_enum(errs, path, odin_obj, "odin.explicit_allocators", Explicit_Allocators)
-	// unmarshal leaves an empty array nil (17.20): presence in the tree is the real signal
+	// unmarshal leaves an empty array nil: presence in the tree is the real signal
 	if "exclude" not_in tree {cfg.exclude = DEFAULT_EXCLUDE}
 	dependencies_obj, _ := tree["dependencies"].(json.Object)
 	for role in sorted_keys(cfg.dependencies) {
@@ -127,7 +126,6 @@ load_config :: proc(root: string, errs: ^[dynamic]string) -> (cfg: Config) {
 			CONFIG_VERSION,
 		)
 	}
-	// dependencies keys and may_import role names must be declared roles; collections are `x:*`
 	for role in sorted_keys(cfg.dependencies) {
 		if role not_in
 		   cfg.roles {errf(errs, "%s: dependencies.%s is not a declared role", path, role)}
@@ -155,7 +153,7 @@ load_config :: proc(root: string, errs: ^[dynamic]string) -> (cfg: Config) {
 }
 
 // unmarshal_json5 fills v and returns the parsed tree for the checks unmarshal cannot do:
-// unknown keys (silently skipped, 17.20) and misspelt enum names (silently zero).
+// unknown keys (silently skipped) and misspelt enum names (silently zero).
 unmarshal_json5 :: proc(
 	text: string,
 	v: ^$T,
@@ -188,7 +186,6 @@ json_array :: proc(obj: json.Object, key: string) -> []json.Value {
 	return arr[:]
 }
 
-// check_keys appends an error for every key of obj not in allowed. A nil obj passes.
 check_keys :: proc(
 	errs: ^[dynamic]string,
 	at, section: string,
@@ -206,7 +203,6 @@ require_key :: proc(errs: ^[dynamic]string, at: string, obj: json.Object, key: s
 	if key not_in obj {errf(errs, "%s: %s is required", at, key)}
 }
 
-// check_enum: if obj[key] is present it must spell one of E's names.
 check_enum :: proc(errs: ^[dynamic]string, at: string, obj: json.Object, key: string, $E: typeid) {
 	name := key[strings.last_index(key, ".") + 1:]
 	v, present := obj[name]
@@ -217,13 +213,12 @@ check_enum :: proc(errs: ^[dynamic]string, at: string, obj: json.Object, key: st
 	errf(errs, "%s: %s must be one of %v", at, key, reflect.enum_field_names(E))
 }
 
-// reflect_enum parses a lowercase enum name; the CLI's subcommand words are enums too.
 reflect_enum :: proc($E: typeid, name: string) -> (E, bool) {
 	return reflect.enum_from_name(E, name)
 }
 
-// role_of resolves the role of a package directory (relative to root, `/` separators).
-// n is the number of matching roles: 0 = unmapped, >1 = config conflict (17.5).
+// rel_dir is relative to root with `/` separators. n counts matching roles: 0 = unmapped,
+// >1 = config conflict.
 role_of :: proc(cfg: ^Config, rel_dir: string) -> (role: string, n: int) {
 	for name, globs in cfg.roles {
 		for g in globs {
@@ -253,7 +248,7 @@ join :: proc(elems: []string) -> string {
 	return s
 }
 
-// rel_of returns path relative to root with "" for root itself; inside is false outside root.
+// rel_of: "" for root itself; inside is false outside root.
 rel_of :: proc(root, path: string) -> (rel: string, inside: bool) {
 	r, err := filepath.rel(root, path)
 	if err != nil || r == ".." || strings.has_prefix(r, "../") {return path, false}

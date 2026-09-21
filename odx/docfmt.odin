@@ -6,11 +6,11 @@ import "core:os"
 import "core:path/filepath"
 import "core:strings"
 
-// Family C: `odin doc -doc-format` per package, the compiler's checked entity table (19.2).
-// Only `require_attribute` rules today. A package that fails to type-check writes no file;
-// family A already reported why, so it is marked doc_skipped and its ignores stay unjudged.
+// Family C: `odin doc -doc-format` per package, the compiler's checked entity table.
+// A package that fails to type-check writes no file; family A already reported why, so it is
+// marked doc_skipped and its ignores stay unjudged.
 
-// is_family_c: the kinds that need the type-checked entity table (skipped under --fast).
+// is_family_c: kinds that need the type-checked entity table; skipped under --fast.
 is_family_c :: proc(k: Check_Kind) -> bool {
 	return k == .require_attribute || k == .foreign_error_type
 }
@@ -47,7 +47,6 @@ Doc_Status :: enum {
 	Fatal, // odin missing or reader version mismatch: a tool error was recorded
 }
 
-// doc_package runs `odin doc <pkg> -doc-format` and reads the result (19.2).
 doc_package :: proc(
 	c: ^Ctx,
 	p: ^Package,
@@ -68,8 +67,7 @@ doc_package :: proc(
 	ok: bool
 	for _ in 0 ..< 3 {
 		code, text, ok = run_odin(c, ..args[:])
-		// ponytail: the 2026-09 nightly segfaults intermittently (exit 11, no output): retry,
-		// as family A does; a real type error always prints
+		// ponytail: the 2026-09 nightly segfaults intermittently (exit 11, no output): retry
 		if !(ok && code != 0 && text == "") {break}
 	}
 	if !ok {return nil, .Fatal}
@@ -94,7 +92,6 @@ doc_package :: proc(
 	return h, .Ok
 }
 
-// the odx <-> doc-format compatibility matrix (20.6): one supported line, stated in the error
 DOC_FORMAT_MAJOR :: 0
 DOC_FORMAT_MINOR :: 3
 
@@ -111,12 +108,12 @@ check_entities :: proc(c: ^Ctx, p: ^Package, h: ^doc.Header, rules: []^Active_Ru
 			if e.kind != .Procedure {continue}
 			attrs := make(map[string]bool, context.temp_allocator)
 			for at in doc.from_array(h, e.attributes) {attrs[doc.from_string(h, at.name)] = true}
-			if "test" in attrs {continue} 	// 17.13
+			if "test" in attrs {continue}
 			last := last_result_name(h, types, e.type)
 			for a in rules {
 				if !role_applies(&a.rule.check, p.role) {continue}
 				if a.rule.check.kind == .foreign_error_type {
-					// M7.4: an error crosses the package boundary untranslated. The doc format records
+					// An error crosses the package boundary untranslated. The doc format records
 					// no position for a type defined outside the documented package, so "" means
 					// exactly "declared elsewhere".
 					if !has_suffix_any(last, a.rule.check.result_type_suffix) {continue}
@@ -169,7 +166,6 @@ check_entities :: proc(c: ^Ctx, p: ^Package, h: ^doc.Header, rules: []^Active_Ru
 	}
 }
 
-// last_result_name: the named type of a procedure's last result, "" if none or unnamed.
 @(private = "file")
 last_result_name :: proc(h: ^doc.Header, types: []doc.Type, ti: doc.Type_Index) -> string {
 	t := types[ti]
@@ -183,7 +179,6 @@ last_result_name :: proc(h: ^doc.Header, types: []doc.Type, ti: doc.Type_Index) 
 	return doc.from_string(h, last.name) if last.kind == .Named else ""
 }
 
-// last_result_pkg: the directory of the package that declares the last result's named type.
 @(private = "file")
 last_result_pkg :: proc(
 	h: ^doc.Header,

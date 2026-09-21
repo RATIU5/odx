@@ -1,4 +1,4 @@
-// M1.1 redundancy audit: the compiler must keep rejecting this with no flags. If it ever
+// Redundancy audit: the compiler must keep rejecting this with no flags. If it ever
 // compiles, `using` as a statement is no longer compiler-owned and odx needs a rule again.
 package compiler_owned
 

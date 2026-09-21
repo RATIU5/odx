@@ -5,7 +5,7 @@ import "core:os"
 import "core:slice"
 import "core:strings"
 
-// odx.baseline (M3.1, IMPL_PLAN 20.5): pre-existing violations frozen by semantic key so a
+// odx.baseline: pre-existing violations frozen by semantic key so a
 // project with debt can adopt odx without every edit blocking. Softens, never hides: a
 // baselined violation still prints and appears in --json, it just stops failing the build.
 // Shrinks automatically on a full run; grows only through `odx baseline add | regen`.
@@ -86,7 +86,7 @@ apply_baseline :: proc(c: ^Ctx, full, ci: bool) {
 }
 
 // cmd_baseline: `add` appends every current unbaselined violation with a subject; `regen`
-// rewrites from scratch. Both are the only ways the file grows.
+// rewrites from scratch.
 cmd_baseline :: proc(o: Opts) {
 	if len(o.args) != 1 ||
 	   (o.args[0] != "add" && o.args[0] != "regen") {fail("usage: odx baseline add | regen")}

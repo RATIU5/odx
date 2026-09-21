@@ -7,13 +7,11 @@ import "core:os"
 import "core:slice"
 import "core:strings"
 
-// Protected paths (17.9, 20.3): a sorted `sha256  path` manifest in .odx/lock over every file
+// Protected paths: a sorted `sha256  path` manifest in .odx/lock over every file
 // the rulebook and its enforcement depend on. Editing them is allowed; doing it invisibly is
 // not. `odx doctor --verify-rulebook` names every changed file; a human rewrites the lock with
 // ODX_ALLOW_PROTECTED=1 `odx doctor --relock`, and that diff is the approval record.
-// Reports only, never refuses (M4.2): `doctor --ci` fails on drift, the hooks print it.
-// Kept over plain `git diff -- rules/` (decided in M4) for the case git cannot cover: drift
-// between a commit and the builtins embedded in the running binary, and repos without git.
+// Reports only: `doctor --ci` fails on drift, the hooks print it.
 
 LOCK_FILE :: ".odx/lock"
 LOCK_HINT :: "a human approves with ODX_ALLOW_PROTECTED=1 odx doctor --relock"
@@ -34,7 +32,7 @@ Lock_State :: enum {
 	missing, // no lock yet: nothing to verify against
 }
 
-// lock_check compares the tree to the lock; text is the human message for a dirty lock.
+// lock_check: text is the message for a dirty lock.
 lock_check :: proc(root: string) -> (state: Lock_State, text: string) {
 	old, err := os.read_entire_file(join({root, LOCK_FILE}), context.allocator)
 	if err != nil {return .missing, ""}
@@ -71,7 +69,6 @@ parse_manifest :: proc(text: string) -> map[string]string {
 	return m
 }
 
-// lock_manifest hashes every protected file under root.
 lock_manifest :: proc(root: string) -> string {
 	lines := make([dynamic]string)
 	w := os.walker_create_path(root)
@@ -109,7 +106,7 @@ write_lock :: proc(root: string) {
 	fmt.println("wrote", LOCK_FILE)
 }
 
-// write_atomic: temp then rename, because two hooks may run at once (17.10).
+// write_atomic: temp then rename, because two hooks may run at once.
 write_atomic :: proc(path, text: string) {
 	tmp := strings.concatenate({path, ".tmp"}, context.temp_allocator)
 	if err := os.write_entire_file(tmp, text); err != nil {fail("write %s: %v", tmp, err)}

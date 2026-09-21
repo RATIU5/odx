@@ -2,23 +2,20 @@ package odx
 
 import "core:strings"
 
-// The .odx.md format (M8.2): one file per rule, and one topic.md per topic. Restricted
-// frontmatter between `---` lines: `key: value`, where a value that starts with `{` or `[`, or is
-// true/false or a number, is inline JSON5, and anything else is a string. The body is Markdown
-// whose fenced ```odin prelude|fires|silent blocks are the exemplar, the test and the
-// documentation at once; the prose around them is the explain body and the block text.
+// Frontmatter values starting with `{` or `[`, or true/false/a number, are inline JSON5; anything
+// else is a string. Fenced ```odin prelude|fires|silent blocks are exemplar, test and
+// documentation at once.
 // ponytail: the frontmatter is turned into one JSON5 object and fed to the existing loader, so
 // there is exactly one validator for keys, enums and required fields.
 
 Rule_File :: struct {
-	frontmatter: string, // as a JSON5 object text
-	prose:       string, // body minus the fenced blocks
+	frontmatter: string,
+	prose:       string,
 	prelude:     string,
 	fires:       string,
 	silent:      string,
 }
 
-// parse_rule_file splits frontmatter, prose and the three fenced blocks. err names the defect.
 parse_rule_file :: proc(text: string) -> (rf: Rule_File, err: string) {
 	body := text
 	if strings.has_prefix(text, "---\n") {
@@ -54,7 +51,6 @@ parse_rule_file :: proc(text: string) -> (rf: Rule_File, err: string) {
 			case "silent":
 				rf.silent = strings.clone(block)
 			case "":
-				// an ordinary code sample: stays in the prose
 				strings.write_string(
 					&prose,
 					strings.join(lines[i:j + 1], "\n", context.temp_allocator),
@@ -76,8 +72,6 @@ parse_rule_file :: proc(text: string) -> (rf: Rule_File, err: string) {
 	return
 }
 
-// frontmatter_to_json5: `key: value` lines to one JSON5 object. Bare strings are quoted;
-// inline objects, arrays, booleans and numbers pass through.
 frontmatter_to_json5 :: proc(fm: string) -> string {
 	b := strings.builder_make()
 	strings.write_string(&b, "{\n")
@@ -116,8 +110,8 @@ is_number :: proc(s: string) -> bool {
 	return true
 }
 
-// block_source: a fenced block as a compilable file: `#+` tags stay first, then the package
-// clause, then the block. One prepended line, so a violation's line maps back as line-1.
+// `#+` tags stay first, then the package clause: one prepended line, so a violation's line
+// maps back as line-1.
 block_source :: proc(block, pkg: string) -> string {
 	tags, rest := strings.builder_make(), strings.builder_make()
 	for l in strings.split_lines(block, context.temp_allocator) {
@@ -134,9 +128,8 @@ block_source :: proc(block, pkg: string) -> string {
 	)
 }
 
-// quote_bare_values: inside an inline object or array, a bare word in value position
-// (`kind: vet_tag`, `["pure", edge]`) becomes a JSON5 string; keys, numbers, true/false/null
-// and quoted strings pass through. Lets the frontmatter read like the spec instead of JSON.
+// A bare word in value position (`kind: vet_tag`, `["pure", edge]`) becomes a JSON5 string;
+// keys, numbers, true/false/null and quoted strings pass through.
 quote_bare_values :: proc(src: string) -> string {
 	b := strings.builder_make()
 	i := 0

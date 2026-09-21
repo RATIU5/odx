@@ -2,9 +2,8 @@ package odx
 
 import "base:runtime"
 
-// One #load_directory per built-in topic (17.20: non-recursive, empty dir is a
-// compile error). Add a line here when adding a topic under rules/.
-// The example is what the stop hook shows on its second identical block (M2.3).
+// One #load_directory per built-in topic (non-recursive; an empty dir is a compile error).
+// Add a line here when adding a topic under rules/.
 // ponytail: one example dir per topic; dependencies's platform example is not embedded.
 BUILTIN_TOPICS := []Builtin {
 	{

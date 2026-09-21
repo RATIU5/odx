@@ -5,7 +5,7 @@ import "core:os"
 import "core:strconv"
 import "core:strings"
 
-// Exit codes (section 3): 0 clean, 1 violations, 2 tool/config error.
+// Exit codes: 0 clean, 1 violations, 2 tool/config error.
 EXIT_VIOLATION :: 1
 EXIT_TOOL :: 2
 
@@ -15,22 +15,22 @@ Opts :: struct {
 	strict:         bool,
 	ci:             bool, // doctor: version drift is an error, lock is verified
 	verify:         bool, // doctor --verify-rulebook
-	relock:         bool, // doctor --relock
-	checklist:      bool, // explain --checklist
+	relock:         bool,
+	checklist:      bool,
 	max_violations: int,
-	hooks:          bool, // init --hooks
-	brief:          bool, // for --brief
-	report:         bool, // eval --report
-	added:          bool, // ignores --added
-	stale:          bool, // ignores --stale
-	count:          bool, // rule try --count
-	file:           string, // rule try --file <rule.odx.md>
-	id:             string, // rule add --id
-	since:          string, // check --since <ref>
+	hooks:          bool,
+	brief:          bool,
+	report:         bool,
+	added:          bool,
+	stale:          bool,
+	count:          bool,
+	file:           string,
+	id:             string,
+	since:          string,
 	root:           string, // --root override; "" = walk up from cwd
-	rule:           string, // explain --rule
-	exemplar:       string, // check --exemplar <topic>
-	topics:         [dynamic]string, // check --topic
+	rule:           string,
+	exemplar:       string,
+	topics:         [dynamic]string,
 	args:           [dynamic]string, // positionals after the subcommand
 }
 
@@ -59,8 +59,7 @@ fail :: proc(f: string, args: ..any) -> ! {
 	os.exit(EXIT_TOOL)
 }
 
-// parse_opts accepts `--flag`, `--flag value` and `--flag=value`.
-// ponytail: hand-rolled; core:flags has no subcommand concept (17.20)
+// ponytail: hand-rolled; core:flags has no subcommand concept
 parse_opts :: proc(args: []string) -> (o: Opts) {
 	for i := 0; i < len(args); i += 1 {
 		a := args[i]

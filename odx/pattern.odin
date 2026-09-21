@@ -4,9 +4,8 @@ import "core:fmt"
 import "core:odin/ast"
 import "core:strings"
 
-// M9.1 pattern checks: `check: { kind: pattern, match: <node class>, ...filters }`. One kind
-// whose `match` picks the AST node class and whose other keys narrow it. Stage 1 only: a
-// selector over the walk family B already does. No regex over source text, ever.
+// Pattern checks: `match` picks the AST node class, the other keys narrow it.
+// No regex over source text, ever.
 // ponytail: call reuses banned_call's alias-resolving visitor (name folds into names at load);
 // metavariable templates (stage 2) wait until an idiom this cannot express is written down.
 
@@ -71,7 +70,6 @@ check_pattern :: proc(c: ^Ctx, p: ^Package, a: ^Active_Rule) {
 	}
 }
 
-// is_private: the declaration carries @(private) or @(private = "file").
 is_private :: proc(vd: ^ast.Value_Decl) -> bool {
 	for at in vd.attributes {
 		for e in at.elems {
@@ -96,7 +94,6 @@ has_param :: proc(t: ^ast.Proc_Type, index: int, suffix: string) -> bool {
 	return false
 }
 
-// type_name: the identifier at the core of a type expression, "" for anything else.
 type_name :: proc(e: ^ast.Expr) -> string {
 	if e == nil {return ""}
 	#partial switch x in e.derived {

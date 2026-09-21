@@ -1,4 +1,4 @@
-// M0 spike: time walking a multi-directory tree, parsing each dir as a package
+// Spike: time walking a multi-directory tree, parsing each dir as a package
 // (arena per package, freed after), and visiting every AST node.
 package astwalk
 
@@ -31,7 +31,6 @@ main :: proc() {
 	start := time.tick_now()
 	st: Stats
 
-	// collect directories that contain at least one .odin file
 	dirs := make(map[string]bool)
 	w := os.walker_create_path(root)
 	defer os.walker_destroy(&w)
@@ -50,7 +49,7 @@ main :: proc() {
 	for dir in sorted {
 		context.allocator = virtual.arena_allocator(&arena)
 		p := parser.default_parser()
-		p.err = proc(pos: tokenizer.Pos, msg: string, args: ..any) {} 	// ponytail: swallow; odx collects via thread-local per 17.20
+		p.err = proc(pos: tokenizer.Pos, msg: string, args: ..any) {} 	// ponytail: swallow; odx collects via a thread-local collector
 		pkg, _ := parser.parse_package_from_path(dir, &p)
 		st.dirs += 1
 		if pkg != nil {
