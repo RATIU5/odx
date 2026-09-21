@@ -9,6 +9,7 @@ simultaneously the check: one rule id the model can look up and CI can fail on.
 odx topics                       list topics
 odx explain <topic> [--rule R3]  rules, rationale, do/don't
 odx for <path>                   topics that apply to a file or package (by role)
+odx ask "<question>"             topics that answer a question (local BM25; --explain shows scores)
 odx check [<path>...]            run the checks (exit 1 on violations)
 odx doctor [--ci]                toolchain, flags, mise.toml drift, overrides, protected-path lock
 odx fix [--propose]              delete stale odx:ignore directives (refuses on a dirty worktree)
@@ -57,6 +58,14 @@ A fixture is a small project under `tests/fixtures/<name>/` with its own `odx.js
 offending line carries `// want: topic/R2` (several ids space-separated). A package-level
 finding is marked on line 1 of any file in that package. A fixture with an `api/` directory
 also verifies its snapshots; every template is rendered as `Sample` and checked.
+
+## odx ask
+
+`odx ask "who frees this slice"` ranks topics with BM25 over topic names, tags, aliases,
+example questions (all boosted), summaries and rule text. No network, no cache: the index is
+rebuilt per call. `odx ask --eval` scores `rules/ask-eval.json5` (recall@3, MRR) and fails
+under 0.9 in CI, so tag edits cannot silently degrade retrieval. A hosted router (plan 10b)
+is only added if local recall stays below that bar.
 
 ## API snapshots
 

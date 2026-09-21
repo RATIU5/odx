@@ -22,6 +22,8 @@ Opts :: struct {
 	allow_dirty:    bool, // fix --allow-dirty
 	hooks:          bool, // init --hooks
 	list:           bool, // new --list
+	explain:        bool, // ask --explain
+	eval:           bool, // ask --eval
 	dir:            string, // new --dir
 	root:           string, // --root override; "" = walk up from cwd
 	rule:           string, // explain --rule
@@ -36,6 +38,7 @@ USAGE :: `usage: odx <command> [args] [--json] [--root <dir>]
   explain <topic> [--rule R3]  rules, rationale, do/don't
   explain [<topic>] --checklist   manual rules only, for an adversarial reviewer
   for <path>                   topics that apply to a file or package
+  ask "<question>" [--explain] topics that answer a question (local BM25; --eval: recall@3 over rules/ask-eval.json5)
   check [<path>...] [--topic t] [--fast] [--strict] [--max-violations n]   run checks
   ignores                      list every odx:ignore suppression
   api [<path>...]              public API snapshots in api/<pkg>.txt (ODX_UPDATE_SNAPSHOTS=1 re-blesses)
@@ -87,6 +90,10 @@ parse_opts :: proc(args: []string) -> (o: Opts) {
 			o.hooks = true
 		case "--list":
 			o.list = true
+		case "--explain":
+			o.explain = true
+		case "--eval":
+			o.eval = true
 		case "--max-violations":
 			if has_eq == "" {
 				if i + 1 >= len(args) {fail("%s needs a value", a)}
@@ -134,6 +141,8 @@ main :: proc() {
 		cmd_explain(o)
 	case "for":
 		cmd_for(o)
+	case "ask":
+		cmd_ask(o)
 	case "check":
 		cmd_check(o)
 	case "ignores":

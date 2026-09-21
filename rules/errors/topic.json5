@@ -2,7 +2,7 @@
   name: "errors",
   summary: "Typed errors, @(require_results), or_return; never discard a failure",
   tags: ["errors", "results", "or_return", "require_results"],
-  aliases: ["error handling", "failure", "fallible"],
+  aliases: ["error handling", "failure", "fallible", "boolean result", "ok flag"],
   example_questions: [
     "how do I return failures from a proc",
     "should this return a bool or an error",

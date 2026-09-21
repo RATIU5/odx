@@ -67,9 +67,14 @@ description = "odx checks its own sources with its own rules (milestone stop con
 depends = ["build"]
 run = "$ODX doctor --ci && $ODX check"
 
+[tasks.eval]
+description = "odx ask recall@3 / MRR over rules/ask-eval.json5 (M6a); fails under 0.9"
+depends = ["build"]
+run = "$ODX ask --eval"
+
 [tasks.ci]
 description = "Everything CI runs, in order"
-depends = ["build", "test", "fixtures", "exemplars", "self"]
+depends = ["build", "test", "fixtures", "exemplars", "eval", "self"]
 
 [tasks.fixtures]
 description = "Every tests/fixtures/<name>/ is checked and diffed against its // want: markers (17.14)"
