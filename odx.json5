@@ -6,15 +6,10 @@
   //   rules/errors/example/core
   //   rules/dependencies/example/core
   //   rules/dependencies/example/platform
-  //   spikes/astwalk
-  //   spikes/docfmt
-  //   spikes/docshort
-  //   spikes/sample/app
-  //   spikes/sample/lib
   roles: {
     pure: [],    // no os, no foreign, no I/O, no mutable globals
     service: [], // takes capabilities as parameters
-    edge: ["odx", "odx/**", "spikes/**"], // os, foreign, I/O allowed
+    edge: ["odx", "odx/**"], // os, foreign, I/O allowed
   },
   dependencies: {
     pure: { may_import: ["pure", "core:*"] },

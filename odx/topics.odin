@@ -14,7 +14,6 @@ Topic :: struct {
 	summary:           string,
 	tags:              []string,
 	aliases:           []string,
-	example_questions: []string,
 	applies_to:        struct {
 		roles: []string,
 	},
@@ -102,7 +101,6 @@ TOPIC_KEYS := []string {
 	"summary",
 	"tags",
 	"aliases",
-	"example_questions",
 	"applies_to",
 	"related",
 	"example_roles",
@@ -272,7 +270,7 @@ add_topic :: proc(
 @(private = "file")
 validate_rule :: proc(r: ^Rule, obj: json.Object, at: string, errs: ^[dynamic]string) {
 	if r.statement == "" {errf(errs, "%s: statement is required", at)}
-	if r.why == "" {errf(errs, "%s: why is required (20.4)", at)}
+	if r.why == "" {errf(errs, "%s: why is required", at)}
 	// a rule cannot reach a user without its justification
 	if r.instead_of == "" {errf(errs, "%s: instead_of is required (compared to what?)", at)}
 	if r.evidence == "" {errf(errs, "%s: evidence is required (what hard evidence?)", at)}
@@ -327,7 +325,7 @@ find_rule :: proc(rb: ^Rulebook, id: string) -> ^Rule {
 	return nil
 }
 
-// A rule that survives the retired / example-only / --topic / disabled filters.
+// A rule that survives the retired / --topic / disabled filters.
 Active_Rule :: struct {
 	id:   string, // "topic/Rn"
 	rule: ^Rule,

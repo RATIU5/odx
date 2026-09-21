@@ -87,7 +87,7 @@ Why this idiom exists, in a paragraph a reader can act on.
 
 // rule_add: built-in topics live under rules/, project topics under .odx/topics/.
 rule_add :: proc(o: Opts) {
-	if len(o.args) < 2 {fail("usage: odx rule add <topic> [--id R5]")}
+	if len(o.args) < 2 {fail("usage: odx rule add <topic> [--id R9]")}
 	p := must_load(o, true)
 	t := find_topic(&p.rb, o.args[1])
 	if t == nil {fail("unknown topic %q (create %s/%s/topic.md first)", o.args[1], PROJECT_TOPICS_DIR, o.args[1])}

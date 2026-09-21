@@ -35,7 +35,8 @@ USAGE :: `usage: odx <command> [args] [--json] [--root <dir>]
   --json is the machine contract on check, doctor, for, explain, ignores and hook (schema: 1).
   Exit codes: 0 clean, 1 violations, 2 tool/config error.
 
-  check [<path>...] [--topic t] [--fast] [--strict] [--since <ref>] [--ci]   run checks (odx.baseline softens, never hides)
+  check [<path>...] [--topic t] [--fast] [--strict] [--since <ref>] [--ci] [--max-violations N]   run checks (odx.baseline softens, never hides)
+  check --exemplar <topic>     check rules/<topic>/example/ against that topic (the exemplars CI task)
   baseline add | regen         freeze current violations into odx.baseline (shrinks on its own; never grows from check)
   for <path> [--brief]         the rules that apply to a file or package (--brief: topic names only)
   for --emit-claude-md [<path>]   the same as a Markdown section for CLAUDE.md (no path: every topic)
@@ -48,7 +49,7 @@ USAGE :: `usage: odx <command> [args] [--json] [--root <dir>]
   self-test                    run every tests/fixtures/* and diff its // want: markers
   rule try '<check json5>' [<path>...] [--count]   run an inline check spec, print every match (nothing written)
   rule try --file <rule.odx.md> [<path>...]        dry-run a drafted rule file the same way
-  rule add <topic> [--id R5]   scaffold <topic>/<id>.odx.md with the next free id
+  rule add <topic> [--id R9]   scaffold <topic>/<id>.odx.md with the next free id
   rule test <topic>/<id>       compile just that rule's fires/silent blocks
 `
 

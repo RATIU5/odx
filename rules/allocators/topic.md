@@ -3,7 +3,6 @@ name: "allocators",
 summary: "Explicit allocator parameters in pure code; each allocation's lifetime is chosen at the call site",
 tags: ["allocators", "memory", "arena", "defer", "leaks"],
 aliases: ["memory management", "allocation", "context.allocator"],
-example_questions: ["who frees this slice", "should this proc take an allocator parameter", "how do I avoid leaks in tests"],
 applies_to: { roles: ["pure", "service"] },
 related: ["errors", "dependencies"],
 example_roles: { "example/core": "pure" },
@@ -23,7 +22,7 @@ its intended lifetime is outside any static checker's reach.
   declaring `allocator := context.allocator` as a parameter. Inside a tagged file the default
   is unreachable from other tagged files, so it serves untagged callers.
 - Sanitized tests (`-sanitize:address -define:ODIN_TEST_FAIL_ON_BAD_MEMORY=true`) are a
-  guarantee `odx doctor` checks in mise.toml, not a rule (the former R3, retired in M8.3).
+  guarantee `odx doctor` checks in mise.toml, not a rule (the former R3, retired).
 
 ## Reader checks
 

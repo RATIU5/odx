@@ -202,11 +202,6 @@ unmarshal_json5 :: proc(
 	return
 }
 
-json_array :: proc(obj: json.Object, key: string) -> []json.Value {
-	arr, _ := obj[key].(json.Array)
-	return arr[:]
-}
-
 check_keys :: proc(
 	errs: ^[dynamic]string,
 	at, section: string,
@@ -232,10 +227,6 @@ check_enum :: proc(errs: ^[dynamic]string, at: string, obj: json.Object, key: st
 		if _, found := reflect.enum_from_name(E, s); found {return}
 	}
 	errf(errs, "%s: %s must be one of %v", at, key, reflect.enum_field_names(E))
-}
-
-reflect_enum :: proc($E: typeid, name: string) -> (E, bool) {
-	return reflect.enum_from_name(E, name)
 }
 
 // rel_dir is relative to root with `/` separators. n counts matching roles: 0 = unmapped,

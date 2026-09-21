@@ -17,7 +17,7 @@ outputs = ["{{ env.OUT }}/odx"]
 run = "mkdir -p $OUT && odin build odx -out:$OUT/odx $ODIN_VET -vet-packages:odx -debug"
 
 [tasks.release]
-description = "Optimized binary for distribution (ubi: path once a tagged release exists, 18.3)"
+description = "Optimized binary for distribution"
 sources = ["odx/**/*.odin", "rules/**/*"]
 outputs = ["{{ env.OUT }}/release/odx"]
 run = "mkdir -p $OUT/release && odin build odx -out:$OUT/release/odx $ODIN_VET -vet-packages:odx -o:speed"
@@ -30,7 +30,7 @@ run = "install -m 755 $OUT/release/odx ~/.local/bin/odx"
 [tasks.fmt]
 description = "Format all odin files in this project"
 alias = "f"
-run = "for d in odx spikes; do odinfmt -w $d; done"  # odinfmt (from OLS) takes one path; tests/fixtures excluded on purpose
+run = "odinfmt -w odx"  # tests/fixtures excluded on purpose
 
 [tasks.odx]
 description = "Run the odx binary (debug)"
@@ -40,17 +40,6 @@ run = "${ODX}"
 [tasks.test]
 description = "odx's own unit tests"
 run = "mkdir -p $OUT && odin test odx $ODIN_VET -sanitize:address -define:ODIN_TEST_FAIL_ON_BAD_MEMORY=true -out:$OUT/odx_test"
-
-[tasks.spikes]
-description = "M0 feasibility spikes (spikes/README.md records results)"
-run = '''
-set -e
-mkdir -p $OUT
-for s in spikes/*/; do
-  [ -f "$s/main.odin" ] || continue
-  odin build "$s" -out:$OUT/spike_$(basename "$s") $ODIN_VET -debug
-done
-'''
 
 [tasks.exemplars]
 description = "Every rules/<topic>/example/<pkg> compiles and passes its own topic checks"
@@ -64,12 +53,12 @@ for t in rules/*/; do $ODX check --exemplar "$(basename "$t")"; done
 '''
 
 [tasks.self]
-description = "odx checks its own sources with its own rules (milestone stop condition)"
+description = "odx checks its own sources with its own rules"
 depends = ["build"]
 run = "$ODX doctor --ci && $ODX check"
 
 [tasks.audit]
-description = "M1.1 redundancy audit: every construct odx retired because the compiler owns it must still be rejected with no flags; rerun on each Odin release"
+description = "Redundancy audit: every construct odx retired because the compiler owns it must still be rejected with no flags; rerun on each Odin release"
 run = '''
 for f in tests/compiler/*.odin; do
   if odin check "$f" -file -no-entry-point >/dev/null 2>&1; then
@@ -84,6 +73,6 @@ description = "Everything CI runs, in order"
 depends = ["build", "test", "fixtures", "exemplars", "audit", "self"]
 
 [tasks.fixtures]
-description = "Every tests/fixtures/<name>/ is checked and diffed against its // want: markers (17.14)"
+description = "Every tests/fixtures/<name>/ is checked and diffed against its // want: markers, plus every rule and topic.md block"
 depends = ["build"]
 run = "$ODX self-test"
