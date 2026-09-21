@@ -14,13 +14,13 @@ description = "Build the odx binary (debug)"
 alias = "b"
 sources = ["odx/**/*.odin", "rules/**/*"] # rules/ is embedded, so it is a build input
 outputs = ["{{ env.OUT }}/odx"]
-run = "odin build odx -out:$OUT/odx $ODIN_VET -vet-packages:odx -debug"
+run = "mkdir -p $OUT && odin build odx -out:$OUT/odx $ODIN_VET -vet-packages:odx -debug"
 
 [tasks.release]
 description = "Optimized binary for distribution (ubi: path once a tagged release exists, 18.3)"
 sources = ["odx/**/*.odin", "rules/**/*"]
 outputs = ["{{ env.OUT }}/release/odx"]
-run = "odin build odx -out:$OUT/release/odx $ODIN_VET -vet-packages:odx -o:speed"
+run = "mkdir -p $OUT/release && odin build odx -out:$OUT/release/odx $ODIN_VET -vet-packages:odx -o:speed"
 
 [tasks.install]
 description = "Put a release build on PATH for local use in other projects"
@@ -39,12 +39,13 @@ run = "${ODX}"
 
 [tasks.test]
 description = "odx's own unit tests"
-run = "odin test odx $ODIN_VET -sanitize:address -define:ODIN_TEST_FAIL_ON_BAD_MEMORY=true -out:$OUT/odx_test"
+run = "mkdir -p $OUT && odin test odx $ODIN_VET -sanitize:address -define:ODIN_TEST_FAIL_ON_BAD_MEMORY=true -out:$OUT/odx_test"
 
 [tasks.spikes]
 description = "M0 feasibility spikes (spikes/README.md records results)"
 run = '''
 set -e
+mkdir -p $OUT
 for s in spikes/*/; do
   [ -f "$s/main.odin" ] || continue
   odin build "$s" -out:$OUT/spike_$(basename "$s") $ODIN_VET -debug
