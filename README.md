@@ -125,6 +125,23 @@ Protected paths (`rules/`, `.odx/`, `odx.json5`, `mise.toml`, `tests/fixtures/`,
 hooks print it and let the edit stand. A human approves with `ODX_ALLOW_PROTECTED=1 odx
 doctor --relock`. This is visibility, not a security boundary.
 
+## Formats and output
+
+Two formats, total. `odx.json5` is project configuration only: `version: 1`, `roles`,
+`default_role`, `exclude`, `disabled`, `dependencies`, `odin` (flags, collections, allowed
+vet disables, explicit-allocators policy); one schema, and an unknown key is a load error.
+`.odx.md` is everything a human writes about rules: `topic.md` for the topic record and
+`<id>.odx.md` per rule, frontmatter plus fenced blocks. The lock file and `odx.baseline` are
+written by odx, never by hand.
+
+`--json` on `check`, `hook` and `ignores` is the machine contract, `schema: 1`. Each
+violation carries `file`, `line`, `col`, `rule`, `severity`, `check`, `message`, `class`
+(the rule's stable greppable name), `subject` (the baseline key), `baselined`, `blocking`,
+`ignorable`, `statement`, `why`, `fires` and `silent`. `summary` carries `errors`,
+`warnings` (baselined findings count in neither), `ignored`, `files`, `baselined` and
+`omitted`: `--max-violations` is unlimited by default and 50 on the hook path, and a
+truncated report always says how many it dropped.
+
 ## Layout
 
 - `odx/` the tool. `rules/<topic>/` built-in topics (`topic.md` record + prose, one

@@ -21,7 +21,7 @@ Topic :: struct {
 	related:           []string,
 	example_roles:     map[string]string,
 	rules:             []Rule,
-	// runtime only (not in topic.json5; TOPIC_KEYS rejects them there)
+	// runtime only (not in topic.md frontmatter; TOPIC_KEYS rejects them there)
 	prose:             string, // topic.md
 	exemplar:          string, // example/*/*.odin concatenated; shown by the stop hook (M2.3)
 	source:            string, // "builtin" or the directory it came from
