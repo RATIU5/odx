@@ -16,28 +16,71 @@ DEFAULT_GUARANTEES := []string {
 	"-warnings-as-errors",
 }
 
-// compiler_guarantees: every -vet*/-strict-style/-warnings-as-errors flag `odin help check`
-// lists, so doctor ratchets as the compiler grows. implied are the sub-flags of -vet.
-compiler_guarantees :: proc(help: string) -> (flags, implied: []string) {
-	out := make([dynamic]string, context.temp_allocator)
-	imp := make([dynamic]string, context.temp_allocator)
+// Help_Flags is `odin help check`, parsed once and shared by doctor's flag check and the
+// guarantee ratchet. ok is false when the text yields implausibly few flags: a help reflow
+// must never fail a build, so callers warn once and skip.
+Help_Flags :: struct {
+	flags:   map[string]bool, // top-level flag names, `:` suffix dropped
+	implied: []string, // flags listed under -vet: on whenever -vet is
+	ok:      bool,
+}
+
+MIN_HELP_FLAGS :: 5
+
+// A flag line is one whose trimmed text is a single `-token`. Indentation is counted in
+// characters, tabs or spaces alike, so the shallowest such lines are top-level and anything
+// deeper is nested (the sub-flags under -vet). Nothing depends on tabs.
+parse_help_flags :: proc(help: string) -> (hf: Help_Flags) {
+	Line :: struct {
+		depth: int,
+		name:  string,
+	}
+	found := make([dynamic]Line, context.temp_allocator)
+	top := max(int)
 	for line in strings.split_lines(help, context.temp_allocator) {
 		t := strings.trim_left_space(line)
-		if !(strings.has_prefix(t, "-vet") ||
-			   strings.has_prefix(t, "-strict-style") ||
-			   strings.has_prefix(t, "-warnings-as-errors")) {continue}
+		if !strings.has_prefix(t, "-") || strings.contains_any(t, " \t") {continue}
 		name, _, _ := strings.partition(t, ":")
-		if strings.contains(name, "-packages") {continue} 	// scoping, not a guarantee
-		if strings.count(line, "\t") >
-		   1 {append(&imp, name)} else if !slice.contains(out[:], name) {append(&out, name)}
+		depth := len(line) - len(t)
+		top = min(top, depth)
+		append(&found, Line{depth, name})
 	}
+	hf.flags = make(map[string]bool)
+	imp := make([dynamic]string)
+	for l in found {
+		if l.depth == top {hf.flags[l.name] = true} else {append(&imp, l.name)}
+	}
+	hf.implied = imp[:]
+	hf.ok = len(hf.flags) >= MIN_HELP_FLAGS
+	return
+}
+
+// compiler_guarantees: every -vet*/-strict-style/-warnings-as-errors flag the compiler lists,
+// so doctor ratchets as the compiler grows. implied are the sub-flags of -vet.
+compiler_guarantees :: proc(hf: Help_Flags) -> (flags, implied: []string) {
+	is_guarantee :: proc(name: string) -> bool {
+		if strings.contains(name, "-packages") {return false} 	// scoping, not a guarantee
+		return(
+			strings.has_prefix(name, "-vet") ||
+			name == "-strict-style" ||
+			name == "-warnings-as-errors" \
+		)
+	}
+	out := make([dynamic]string, context.temp_allocator)
+	imp := make([dynamic]string, context.temp_allocator)
+	for name in sorted_keys(hf.flags) {if is_guarantee(name) {append(&out, name)}}
+	for name in hf.implied {if is_guarantee(name) {append(&imp, name)}}
 	return out[:], imp[:]
 }
 
 // Missing defaults and un-adopted compiler flags are warnings; `check` turns the per-file
 // opt-outs into violations.
-report_guarantees :: proc(d: ^Doctor, c: ^Ctx, help: string) {
-	flags, implied := compiler_guarantees(help)
+report_guarantees :: proc(d: ^Doctor, c: ^Ctx, hf: Help_Flags) {
+	if !hf.ok {
+		warn(d, "cannot read `odin help check` output; guarantee ratchet skipped")
+		return
+	}
+	flags, implied := compiler_guarantees(hf)
 	on := make(map[string]bool, context.temp_allocator)
 	for f in c.cfg.odin.flags {
 		name, _, _ := strings.partition(f, ":")

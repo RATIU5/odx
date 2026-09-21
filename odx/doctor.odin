@@ -63,8 +63,9 @@ cmd_doctor :: proc(o: Opts) {
 	for e in p.errs {err(&d, "%s", e)}
 	if len(d.errors) > 0 {doctor_exit(&d)}
 	c := make_ctx(&p, nil)
-	check_toolchain(&d, &c, o.ci)
-	report_guarantees(&d, &c, odin_output(odin_exe(c.cfg), "help", "check"))
+	hf := parse_help_flags(odin_output(odin_exe(c.cfg), "help", "check"))
+	check_toolchain(&d, &c, o.ci, hf)
+	report_guarantees(&d, &c, hf)
 	check_task_files(&d, &p)
 	say(&d, "check argv: odx check  (mise task, CI via `mise run ci`)")
 	say(
@@ -79,7 +80,7 @@ cmd_doctor :: proc(o: Opts) {
 	doctor_exit(&d)
 }
 
-check_toolchain :: proc(d: ^Doctor, c: ^Ctx, ci: bool) {
+check_toolchain :: proc(d: ^Doctor, c: ^Ctx, ci: bool, hf: Help_Flags) {
 	exe := odin_exe(c.cfg)
 	version := odin_output(exe, "version")
 	if version == "" {
@@ -92,17 +93,10 @@ check_toolchain :: proc(d: ^Doctor, c: ^Ctx, ci: bool) {
 		report := err if ci else warn
 		report(d, "odin version %s does not match odin.version %s", ver, want)
 	}
-	help := odin_output(exe, "help", "check")
 	for f in c.cfg.odin.flags {
 		name, _, _ := strings.partition(f, ":")
-		if !strings.contains(
-			   help,
-			   strings.concatenate({"\n\t", name, "\n"}, context.temp_allocator),
-		   ) &&
-		   !strings.contains(
-				   help,
-				   strings.concatenate({"\n\t", name, ":"}, context.temp_allocator),
-			   ) {
+		// an unreadable help text is report_guarantees' one warning, never an error here
+		if hf.ok && name not_in hf.flags {
 			err(d, "flag %s is not accepted by `odin check` on this compiler", f)
 		}
 		if flag_listed(
@@ -118,8 +112,7 @@ check_task_files :: proc(d: ^Doctor, p: ^Project) {
 		// tokens of every non-comment line: a comment naming a flag is not a use of it
 		tokens := make(map[string]bool, context.temp_allocator)
 		for line in strings.split_lines(string(mise), context.temp_allocator) {
-			code, _, _ := strings.partition(line, "#")
-			for tok in strings.fields(code, context.temp_allocator) {tokens[strings.trim(tok, "\"'")] = true}
+			for tok in strings.fields(toml_code(line), context.temp_allocator) {tokens[strings.trim(tok, "\"'")] = true}
 		}
 		for f in p.cfg.odin.forbidden_flags {
 			if f in tokens {err(d, "mise.toml uses forbidden flag %s", f)}
@@ -140,7 +133,7 @@ check_task_files :: proc(d: ^Doctor, p: ^Project) {
 		context.allocator,
 	); herr == nil {
 		if !strings.contains(
-			string(hooks),
+			uncommented_json(string(hooks)),
 			"hook edit",
 		) {warn(d, ".claude/settings.json does not run `odx hook edit` (odx init --hooks prints the block)")}
 	}
@@ -150,6 +143,35 @@ check_task_files :: proc(d: ^Doctor, p: ^Project) {
 	); cerr == nil && !strings.contains(string(ci), "mise run ci") {
 		warn(d, ".github/workflows/ci.yml does not run `mise run ci`")
 	}
+}
+
+// toml_code: the line up to the first `#` that is outside a quoted string.
+// ponytail: a `'''` block is scanned line by line, so a `#` inside one still ends the line;
+// flags inside such blocks sit before any `#` in practice.
+toml_code :: proc(line: string) -> string {
+	quote: byte
+	for c, i in transmute([]byte)line {
+		switch {
+		case quote != 0:
+			if c == quote {quote = 0}
+		case c == '"' || c == '\'':
+			quote = c
+		case c == '#':
+			return line[:i]
+		}
+	}
+	return line
+}
+
+// uncommented_json drops `//` comment lines, so a commented-out hook is not a hook.
+uncommented_json :: proc(text: string) -> string {
+	b := strings.builder_make(context.temp_allocator)
+	for l in strings.split_lines(text, context.temp_allocator) {
+		if strings.has_prefix(strings.trim_left_space(l), "//") {continue}
+		strings.write_string(&b, l)
+		strings.write_byte(&b, '\n')
+	}
+	return strings.to_string(b)
 }
 
 // check_attachment: a topic whose roles no package has never attaches.

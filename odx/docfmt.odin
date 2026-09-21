@@ -67,33 +67,64 @@ doc_package :: proc(
 	ok: bool
 	for _ in 0 ..< 3 {
 		code, text, ok = run_odin(c, ..args[:])
-		// ponytail: the 2026-09 nightly segfaults intermittently (exit 11, no output): retry
-		if !(ok && code != 0 && text == "") {break}
+		// ponytail: the 2026-09 nightly crashes intermittently on `odin doc`: retry a failure
+		// that carries no diagnostic (a crash), not one the compiler explained
+		if !ok || code == 0 || strings.contains(text, "Error:") {break}
 	}
 	if !ok {return nil, .Fatal}
-	if code != 0 || !os.exists(out) {return nil, .Skipped}
+	if code != 0 && !strings.contains(text, "Error:") {
+		// no diagnostic means the tool failed, not the code; say which rule that silences
+		rel, _ := rel_of(c.root, p.dir)
+		tool_error(c.r, "odin doc failed on %s (exit %d) with no diagnostic: errors/R3 (require_results) is NOT checked there", rel, code)
+		return nil, .Skipped
+	}
+	if code != 0 || !os.exists(out) {return nil, .Skipped} 	// family A already said why
 	data, rerr := os.read_entire_file(out, context.allocator)
 	if rerr != nil {return nil, .Skipped}
 	derr: doc.Reader_Error
 	h, derr = doc.read_from_bytes(data)
-	if derr != nil {
+	want := doc.Version_Type_Default
+	if derr == .Invalid_Version {
+		// core's reader wants the exact version it was built with; a newer minor within the
+		// same major only adds fields, so read it and say so once. A major bump is fatal and
+		// names what stops being checked, rather than going quiet.
+		hb := (^doc.Header_Base)(raw_data(data))
+		got := hb.version
+		if got.major == want.major && got.minor >= want.minor {
+			if !doc_version_warned {
+				doc_version_warned = true
+				fmt.eprintfln(
+					"odx: warning: odin doc-format %d.%d.%d is newer than the %d.%d.x this odx was built against; reading it anyway",
+					got.major,
+					got.minor,
+					got.patch,
+					want.major,
+					want.minor,
+				)
+			}
+			return (^doc.Header)(hb), .Ok
+		}
 		tool_error(
 			c.r,
-			"doc-format reader: %v (compiler wrote version %d.%d.%d); this odx supports %d.%d.x only",
-			derr,
-			h.version.major,
-			h.version.minor,
-			h.version.patch,
-			DOC_FORMAT_MAJOR,
-			DOC_FORMAT_MINOR,
+			"doc-format %d.%d.%d is not the %d.%d.x this odx reads: errors/R3 (require_results) is NOT checked until odx is rebuilt against this compiler",
+			got.major,
+			got.minor,
+			got.patch,
+			want.major,
+			want.minor,
 		)
+		return nil, .Fatal
+	}
+	if derr != nil {
+		tool_error(c.r, "doc-format reader: %v; errors/R3 (require_results) is NOT checked", derr)
 		return nil, .Fatal
 	}
 	return h, .Ok
 }
 
-DOC_FORMAT_MAJOR :: 0
-DOC_FORMAT_MINOR :: 3
+// ponytail: one process, one warning; the doc pass runs per package.
+@(private = "file")
+doc_version_warned: bool
 
 @(private = "file")
 check_entities :: proc(c: ^Ctx, p: ^Package, h: ^doc.Header, rules: []^Active_Rule) {

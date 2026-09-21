@@ -149,11 +149,19 @@ vet_tag_names :: proc(f: ^ast.File) -> []string {
 
 // `#+feature` opt-outs need a same-line `// reason:`.
 check_vet_disables :: proc(c: ^Ctx, f: ^ast.File) {
-	lines := strings.split_lines(f.src, context.temp_allocator)
+	// a comment token, not a substring of the line: `// reason:` inside a string literal is not a reason
+	has_reason :: proc(f: ^ast.File, line: int) -> bool {
+		for g in f.comments {
+			for ct in g.list {
+				if ct.pos.line == line && strings.has_prefix(ct.text, "// reason:") {return true}
+			}
+		}
+		return false
+	}
 	for tok in f.tags {
 		t := strings.trim_space(strings.trim_prefix(tok.text, "#+"))
 		if !strings.has_prefix(t, "feature") {continue}
-		if strings.contains(lines[tok.pos.line - 1], "// reason:") {continue}
+		if has_reason(f, tok.pos.line) {continue}
 		file, _ := rel_of(c.root, f.fullpath)
 		note(
 			c.r,

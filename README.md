@@ -38,7 +38,7 @@ so `hook = 0` is the stopping condition, not a result.
 The two independent columns regressed under both odx conditions, and `hook` cost 46% more
 turns than `bare`. A second run of `ring` and `stack` (the two tasks that failed under odx)
 passed under all three conditions, so those failures were noise; the regression on the
-first run is still the only evidence there is. The agent-loop features (`odx eval`,
+first run is still the only evidence there is. The agent-loop features (the eval harness,
 `odx hook stop`) were removed on this evidence; re-litigating it needs a different
 experiment, which does not belong in this binary. Raw rows, tab-separated
 `task condition compiled tests_pass violations turns seconds`; the last six are the rerun:
