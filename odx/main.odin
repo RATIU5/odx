@@ -20,7 +20,6 @@ Opts :: struct {
 	max_violations: int,
 	hooks:          bool,
 	brief:          bool,
-	report:         bool,
 	added:          bool,
 	stale:          bool,
 	count:          bool,
@@ -50,7 +49,6 @@ USAGE :: `usage: odx <command> [args] [--json] [--root <dir>]
   rule try --file <rule.odx.md> [<path>...]        dry-run a drafted rule file the same way
   rule add <topic> [--id R5]   scaffold <topic>/<id>.odx.md with the next free id
   rule test <topic>/<id>       compile just that rule's fires/silent blocks
-  eval [<task>...] [--topic bare|for|hook] [--report]   M6 pilot: run evals/<task>/ through claude -p and score mechanically
 `
 
 fail :: proc(f: string, args: ..any) -> ! {
@@ -85,8 +83,6 @@ parse_opts :: proc(args: []string) -> (o: Opts) {
 			o.checklist = true
 		case "--hooks":
 			o.hooks = true
-		case "--report":
-			o.report = true
 		case "--brief":
 			o.brief = true
 		case "--added":
@@ -152,8 +148,6 @@ main :: proc() {
 		cmd_ignores(o)
 	case "doctor":
 		cmd_doctor(o)
-	case "eval":
-		cmd_eval(o)
 	case "self-test":
 		cmd_selftest(o)
 	case "rule":

@@ -17,8 +17,70 @@ agents and to CI.
 - Rules that are taste rather than mechanics are indefensible. Naming, formatting and brace
   style are never built in.
 - odx does not make code good.
-- The retrieval half of the premise (rules in an agent's context) is unmeasured by anyone
-  until the M6 evaluation runs.
+- Putting odx in an agent's loop does not make the agent write better Odin. The M6 pilot
+  below measured it and the independent columns got worse.
+
+## What the M6 pilot showed
+
+Ten tasks (base64, kv_parse, lru, matrix, path_join, ring, split_words, stack, tokenize,
+version_parse) were each run through `claude -p` under three conditions: `bare` (no odx),
+`for` (`odx for` output in the prompt) and `hook` (the edit and Stop hooks installed).
+Compiled and tests-pass were scored by the harness; `violations` is `odx check` grading
+its own conditions, and the Stop hook refused to end the session until that count was zero,
+so `hook = 0` is the stopping condition, not a result.
+
+| condition | compiled | tests pass | odx violations | turns | seconds |
+|---|---|---|---|---|---|
+| bare | 10/10 | 9/10 | 18 | 71 | 274 |
+| for | 8/10 | 7/10 | 4 | 66 | 407 |
+| hook | 8/10 | 7/10 | 0 | 104 | 349 |
+
+The two independent columns regressed under both odx conditions, and `hook` cost 46% more
+turns than `bare`. A second run of `ring` and `stack` (the two tasks that failed under odx)
+passed under all three conditions, so those failures were noise; the regression on the
+first run is still the only evidence there is. The agent-loop features (`odx eval`,
+`odx hook stop`) were removed on this evidence; re-litigating it needs a different
+experiment, which does not belong in this binary. Raw rows, tab-separated
+`task condition compiled tests_pass violations turns seconds`; the last six are the rerun:
+
+```
+base64	bare	true	true	4	7	37
+base64	for	true	true	0	13	54
+base64	hook	true	true	0	16	60
+kv_parse	bare	true	true	0	8	26
+kv_parse	for	true	true	0	10	170
+kv_parse	hook	true	true	0	11	35
+lru	bare	true	true	2	8	25
+lru	for	true	true	0	6	23
+lru	hook	true	true	0	8	30
+matrix	bare	true	true	0	8	26
+matrix	for	true	true	1	3	15
+matrix	hook	true	true	0	11	33
+path_join	bare	true	true	0	12	52
+path_join	for	true	true	1	3	19
+path_join	hook	true	true	0	7	35
+ring	bare	true	true	4	4	16
+ring	for	false	false	1	3	13
+ring	hook	false	false	0	9	26
+split_words	bare	true	true	1	4	16
+split_words	for	true	true	0	7	29
+split_words	hook	true	true	0	11	29
+stack	bare	true	true	3	6	20
+stack	for	false	false	0	8	27
+stack	hook	false	false	0	11	41
+tokenize	bare	true	false	0	8	26
+tokenize	for	true	false	0	8	34
+tokenize	hook	true	false	0	12	36
+version_parse	bare	true	true	4	6	30
+version_parse	for	true	true	1	5	23
+version_parse	hook	true	true	0	8	24
+ring	bare	true	true	0	10	26
+ring	for	true	true	0	9	26
+ring	hook	true	true	0	8	29
+stack	bare	true	true	0	8	23
+stack	for	true	true	0	11	42
+stack	hook	true	true	0	7	26
+```
 
 ## 1. Guarantees
 
