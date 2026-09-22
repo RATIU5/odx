@@ -111,14 +111,14 @@ guidance_sync :: proc(path, block: string, write: bool) -> (status: int, message
 		replacement = strings.concatenate({old, separator, block}, context.temp_allocator)
 	}
 	mode := os.Permissions_Read_All + {.Write_User} if missing else info.mode
-	if err := guidance_replace(path, replacement, mode);
+	if err := replace_file_atomic(path, replacement, mode);
 	   err != nil {return 2, fmt.aprintf("cannot write %s: %v", path, err)}
 	return 0, fmt.aprintf("%s: guidance written", path)
 }
 
 @(require_results)
-guidance_replace :: proc(path, text: string, mode: os.Permissions) -> os.Error {
-	f, create_error := os.create_temp_file(filepath.dir(path), ".odx-guidance-*")
+replace_file_atomic :: proc(path, text: string, mode: os.Permissions) -> os.Error {
+	f, create_error := os.create_temp_file(filepath.dir(path), ".odx-write-*")
 	if create_error != nil {return create_error}
 	temporary := strings.clone(os.name(f), context.temp_allocator)
 	closed := false

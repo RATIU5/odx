@@ -42,7 +42,7 @@ Rule :: struct {
 	severity:        Severity,
 	class:           string, // stable greppable name, e.g. "dependencies_hidden_state"
 	ignorable:       bool, // default true; set at load when absent
-	baselineable:    bool, // has a stable subject
+	baselineable:    bool, // permits baselining when a source occurrence identity is available
 	retired:         bool,
 	role:            string, // role the fires/silent blocks are checked under (default edge)
 	check:           Check_Spec,
@@ -56,19 +56,18 @@ Rule :: struct {
 	disabled_reason: string, // runtime project disabling reason, empty when enabled
 }
 
-// Every kind runs and every finding blocks; conventions a reader enforces live as prose and
-// compiled blocks in topic.md, not as rules.
+// Reviewer advice belongs in topic prose; these kinds require executable evidence.
 Check_Kind :: enum {
 	path_role,
 	banned_import,
 	vet_tag,
 	require_attribute, // family C: needs the compiler's entity table (docfmt.odin)
-	pattern, // a selector over the AST walk (pattern.odin); the open-ended kind
+	pattern,
 }
 
 // ponytail: strings, because `import` and `proc` are keywords and cannot name enum variants.
 PATTERN_MATCHES := []string {
-	"call", // names: canonical `pkg.name` or bare `name` calls
+	"call", // names: syntactic `pkg.name` or bare `name`; aliases are best effort
 	"import", // name: an import glob (`core:fmt`, `core:sys/*`)
 	"proc", // exported / requires_param: package-level procedures
 	"decl", // at: package_scope, mutable: package-level value declarations
@@ -87,7 +86,7 @@ Check_Spec :: struct {
 	attribute:      string, // require_attribute
 	on:             string, // require_attribute: "" | "exported_procs"
 	from:           string, // banned_import: documentation only
-	names:          []string, // call: canonical `pkg.name` or bare `name`
+	names:          []string, // call: syntactic names with best-effort import aliases
 	roles:          []string,
 	except_roles:   []string,
 	// pattern
@@ -317,7 +316,6 @@ validate_rule :: proc(r: ^Rule, obj: json.Object, at: string, errs: ^[dynamic]st
 	}
 	if r.statement == "" {errf(errs, "%s: statement is required", at)}
 	if r.why == "" {errf(errs, "%s: why is required", at)}
-	// a rule cannot reach a user without its justification
 	if r.instead_of == "" {errf(errs, "%s: instead_of is required (compared to what?)", at)}
 	if r.evidence == "" {errf(errs, "%s: evidence is required (what hard evidence?)", at)}
 	if r.cost == "" {errf(errs, "%s: cost is required (at what cost?)", at)}

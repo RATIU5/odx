@@ -70,7 +70,16 @@ done
 
 [tasks.ci]
 description = "Everything CI runs, in order"
-depends = ["build", "test", "fixtures", "exemplars", "audit", "self", "evidence", "architecture", "contracts", "guidance", "semantics", "policies"]
+depends = ["build", "test", "fixtures", "exemplars", "audit", "self", "evidence", "architecture", "contracts", "guidance", "semantics", "policies", "adoption"]
+
+[tasks.adoption]
+description = "Verify baseline identity, gradual adoption, suppression audits, and init cleanup"
+depends = ["build"]
+run = '''
+ODX_ODIN="$(command -v odin)" odin run docs/milestones/7-baseline-probe -out:$OUT/odx_baselines -vet -strict-style
+ODX_ODIN="$(command -v odin)" odin run docs/milestones/7-adoption-probe -out:$OUT/odx_adoption -vet -strict-style
+ODX_ODIN="$(command -v odin)" odin run docs/milestones/7-cleanup-probe -out:$OUT/odx_cleanup -vet -strict-style
+'''
 
 [tasks.policies]
 description = "Verify independent minimal and strict project policies"

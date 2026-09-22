@@ -1,12 +1,12 @@
 <!-- odx:begin v1 -->
 ## odx
 
-Policy fingerprint (generation 2): `ef4dbd087d0575bd8677190f67d16c6b600684997b37f2def41c69f0342017ab`
+Policy fingerprint (generation 3): `349de3bd96130251a9c3b4bfd13a4ce98351301f3d64bf0f9a5a5c53b237adad`
 
 Scope: all discovered project packages. Rules below are the union applicable to this selection; each rule retains its own scope.
 - Package `parser`: role `(unmapped)`
 
-Run `odx check --json` for findings and coverage. Warnings fail with `--strict`; baselines soften findings and suppressions remove accepted findings. Exit 0 alone does not prove complete analysis. Guidance freshness checks policy synchronization, not source compliance.
+Run `odx check --json` for findings and coverage. Warnings fail with `--strict`; baselines soften findings and suppressions remove accepted findings. Exit 0 alone does not prove complete analysis. Guidance freshness checks policy synchronization, not source compliance. Baselines accept occurrences in unchanged source snapshots; checks never rewrite them. Use `odx baseline add`, `prune`, or `regen` for explicit maintenance.
 
 Use `odx guidance check <markdown-file> [package-path]` to check this section and `odx guidance write <markdown-file> [package-path]` to regenerate it. Repeat the same scope. Rebuild after changing embedded builtin rules; project overrides load directly.
 

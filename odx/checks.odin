@@ -67,8 +67,7 @@ pos_of :: proc(c: ^Ctx, n: ^ast.Node) -> (file: string, line, col: int) {
 	return file, n.pos.line, n.pos.column
 }
 
-// subject is the baseline key (an import path, symbol or declaration name); "" means no stable
-// identity, so the finding cannot be baselined.
+// A baseline also binds this semantic subject to its source snapshot and position.
 report :: proc(
 	c: ^Ctx,
 	a: ^Active_Rule,
@@ -114,7 +113,6 @@ run_family_b :: proc(c: ^Ctx) {
 	c.native_ran = true
 	for &p in c.pkgs {
 		c.r.summary.files += len(p.files)
-		// parse errors first: the model fixes syntax before rules
 		for d in p.diags {
 			file, _ := rel_of(c.root, d.pos.file)
 			note(c.r, "odin/syntax", "parse", file, d.pos.line, d.pos.column, d.msg)
@@ -127,7 +125,6 @@ run_family_b :: proc(c: ^Ctx) {
 		for f in p.files {
 			check_vet_disables(c, f)
 		}
-		// every `match: call` rule shares one AST walk per file (the only check that walks)
 		calls := make([dynamic]^Active_Rule, context.temp_allocator)
 		for &a in c.rules {
 			if a.rule.check.kind == .pattern &&
@@ -209,7 +206,7 @@ check_vet_disables :: proc(c: ^Ctx, f: ^ast.File) {
 			),
 		)
 	}
-	// `#+vet !x` silently defeats -vet: never ignorable, only allow-listable in config.
+	// With auditing enabled, vet opt-outs require config permission rather than source suppression.
 	for name in vet_tag_names(f) {
 		if !strings.has_prefix(name, "!") {continue}
 		if i, ok := slice.linear_search(c.cfg.odin.allowed_vet_disables, name[1:]); ok {
@@ -273,8 +270,7 @@ Walk :: struct {
 	aliases: map[string]string, // local import name -> import path
 }
 
-// Matches `pkg.name` or bare `name` calls; aliases resolved per file, best effort.
-// One walk per file dispatches to every rule, so the cost is O(files), not O(files × rules).
+// Call rules share one AST walk per file; import alias matching does not resolve shadowing.
 check_calls :: proc(c: ^Ctx, p: ^Package, rules: []^Active_Rule) {
 	for f in p.files {
 		w := Walk{c, rules, make(map[string]string, context.temp_allocator)}

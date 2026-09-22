@@ -50,3 +50,36 @@ test_ignore_near_miss :: proc(t: ^testing.T) {
 	testing.expect(t, !is_near_miss("odx ignores nothing here, this is prose about the tool"))
 	testing.expect(t, !is_near_miss("odx check will ignore this"))
 }
+
+@(test)
+test_ignore_requires_reason_marker :: proc(t: ^testing.T) {
+	context.allocator = context.temp_allocator
+	defer free_all(context.temp_allocator)
+	src := `package p
+// odx:ignore x/R1 compatibility exception has a long explanation
+a: int
+// odx:ignore x/R1 because reason: appears later in the explanation
+b: int
+// odx:ignore x/R1 reason: deliberate compatibility exception
+c: int
+`
+	f := ast.File {
+		src      = src,
+		fullpath = "p/p.odin",
+	}
+	ps := parser.default_parser()
+	testing.expect(t, parser.parse_file(&ps, &f))
+	rb: Rulebook
+	append(&rb.topics, Topic{name = "x", rules = {{id = "R1"}}})
+	r: Report
+	igs: [dynamic]Ignore
+	collect_ignores(&r, &rb, &f, "p/p.odin", &igs)
+	if testing.expect_value(t, len(igs), 1) {testing.expect_value(t, igs[0].target, 7)}
+	if testing.expect_value(t, len(r.violations), 2) {
+		for v, i in r.violations {
+			testing.expect_value(t, v.rule, "odx/bad-ignore")
+			testing.expect_value(t, v.line, 2 + 2 * i)
+			testing.expect_value(t, v.message, "suppression reason must start with `reason:`")
+		}
+	}
+}

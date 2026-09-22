@@ -1,5 +1,8 @@
 # odx
 
+The [adoption contract](docs/milestones/7-adoption-and-compatibility.md) documents
+snapshot-bound baselines, explicit maintenance, suppression audits, and migration.
+
 Copyable [minimal](examples/policies/minimal/README.md) and
 [strict](examples/policies/strict/README.md) projects demonstrate independent
 policies. The minimal library uses two source rules without roles; the strict
@@ -106,8 +109,10 @@ for calls, singular `name` for an import glob, `exported` and `requires_param: {
 procedures, `at: "package_scope", mutable: true` for declarations, plus `roles`/`except_roles`.
 `odx rule try '<check json5>' [paths]` prints every match before any file exists,
 `odx rule add <topic>` scaffolds the next id, `odx rule test <topic>/<id>` compiles its
-blocks. The evidence bar is the one `allocators/R1` and `errors/R3` meet: a compiler version
-and a command whose output shows the failure. Anything less stays a reader check.
+blocks. Record reproducible source or compiler evidence, the toolchain used, and
+matching boundaries. A source policy may intentionally reject compiler-valid
+code; compiling examples establishes validity, while odx findings establish the
+selected restriction. Intent-dependent claims stay in reviewer advice.
 
 Rule examples run in a scratch `sample` package assigned the rule's `role`
 (default `edge`). They retain project compiler settings, error classification,
@@ -133,7 +138,7 @@ odx guidance check|write <markdown-file> [<package-path>]  verify or regenerate 
 odx explain [<topic>] [--rule R3] rules, rationale, fires/silent
 odx explain --checklist           the reader checks, for a reviewer
 odx ignores [--stale]             every odx:ignore; --stale: suppressing nothing
-odx baseline add | regen          freeze current violations by semantic key
+odx baseline add | prune | regen  explicitly accept, prune, or replace accepted debt
 odx hook edit                     Claude Code PostToolBatch hook: report, exit 0
 odx init [--hooks]                write odx.json5 and mise.toml (--hooks: hook + CLAUDE.md)
 odx self-test                     fixtures and every rule block
@@ -144,7 +149,7 @@ Check exit codes are contract: `0` no unbaselined errors (warnings also fail wit
 `--strict`), `1` failing findings, `2` tool or config error. Coverage must be inspected
 separately: partial scans can exit 0. `hook edit` always exits 0.
 `--json` on `check` is the machine contract, `schema: 1`. Each violation carries `file`, `line`, `col`, `rule`, `severity`,
-`check`, `message`, `class`, `subject` (the baseline key), `baselined`, `ignorable`,
+`check`, `message`, `class`, `subject` (a semantic label), `baselined`, `ignorable`,
 `statement`, `why`, `fires`, `silent`, `fix_hint` (the desired repair) and
 `ignore_syntax` (the exact suppression comment), plus `blocking`, always true, kept for the
 schema, not an exit-status decision. Milestone 4 corrects the formerly inverted
@@ -225,17 +230,39 @@ there is no evidence in favour either. The raw rows are in the git history of th
 
 ## Adopting, ignoring, layout
 
-`odx baseline regen` writes `odx.baseline`, one `<rule>\t<package>\t<subject>` line per
-current violation, keyed on the subject (an import path, a symbol), never a line number.
-Baselined findings still print and still appear in `--json`; they stop failing the build.
-A full run drops entries that no longer fire; `--ci` fails instead of rewriting. Growth needs
-`odx baseline add`.
+Baselines support gradual adoption without hiding findings. Format 2 binds each
+accepted occurrence to its rule, relative file, subject, line/column, and a SHA-256
+snapshot of the whole source file. Findings without a source-file identity are
+ineligible. Any source-file edit, including formatting or an enclosing procedure
+rename, reopens its findings. Byte-identical source recreated at the same path
+and position has the same identity; this is a snapshot contract, not history tracking.
+
+Ordinary checks and CI never rewrite `odx.baseline`. A complete full check reports
+stale entries as an error; partial or failed checks cannot certify resolution.
+Use `baseline add` to accept new eligible occurrences while retaining existing
+entries, `baseline prune` to remove resolved entries without accepting new debt,
+and `baseline regen` to replace acceptance with the current eligible findings.
+Every write requires complete whole-project analysis. Review the resulting diff.
+Baselined findings remain visible, retain their severity, and do not fail strict mode.
+
+Version 1's package/subject keys cannot identify historical occurrences safely.
+Checks reject old or malformed formats instead of accepting ambiguous debt.
+Explicit `baseline regen` migrates by accepting **current** eligible findings;
+it is a new adoption decision, not a reconstruction of old acceptance or reasons.
 
 `// odx:ignore <topic>/<R> reason: <ten+ characters>` above or at the end of a line
-suppresses one finding; `odx:ignore-file` on lines 1-3 suppresses it for the file. A near
+suppresses matching findings for that rule on its target line; `odx:ignore-file`
+on lines 1-3 suppresses them for the file. The literal `reason:` marker is required. A near
 miss is `odx/bad-ignore`, an ignore that suppresses nothing is `odx/stale-ignore`. Every rule
 is ignorable unless configured otherwise. `rules/`, `odx.json5` and
 `tests/fixtures/` are reviewed like any other source.
+
+`ignores --stale` is a read-only suppression audit: exit 0 means complete evidence
+with no malformed or stale suppressions, 1 means such a suppression was found,
+and 2 means required evidence is incomplete or a tool failed. `--json` returns a
+check report including coverage and findings; unrelated policy findings do not
+fail this specialized audit. Baseline debt does not affect suppression staleness.
+The ordinary `ignores --json` listing retains its `{ignores, bad}` shape.
 
 - `odx/` the tool. `rules/<topic>/` built-in topics, embedded into the binary.
 - `tests/fixtures/<name>/` small projects with `// want: topic/R2` markers, diffed both ways

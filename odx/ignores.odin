@@ -57,6 +57,8 @@ collect_ignores :: proc(
 				bad = "odx:ignore-file must be on line 1-3"
 			case strings.contains(rest, IGNORE_PREFIX):
 				bad = "one odx:ignore per line"
+			case !strings.has_prefix(strings.trim_space(rest), "reason:"):
+				bad = "suppression reason must start with `reason:`"
 			case len(reason) < 10:
 				bad = "reason must be at least 10 characters"
 			case find_rule(rb, ruleid) == nil:

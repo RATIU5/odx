@@ -82,9 +82,7 @@ rule_try :: proc(o: Opts) {
 	}
 }
 
-// The evidence bar: a compiler version and a command whose output shows the failure the rule
-// prevents (allocators/R1 and errors/R3 are the models). An evidence field nobody can check by
-// running something is not evidence; the idiom stays a reader check in topic.md until it is.
+// Source policies may reject compiler-valid code; examples must establish their matching boundaries.
 RULE_STUB ::
 	`---
 id: "@ID@",
@@ -92,7 +90,7 @@ statement: "",
 why: "",
 instead_of: "",
 fix_hint: "", // describe the corrective action; optional for existing rules (defaults to statement)
-evidence: "", // name the compiler version and the command that reproduces the failure; prose is not evidence
+evidence: "", // give reproducible source or compiler evidence, the toolchain version, and matching limits
 cost: "",
 severity: "error",
 role: "edge",
@@ -104,7 +102,6 @@ Why this idiom exists, in a paragraph a reader can act on.
 ` +
 	"```odin prelude\n```\n\n```odin fires\n```\n\n```odin silent\n```\n"
 
-// rule_add: built-in topics live under rules/, project topics under .odx/topics/.
 rule_add :: proc(o: Opts) {
 	if len(o.args) < 2 {fail("usage: odx rule add <topic> [--id R9]")}
 	p := must_load(o, true)

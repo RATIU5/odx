@@ -23,6 +23,12 @@
 !docs/milestones/5-allocator-probe/*.odin
 !docs/milestones/6-probe/
 !docs/milestones/6-probe/*.odin
+!docs/milestones/7-baseline-probe/
+!docs/milestones/7-baseline-probe/*.odin
+!docs/milestones/7-adoption-probe/
+!docs/milestones/7-adoption-probe/*.odin
+!docs/milestones/7-cleanup-probe/
+!docs/milestones/7-cleanup-probe/*.odin
 !examples/
 !examples/policies/
 !examples/policies/**
@@ -47,5 +53,3 @@ ROADMAP.md
 !CLAUDE.md
 !.github/
 !.github/**
-
-.odx/cache/

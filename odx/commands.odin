@@ -281,15 +281,8 @@ cmd_init :: proc(o: Opts) {
 	}
 	if len(package_dirs(root, &skip)) > 0 {
 		fmt.println(
-			"existing packages found: after filling in roles, `odx baseline regen` freezes their current violations so unrelated edits are not blocked",
+			"existing packages found: select policies, then review `odx baseline regen` to accept current eligible occurrences; edits to a source file reopen its findings",
 		)
-	}
-	gi := join({root, ".gitignore"})
-	if data, rerr := os.read_entire_file(gi, context.allocator);
-	   rerr == nil && !strings.contains(string(data), ".odx/cache/") {
-		if err := os.write_entire_file(gi, strings.concatenate({string(data), "\n.odx/cache/\n"}));
-		   err != nil {fail("write %s: %v", gi, err)}
-		fmt.println("appended .odx/cache/ to", gi)
 	}
 }
 

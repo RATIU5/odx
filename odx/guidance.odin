@@ -10,7 +10,7 @@ import "core:slice"
 import "core:strings"
 
 // Bump when interpreter semantics change without changing serialized policy.
-GUIDANCE_REVISION :: 2
+GUIDANCE_REVISION :: 3
 
 Guidance_Package :: struct {
 	path: string,
@@ -62,7 +62,7 @@ guidance_block :: proc(p: ^Project, rels: []string, scoped: bool) -> string {
 	for pkg in packages {fmt.sbprintfln(&b, "- Package `%s`: role `%s`", pkg.path if pkg.path != "" else ".", pkg.role if pkg.role != "" else "(unmapped)")}
 	strings.write_string(
 		&b,
-		"\nRun `odx check --json` for findings and coverage. Warnings fail with `--strict`; baselines soften findings and suppressions remove accepted findings. Exit 0 alone does not prove complete analysis. Guidance freshness checks policy synchronization, not source compliance.\n\nUse `odx guidance check <markdown-file> [package-path]` to check this section and `odx guidance write <markdown-file> [package-path]` to regenerate it. Repeat the same scope. Rebuild after changing embedded builtin rules; project overrides load directly.\n\nConfigured policy (effective defaults included; no compiler run is implied):\n\n",
+		"\nRun `odx check --json` for findings and coverage. Warnings fail with `--strict`; baselines soften findings and suppressions remove accepted findings. Exit 0 alone does not prove complete analysis. Guidance freshness checks policy synchronization, not source compliance. Baselines accept occurrences in unchanged source snapshots; checks never rewrite them. Use `odx baseline add`, `prune`, or `regen` for explicit maintenance.\n\nUse `odx guidance check <markdown-file> [package-path]` to check this section and `odx guidance write <markdown-file> [package-path]` to regenerate it. Repeat the same scope. Rebuild after changing embedded builtin rules; project overrides load directly.\n\nConfigured policy (effective defaults included; no compiler run is implied):\n\n",
 	)
 	fmt.sbprintfln(&b, "```json\n%s\n```", guidance_json(p.cfg))
 	strings.write_string(&b, claude_md(p, applicable_topics(p, rels, len(p.dirs) == 0)))

@@ -28,6 +28,8 @@ cmd_check :: proc(o: Opts) {
 				selection_reason = "no changed project source or policy inputs; no packages checked",
 			}
 			init_coverage(&c, o)
+			apply_baseline(&c, false)
+			refresh_coverage(c.r)
 			code := finalize(c.r, o.strict)
 			print_report(c.r, o.json)
 			os.exit(code)
@@ -58,7 +60,7 @@ run_checks :: proc(c: ^Ctx, o: Opts, use_baseline := true) -> int {
 	source_complete := c.native_ran
 	for p in c.pkgs {source_complete &&= p.parse_result.status == .complete}
 	if full && source_complete {report_stale_config(c)}
-	if use_baseline {apply_baseline(c, full && c.r.coverage.complete, o.ci)}
+	if use_baseline {apply_baseline(c, full && c.r.coverage.complete)}
 	refresh_coverage(c.r)
 	return finalize(c.r, o.strict, o.max_violations)
 }
@@ -79,10 +81,14 @@ cmd_ignores :: proc(o: Opts) {
 	p := must_load(o, true)
 	c := make_ctx(&p, nil)
 	if o.stale {
-		// the stale set is a byproduct of a full check, never a second pass
-		run_checks(&c, Opts{})
-		for v in c.r.violations {if v.rule == "odx/stale-ignore" {fmt.printfln("%s:%d:%d: %s", v.file, v.line, v.col, v.message)}}
-		return
+		run_checks(&c, Opts{}, use_baseline = false)
+		code := 0
+		for v in c.r.violations {
+			if v.rule == "odx/stale-ignore" || v.rule == "odx/bad-ignore" {code = EXIT_VIOLATION}
+		}
+		if !c.r.coverage.complete || len(c.r.tool_errors) > 0 {code = EXIT_TOOL}
+		print_report(c.r, o.json)
+		os.exit(code)
 	}
 	igs := project_ignores(&c)
 	sort_violations(c.r.violations[:])

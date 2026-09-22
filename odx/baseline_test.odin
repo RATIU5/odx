@@ -1,42 +1,58 @@
 package odx
 
 import "core:os"
+import "core:strings"
 import "core:testing"
 
-// A `--since` run once emptied a baseline (full was computed without it); the file format and
-// the key must survive a round trip, and a narrowed run must never be "full".
 @(test)
 test_baseline_round_trip :: proc(t: ^testing.T) {
 	context.allocator = context.temp_allocator
 	defer free_all(context.temp_allocator)
-	// ponytail: not $TMPDIR, which Linux runners leave unset (the path became /odx-baseline)
 	dir, terr := os.make_directory_temp("", "odx-baseline-*", context.allocator)
 	testing.expect(t, terr == nil)
 	defer os.remove_all(dir)
-	write_baseline(
-		dir,
+	fingerprint := strings.repeat("a", 64)
+	original := []Baseline_Entry {
 		{
-			{"dependencies/R2", "core", "core:os", "legacy, tracked in #7", false},
-			{"errors/R3", ".", "parse", "", false},
+			rule = "x/R2",
+			file = "b.odin",
+			subject = "parse\t#\"",
+			fingerprint = fingerprint,
+			line = 2,
+			col = 1,
+			reason = "legacy #7\ntracked\tcarefully",
 		},
-	)
-	es, exists := read_baseline(dir)
-	testing.expect(t, exists)
-	if testing.expect_value(t, len(es), 2) {
-		testing.expect_value(t, es[0].rule, "dependencies/R2") // sorted
-		testing.expect_value(t, es[0].subject, "core:os")
-		testing.expect_value(t, es[0].reason, "legacy, tracked in #7")
-		testing.expect_value(t, es[1].rule, "errors/R3")
+		{
+			rule = "x/R1",
+			file = "a.odin",
+			subject = "name",
+			fingerprint = fingerprint,
+			line = 1,
+			col = 1,
+		},
 	}
-	rule, pkg, subject, ok := baseline_key(
-		Violation{file = "core/core.odin", rule = "dependencies/R2", subject = "core:os"},
-	)
-	testing.expect(t, ok)
-	testing.expect_value(t, rule, "dependencies/R2")
-	testing.expect_value(t, pkg, "core")
-	testing.expect_value(t, subject, "core:os")
-	_, pkg2, _, _ := baseline_key(Violation{file = "root.odin", rule = "x/R1", subject = "s"})
-	testing.expect_value(t, pkg2, ".")
-	_, _, _, ok3 := baseline_key(Violation{file = "a.odin", rule = "x/R1"}) // no subject
-	testing.expect(t, !ok3)
+	testing.expect_value(t, write_baseline(dir, original), "")
+	es, exists, err := read_baseline(dir)
+	testing.expect(t, exists && err == "")
+	if testing.expect_value(t, len(es), 2) {
+		testing.expect_value(t, es[0].file, "a.odin")
+		testing.expect_value(t, es[1].subject, "parse\t#\"")
+		testing.expect_value(t, es[1].reason, "legacy #7\ntracked\tcarefully")
+	}
+}
+
+@(test)
+test_baseline_invalid_documents :: proc(t: ^testing.T) {
+	context.allocator = context.temp_allocator
+	defer free_all(context.temp_allocator)
+	dir, terr := os.make_directory_temp("", "odx-baseline-invalid-*", context.allocator)
+	testing.expect(t, terr == nil)
+	defer os.remove_all(dir)
+	for text in ([]string{"format_version: 1\nx/R1\t.\tname\n", `{"format_version":99,"entries":[]}`, `{"format_version":2.5,"entries":[]}`, `{"format_version":18446744073709551618,"entries":[]}`, `{"format_version":2,"entries":null}`, `{"format_version":2,"entries":[{}]}`, `{"format_version":2,"entries":[],"ignored":true}`, `{"format_version":2,"entries":[],"format_version":2}`, "{"}) {
+		testing.expect(t, os.write_entire_file(join({dir, BASELINE_FILE}), text) == nil)
+		_, exists, err := read_baseline(dir)
+		testing.expect(t, exists && err != "", text)
+		unchanged, _ := os.read_entire_file(join({dir, BASELINE_FILE}), context.allocator)
+		testing.expect_value(t, string(unchanged), text)
+	}
 }

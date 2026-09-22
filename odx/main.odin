@@ -38,13 +38,13 @@ USAGE :: `usage: odx <command> [args] [--json] [--root <dir>]
 
   check [<path>...] [--topic t] [--fast] [--strict] [--since <ref>] [--ci] [--max-violations N]   run checks (odx.baseline softens, never hides)
   check --exemplar <topic>     check rules/<topic>/example/ against that topic (the exemplars CI task)
-  baseline add | regen         freeze current violations into odx.baseline (shrinks on its own; never grows from check)
+  baseline add | prune | regen   explicitly accept, prune, or replace baseline debt; checks never rewrite it
   for <path> [--brief]         the rules that apply to a file or package (--brief: topic names only)
   for --emit-md [<path>]       portable managed Markdown (--emit-claude-md is an alias)
   guidance check|write <markdown-file> [<package-path>]   check freshness or regenerate the owned block; exits 0 current/written, 1 stale/missing, 2 error
   explain [<topic>] [--rule R3]   no topic: list topics; with one: rules, rationale, do/don't
   explain [<topic>] --checklist   the reader checks from topic.md, for an adversarial reviewer
-  ignores [--stale]            every odx:ignore suppression; --stale: suppressing nothing
+  ignores [--stale]            every suppression; stale audit exits 0 clean, 1 malformed/stale, 2 incomplete/error
   doctor [--ci]                toolchain, flags, config errors, mise.toml drift
   hook edit                    Claude Code PostToolBatch hook: reads the hook JSON on stdin, reports, exits 0
   init [--hooks]               write odx.json5 and mise.toml (--hooks: .claude/settings.json, CLAUDE.md)

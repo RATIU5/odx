@@ -307,7 +307,7 @@ exit 1
 		)
 		write(fake, "#!/bin/sh\necho compiler-unavailable >&2\nexit 7\n")
 		baseline := fmt.tprintf("%s/odx.baseline", root)
-		baseline_text :: "format_version: 1\nprobe/R1\tlib\told-subject\n"
+		baseline_text :: `{"format_version":2,"entries":[{"rule":"probe/R1","file":"lib/lib.odin","subject":"old-subject","line":1,"col":1,"fingerprint":"0000000000000000000000000000000000000000000000000000000000000000","reason":"existing debt"}]}`
 		write(baseline, baseline_text)
 		r = run(&p, "compiler failure without JSON", 2, compiler = fake)
 		expect(

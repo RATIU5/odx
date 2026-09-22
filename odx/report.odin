@@ -21,7 +21,7 @@ Violation :: struct {
 	class:         string, // stable greppable name from the rule's frontmatter; "" for odin/odx findings
 	statement:     string, // the rule's statement and why, so a block message is self-sufficient
 	why:           string,
-	subject:       string, // stable semantic key; "" = not baselineable
+	subject:       string, // rule-provided semantic label; baseline identity also binds source and position
 	baselined:     bool, // listed in odx.baseline: printed, never fails the build
 	blocking:      bool, // reserved schema-1 compatibility value; not the exit-status decision
 	fires:         string, // the rule's compiled violating and correct forms, "" for notes
