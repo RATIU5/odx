@@ -7,6 +7,11 @@
 !docs/milestones/
 !docs/milestones/*.md
 !docs/milestones/*.odin
+!docs/milestones/1-alternatives/
+!docs/milestones/1-alternatives/*.txt
+!docs/milestones/1-probe/
+!docs/milestones/1-probe/*.odin
+ROADMAP.md
 !ols.json
 !mise.toml
 !odx/

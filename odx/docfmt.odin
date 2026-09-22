@@ -7,8 +7,7 @@ import "core:path/filepath"
 import "core:strings"
 
 // Family C: `odin doc -doc-format` per package, the compiler's checked entity table.
-// A package that fails to type-check writes no file; family A already reported why, so it is
-// marked doc_skipped and its ignores stay unjudged.
+// Unavailable compiler evidence keeps suppressions unjudged.
 
 // is_family_c: kinds that need the type-checked entity table; skipped under --fast.
 is_family_c :: proc(k: Check_Kind) -> bool {
@@ -22,6 +21,10 @@ run_family_c :: proc(c: ^Ctx) {
 	tmp, terr := os.make_directory_temp("", "odx-doc-*", context.allocator)
 	if terr != nil {
 		tool_error(c.r, "cannot create temp dir for odin doc")
+		for &p in c.pkgs {
+			p.doc_result = {.failed, "cannot create temporary directory"}
+			p.doc_skipped = true
+		}
 		return
 	}
 	defer os.remove_all(tmp)
@@ -31,7 +34,7 @@ run_family_c :: proc(c: ^Ctx) {
 		h, status := doc_package(c, &p, tmp, i, flags)
 		switch status {
 		case .Fatal:
-			return
+			continue
 		case .Skipped:
 			p.doc_skipped = true
 			continue
@@ -43,8 +46,8 @@ run_family_c :: proc(c: ^Ctx) {
 
 Doc_Status :: enum {
 	Ok,
-	Skipped, // did not type-check, or nothing to parse: family A already said why
-	Fatal, // odin missing or reader version mismatch: a tool error was recorded
+	Skipped,
+	Fatal,
 }
 
 @(require_results)
@@ -58,7 +61,16 @@ doc_package :: proc(
 	h: ^doc.Header,
 	status: Doc_Status,
 ) {
-	if p.pkg == nil || len(p.diags) > 0 {return nil, .Skipped}
+	p.doc_skipped = true
+	if p.parse_result.status == .failed || p.pkg == nil || len(p.diags) > 0 {
+		p.doc_result = {.skipped, "source parsing failed"}
+		return nil, .Skipped
+	}
+	if p.compiler_result.status == .failed {
+		p.doc_result = {.skipped, "compiler checking failed"}
+		return nil, .Skipped
+	}
+	p.doc_result = {.failed, "compiler entity export unavailable"}
 	out := join({tmp, fmt.tprintf("%d.odin-doc", i)})
 	args := make([dynamic]string, context.temp_allocator)
 	append(&args, "doc", p.dir, "-doc-format", strings.concatenate({"-out:", out}))
@@ -68,64 +80,42 @@ doc_package :: proc(
 	ok: bool
 	for _ in 0 ..< 3 {
 		code, text, ok = run_odin(c, ..args[:])
-		// ponytail: the 2026-09 nightly crashes intermittently on `odin doc`: retry a failure
-		// that carries no diagnostic (a crash), not one the compiler explained
-		if !ok || code == 0 || strings.contains(text, "Error:") {break}
+		// Retry the nightly's observed crashes, never explained compiler failures.
+		if !ok || code == 0 || text != "" {break}
 	}
 	if !ok {return nil, .Fatal}
-	if code != 0 && !strings.contains(text, "Error:") {
-		// no diagnostic means the tool failed, not the code; say which rule that silences
-		rel, _ := rel_of(c.root, p.dir)
-		tool_error(c.r, "odin doc failed on %s (exit %d) with no diagnostic: errors/R3 (require_results) is NOT checked there", rel, code)
+	if code != 0 {
+		p.doc_result.reason = fmt.aprintf("odin doc exited %d: %s", code, text)
+		tool_error(c.r, "%s: %s; compiler entity rules were not checked", p.rel, p.doc_result.reason)
 		return nil, .Skipped
 	}
-	if code != 0 || !os.exists(out) {return nil, .Skipped} 	// family A already said why
 	data, rerr := os.read_entire_file(out, context.allocator)
-	if rerr != nil {return nil, .Skipped}
-	derr: doc.Reader_Error
-	h, derr = doc.read_from_bytes(data)
-	want := doc.Version_Type_Default
-	if derr == .Invalid_Version {
-		// core's reader wants the exact version it was built with; a newer minor within the
-		// same major only adds fields, so read it and say so once. A major bump is fatal and
-		// names what stops being checked, rather than going quiet.
-		hb := (^doc.Header_Base)(raw_data(data))
-		got := hb.version
-		if got.major == want.major && got.minor >= want.minor {
-			if !doc_version_warned {
-				doc_version_warned = true
-				fmt.eprintfln(
-					"odx: warning: odin doc-format %d.%d.%d is newer than the %d.%d.x this odx was built against; reading it anyway",
-					got.major,
-					got.minor,
-					got.patch,
-					want.major,
-					want.minor,
-				)
-			}
-			return (^doc.Header)(hb), .Ok
-		}
-		tool_error(
-			c.r,
-			"doc-format %d.%d.%d is not the %d.%d.x this odx reads: errors/R3 (require_results) is NOT checked until odx is rebuilt against this compiler",
-			got.major,
-			got.minor,
-			got.patch,
-			want.major,
-			want.minor,
-		)
+	if rerr != nil {
+		p.doc_result.reason = "compiler entity export missing or unreadable"
+		tool_error(c.r, "odin doc %s: %s (%v)", p.rel, p.doc_result.reason, rerr)
+		return nil, .Skipped
+	}
+	reason: string
+	unsupported: bool
+	h, reason, unsupported = read_doc_evidence(data)
+	if h == nil {
+		p.doc_result = {.unsupported if unsupported else .failed, reason}
+		tool_error(c.r, "odin doc %s: %s; compiler entity rules were not checked", p.rel, reason)
 		return nil, .Fatal
 	}
-	if derr != nil {
-		tool_error(c.r, "doc-format reader: %v; errors/R3 (require_results) is NOT checked", derr)
-		return nil, .Fatal
+	found := false
+	for pkg, pi in doc.from_array(h, h.pkgs) {
+		if pi != 0 && doc.from_string(h, pkg.fullpath) == p.dir {found = true; break}
 	}
+	if !found {
+		p.doc_result.reason = "requested package absent from compiler entity export"
+		tool_error(c.r, "odin doc %s: %s", p.rel, p.doc_result.reason)
+		return nil, .Skipped
+	}
+	p.doc_skipped = false
+	p.doc_result = {.complete, ""}
 	return h, .Ok
 }
-
-// ponytail: one process, one warning; the doc pass runs per package.
-@(private = "file")
-doc_version_warned: bool
 
 @(private = "file")
 check_entities :: proc(c: ^Ctx, p: ^Package, h: ^doc.Header, rules: []^Active_Rule) {

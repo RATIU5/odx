@@ -119,6 +119,16 @@ apply_ignores :: proc(c: ^Ctx, igs: []Ignore, ran: map[string]bool) {
 	r.violations = kept
 	for ig in igs {
 		if ig.used || ig.rule not_in ran {continue}
+		unchecked_rule := false
+		for entry in r.coverage.checks {
+			if entry.package_dir == dir_of(ig.file) &&
+			   entry.rule == ig.rule &&
+			   entry.status != .complete {
+				unchecked_rule = true
+				break
+			}
+		}
+		if unchecked_rule {continue}
 		if rule := find_rule(c.rb, ig.rule);
 		   rule != nil && is_family_c(rule.check.kind) && dir_of(ig.file) in unchecked {continue}
 		note(

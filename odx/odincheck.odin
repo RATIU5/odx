@@ -67,7 +67,9 @@ run_odin :: proc(c: ^Ctx, args: ..string) -> (exit_code: int, stderr: string, ok
 run_family_a :: proc(c: ^Ctx) {
 	flags := odin_flags(c)
 	for &p in c.pkgs {
-		if p.pkg == nil || len(p.diags) > 0 {continue} 	// the parser already reported it
+		p.compiler_result = {.skipped, "source parsing failed"}
+		if p.parse_result.status == .failed || p.pkg == nil || len(p.diags) > 0 {continue}
+		p.compiler_result = {.failed, "compiler diagnostics unavailable"}
 		args := make([dynamic]string, context.temp_allocator)
 		append(&args, "check", p.dir)
 		append(&args, ..flags)
@@ -80,15 +82,27 @@ run_family_a :: proc(c: ^Ctx) {
 			// ponytail: the 2026-09 nightly segfaults intermittently (exit 11, no output): retry
 			if !(ok && code != 0 && text == "") {break}
 		}
-		if !ok {return}
+		if !ok {continue}
 		if text == "" {
-			if code != 0 {tool_error(c.r, "odin check %s exited %d with no output", p.rel, code)}
+			if code != 0 {
+				tool_error(c.r, "odin check %s exited %d with no output", p.rel, code)
+			} else {
+				p.compiler_result = {.complete, ""}
+			}
 			continue
 		}
 		oe: Odin_Errors
 		if uerr := json.unmarshal_string(text, &oe); uerr != nil {
 			tool_error(c.r, "odin check %s: unparseable -json-errors output: %s", p.rel, text)
 			continue
+		}
+		if code == 0 && oe.error_count == 0 {
+			p.compiler_result = {.complete, ""}
+		} else {
+			p.compiler_result = {
+				.failed,
+				fmt.aprintf("odin check exited %d with %d reported errors", code, oe.error_count),
+			}
 		}
 		// odin type-checks dependencies too; each package reports only its own files, and a
 		// broken dependency becomes one summary line so the failure is never silent.
@@ -99,6 +113,19 @@ run_family_a :: proc(c: ^Ctx) {
 			if key in seen {continue}
 			seen[key] = true
 			file, _ := rel_of(c.root, e.pos.file)
+			if e.pos.file == "" {
+				note(
+					c.r,
+					"odin/error" if code != 0 else "odin/warning",
+					"odin",
+					p.rel if p.rel != "" else ".",
+					1,
+					1,
+					strings.join(e.msgs, " ", context.temp_allocator),
+				)
+				if code == 0 {c.r.violations[len(c.r.violations) - 1].severity = .warning}
+				continue
+			}
 			if dir, _ := rel_of(c.root, filepath.dir(e.pos.file)); dir != p.rel {
 				if e.type == "error" {foreign_errors += 1}
 				continue
@@ -125,6 +152,16 @@ run_family_a :: proc(c: ^Ctx) {
 					foreign_errors,
 				),
 			)
+		}
+		if p.compiler_result.status == .failed {
+			has_error := false
+			for v in c.r.violations {
+				has_error ||=
+					v.check == "odin" &&
+					v.severity == .error &&
+					(dir_of(v.file) == p.rel || v.file == p.rel || (p.rel == "" && v.file == "."))
+			}
+			if !has_error {tool_error(c.r, "odin check %s failed without an error diagnostic (exit %d)", p.rel, code)}
 		}
 	}
 }

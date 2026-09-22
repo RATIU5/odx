@@ -70,7 +70,12 @@ done
 
 [tasks.ci]
 description = "Everything CI runs, in order"
-depends = ["build", "test", "fixtures", "exemplars", "audit", "self"]
+depends = ["build", "test", "fixtures", "exemplars", "audit", "self", "evidence"]
+
+[tasks.evidence]
+description = "Exercise analysis coverage and unavailable compiler evidence through the CLI"
+depends = ["build"]
+run = 'ODX_ODIN="$(command -v odin)" odin run docs/milestones/1-probe -out:$OUT/odx_evidence -vet -strict-style'
 
 [tasks.fixtures]
 description = "Every tests/fixtures/<name>/ is checked and diffed against its // want: markers, plus every rule and topic.md block"

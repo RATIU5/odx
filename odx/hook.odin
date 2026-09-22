@@ -57,12 +57,16 @@ hook_edit :: proc(p: ^Project, file: string) {
 	}
 	if len(c.r.violations) == 0 {run_family_a(&c)}
 	if finalize(c.r, false, HOOK_MAX_VIOLATIONS) != 0 {
+		init_coverage(&c, fo)
+		collect_coverage(&c, fo)
 		for e in c.r.tool_errors {fmt.println("odx: tool error:", e)}
 		fmt.print(report_text(c.r))
+		fmt.print(coverage_text(c.r))
 		return
 	}
 	c.r^ = {}
 	run_checks(&c, fo)
 	for e in c.r.tool_errors {fmt.println("odx: tool error:", e)}
 	fmt.print(hook_text(c.r))
+	fmt.print(coverage_text(c.r))
 }

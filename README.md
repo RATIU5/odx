@@ -1,9 +1,10 @@
 # odx
 
-The [milestone 0 contract and baseline](docs/milestones/0-contract-and-baseline.md)
-records current limitations, including scoped dependency false negatives and
-generated guidance that can disagree with rule scope. The command reference
-below describes the existing implementation.
+The [analysis and coverage contract](docs/milestones/1-analysis-and-coverage.md)
+defines what each check establishes. Scoped transitive checks report unavailable
+graph evidence until that graph is complete. Generated guidance can still disagree
+with rule scope; the [original baseline](docs/milestones/0-contract-and-baseline.md)
+records that remaining work.
 
 odx is a secondary vet pass for Odin: it checks that every guarantee the compiler offers is
 switched on, and enforces the few conventions a project has explicitly agreed on, with a
@@ -96,6 +97,16 @@ added under that number. Each violation carries `file`, `line`, `col`, `rule`, `
 schema. `summary` carries `errors`, `warnings`, `ignored`, `files`, `baselined` and
 `omitted`.
 
+`coverage` records selected packages/files, compiler flags, and each check's
+evidence, boundary, status, reason, and raw finding count. Source checks include
+inactive/platform/generated/test files; compiler checks use the selected target
+and do not execute tests. `coverage.complete` describes completed evidence within
+those boundaries, not absence of violations or whole-project compliance.
+`--fast` and empty `--since` selections report incomplete coverage. Missing or
+unsupported required evidence exits 2; scoped dependency deny checks currently
+do so when the loaded project graph is partial. Failed analysis cannot shrink
+or regenerate a baseline. See the linked contract for exact limits and statuses.
+
 ## Agents
 
 `odx init --hooks` writes two things: a PostToolBatch hook running `odx hook edit`, which
@@ -139,3 +150,9 @@ the generated `CLAUDE.md` tells an agent to ask before editing them.
 ```
 mise run ci   # build, unit tests, self-test, exemplars, audit, doctor --ci, odx on itself
 ```
+
+## Future Tests:
+
+Against this codebase, this tool should:
+
+- Detect code like `if boolean { return ... }` then error/warn and prefer `if boolean do return ...`

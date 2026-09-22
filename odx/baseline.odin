@@ -92,9 +92,13 @@ cmd_baseline :: proc(o: Opts) {
 	   (o.args[0] != "add" && o.args[0] != "regen") {fail("usage: odx baseline add | regen")}
 	p := must_load(o, true)
 	c := make_ctx(&p, nil)
-	if o.args[0] == "regen" {os.remove(join({p.root, BASELINE_FILE}))} 	// never read the file being rewritten
-	run_checks(&c, Opts{})
-	es, _ := read_baseline(p.root)
+	run_checks(&c, Opts{}, use_baseline = o.args[0] == "add")
+	if !c.r.coverage.complete || len(c.r.tool_errors) > 0 {
+		print_report(c.r, o.json)
+		fail("baseline unchanged: required analysis did not complete")
+	}
+	es: [dynamic]Baseline_Entry
+	if o.args[0] == "add" {es, _ = read_baseline(p.root)}
 	added := 0
 	for v in c.r.violations {
 		rule, pkg, subject, ok := baseline_key(v)

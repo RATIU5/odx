@@ -9,13 +9,16 @@ import "core:strings"
 // Family B: syntax checks over the AST.
 
 Ctx :: struct {
-	root:  string,
-	cfg:   ^Config,
-	rb:    ^Rulebook,
-	pkgs:  []Package,
-	rules: []Active_Rule,
-	r:     ^Report,
-	hits:  map[string]int, // config allow-list entries that matched something this run
+	root:          string,
+	cfg:           ^Config,
+	rb:            ^Rulebook,
+	pkgs:          []Package,
+	rules:         []Active_Rule,
+	r:             ^Report,
+	hits:          map[string]int, // config allow-list entries that matched something this run
+	paths:         []string,
+	partial_graph: bool,
+	native_ran:    bool,
 }
 
 make_ctx :: proc(p: ^Project, paths: []string, only_topics: []string = nil) -> Ctx {
@@ -26,12 +29,14 @@ make_ctx :: proc(p: ^Project, paths: []string, only_topics: []string = nil) -> C
 		rules = active_rules(p, only_topics),
 		r     = new(Report),
 		hits  = make(map[string]int),
+		paths = paths,
 	}
 	rels := p.dirs
 	if len(paths) > 0 {
 		rels = select_packages(p.root, rels, paths)
 		if len(rels) == 0 {fail("no packages under %v", paths)}
 	}
+	c.partial_graph = len(rels) != len(p.dirs)
 	c.pkgs = load_packages(p.root, &p.cfg, rels)
 	return c
 }
@@ -96,20 +101,28 @@ report_at :: proc(c: ^Ctx, a: ^Active_Rule, n: ^ast.Node, msg: string, subject :
 }
 
 run_family_b :: proc(c: ^Ctx) {
+	c.native_ran = true
 	for &p in c.pkgs {
+		c.r.summary.files += len(p.files)
 		// parse errors first: the model fixes syntax before rules
 		for d in p.diags {
 			file, _ := rel_of(c.root, d.pos.file)
 			note(c.r, "odin/syntax", "parse", file, d.pos.line, d.pos.column, d.msg)
 		}
+		if p.parse_result.status == .failed {
+			if len(p.diags) ==
+			   0 {tool_error(c.r, "cannot parse %s: %s", p.rel, p.parse_result.reason)}
+			continue
+		}
 		for f in p.files {
-			c.r.summary.files += 1
 			check_vet_disables(c, f)
 		}
 		// every `match: call` rule shares one AST walk per file (the only check that walks)
 		calls := make([dynamic]^Active_Rule, context.temp_allocator)
 		for &a in c.rules {
-			if a.rule.check.kind == .pattern && a.rule.check.match == "call" && role_applies(&a.rule.check, p.role) {append(&calls, &a)}
+			if a.rule.check.kind == .pattern &&
+			   a.rule.check.match == "call" &&
+			   role_applies(&a.rule.check, p.role) {append(&calls, &a)}
 		}
 		if len(calls) > 0 {check_calls(c, &p, calls[:])}
 		for &a in c.rules {
@@ -294,7 +307,13 @@ check_imports :: proc(c: ^Ctx, p: ^Package, a: ^Active_Rule) {
 reach_denied :: proc(c: ^Ctx, start: string, deny: []string) -> map[string]string {
 	found := make(map[string]string, context.temp_allocator)
 	visited := make(map[string]bool, context.temp_allocator)
-	walk :: proc(c: ^Ctx, rel, chain: string, deny: []string, found: ^map[string]string, visited: ^map[string]bool) {
+	walk :: proc(
+		c: ^Ctx,
+		rel, chain: string,
+		deny: []string,
+		found: ^map[string]string,
+		visited: ^map[string]bool,
+	) {
 		if rel in visited {return}
 		visited[rel] = true
 		for &q in c.pkgs {
@@ -310,7 +329,14 @@ reach_denied :: proc(c: ^Ctx, start: string, deny: []string) -> map[string]strin
 						if import_matches(deny, path) && path not_in found {found[path] = chain}
 						continue
 					}
-					walk(c, label, strings.concatenate({chain, " -> ", label}, context.temp_allocator), deny, found, visited)
+					walk(
+						c,
+						label,
+						strings.concatenate({chain, " -> ", label}, context.temp_allocator),
+						deny,
+						found,
+						visited,
+					)
 				}
 			}
 			break
@@ -386,7 +412,10 @@ visit_call :: proc(v: ^ast.Visitor, n: ^ast.Node) -> ^ast.Visitor {
 	}
 	if name == "" {return v}
 	for a in w.rules {
-		if slice.contains(a.rule.check.names, name) {report_at(w.c, a, n, strings.concatenate({"call to ", name}), name)}
+		if slice.contains(
+			a.rule.check.names,
+			name,
+		) {report_at(w.c, a, n, strings.concatenate({"call to ", name}), name)}
 	}
 	return v
 }

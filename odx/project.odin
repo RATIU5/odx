@@ -68,14 +68,17 @@ sorted_keys :: proc(m: map[string]$V) -> []string {
 }
 
 Package :: struct {
-	dir:         string,
-	rel:         string, // relative to root, "/" separators, "" for root itself
-	role:        string, // "" = unmapped
-	role_count:  int, // 0 unmapped, >1 conflict
-	pkg:         ^ast.Package, // nil if the directory failed to parse at all
-	files:       []^ast.File,
-	diags:       []Diag,
-	doc_skipped: bool, // family C found no .odin-doc (type error); its ignores are never stale
+	dir:             string,
+	rel:             string, // relative to root, "/" separators, "" for root itself
+	role:            string, // "" = unmapped
+	role_count:      int, // 0 unmapped, >1 conflict
+	pkg:             ^ast.Package, // nil if the directory failed to parse at all
+	files:           []^ast.File,
+	diags:           []Diag,
+	doc_skipped:     bool, // family C found no .odin-doc (type error); its ignores are never stale
+	parse_result:    Evidence_Result,
+	compiler_result: Evidence_Result,
+	doc_result:      Evidence_Result,
 }
 
 Diag :: struct {
@@ -125,12 +128,38 @@ load_packages :: proc(root: string, cfg: ^Config, rels: []string) -> []Package {
 		ps := parser.default_parser()
 		ps.err = collect_diag
 		ps.warn = collect_diag
-		p.pkg, _ = parser.parse_package_from_path(p.dir, &ps)
-		p.diags = slice.clone(parse_diags[:])
+		collected: bool
+		p.pkg, collected = parser.collect_package(p.dir)
+		p.parse_result = Evidence_Result{.complete, ""}
+		if !collected {
+			p.parse_result = Evidence_Result{.failed, "could not collect every source file"}
+		}
 		if p.pkg != nil {
 			keys := sorted_keys(p.pkg.files)
 			p.files = make([]^ast.File, len(keys))
-			for k, j in keys {p.files[j] = p.pkg.files[k]}
+			for k, j in keys {
+				f := p.pkg.files[k]
+				p.files[j] = f
+				parsed := parser.parse_file(&ps, f)
+				if !parsed || f.syntax_error_count > 0 || f.pkg_decl == nil {
+					p.parse_result = Evidence_Result{.failed, "source parsing failed"}
+				}
+				if f.pkg_decl == nil {continue}
+				if p.pkg.name == "" {
+					p.pkg.name = f.pkg_decl.name
+				} else if p.pkg.name != f.pkg_decl.name {
+					collect_diag(
+						f.pkg_decl.pos,
+						"different package name, expected '%s', got '%s'",
+						p.pkg.name,
+						f.pkg_decl.name,
+					)
+				}
+			}
+		}
+		p.diags = slice.clone(parse_diags[:])
+		if len(p.diags) > 0 {
+			p.parse_result = Evidence_Result{.failed, "source parsing produced diagnostics"}
 		}
 	}
 	return pkgs

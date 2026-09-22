@@ -1,0 +1,29 @@
+package probe
+import os "core:os"
+import platform "core:os"
+foreign import libc "system:c"
+foreign libc {
+    puts :: proc(s: cstring) -> i32 ---
+}
+a, b := 1, 2
+typed: int
+constant :: 42
+@(private)
+hidden := 3
+when false {
+    inactive := 1
+    inactive_proc :: proc() { os.exit(1) }
+}
+run :: proc() {
+    // os.exit(2)
+    text := "os.exit(3)"
+    _ = text
+    if false { os.exit(4) }
+    if false { platform.exit(5) }
+    alias :: os.exit
+    if false { alias(6) }
+    {
+        os := struct { exit: proc(int) }{exit = proc(code: int) {}}
+        os.exit(7)
+    }
+}

@@ -1,0 +1,5 @@
+package probe
+run :: proc() {
+    os.exit(1)
+    broken := (
+}

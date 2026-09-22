@@ -10,22 +10,22 @@ Severity :: enum {
 }
 
 Violation :: struct {
-	file:      string, // relative to root
-	line:      int,
-	col:       int,
-	rule:      string, // "topic/R3", "odin/error", "odx/bad-ignore"
-	severity:  Severity,
-	check:     string,
-	message:   string,
-	ignorable: bool,
-	class:     string, // stable greppable name from the rule's frontmatter; "" for odin/odx findings
-	statement: string, // the rule's statement and why, so a block message is self-sufficient
-	why:       string,
-	subject:   string, // stable semantic key; "" = not baselineable
-	baselined: bool, // listed in odx.baseline: printed, never fails the build
-	blocking:  bool, // always true since the advisory tier went; kept for schema 1
-	fires:     string, // the rule's compiled violating and correct forms, "" for notes
-	silent:    string,
+	file:          string, // relative to root
+	line:          int,
+	col:           int,
+	rule:          string, // "topic/R3", "odin/error", "odx/bad-ignore"
+	severity:      Severity,
+	check:         string,
+	message:       string,
+	ignorable:     bool,
+	class:         string, // stable greppable name from the rule's frontmatter; "" for odin/odx findings
+	statement:     string, // the rule's statement and why, so a block message is self-sufficient
+	why:           string,
+	subject:       string, // stable semantic key; "" = not baselineable
+	baselined:     bool, // listed in odx.baseline: printed, never fails the build
+	blocking:      bool, // always true since the advisory tier went; kept for schema 1
+	fires:         string, // the rule's compiled violating and correct forms, "" for notes
+	silent:        string,
 	// the agent contract: what to write instead, and the exact suppression line, so a
 	// consumer can act on one finding without a second call; "" for notes
 	fix_hint:      string,
@@ -43,6 +43,7 @@ ignore_syntax_of :: proc(file, rule: string) -> string {
 
 Report :: struct {
 	schema:      int,
+	coverage:    Coverage,
 	violations:  [dynamic]Violation,
 	tool_errors: [dynamic]string,
 	summary:     struct {
@@ -109,9 +110,16 @@ print_report :: proc(r: ^Report, json_out: bool) {
 		return
 	}
 	fmt.print(report_text(r))
+	fmt.print(coverage_text(r))
 	print_tool_errors(r)
-	if len(r.violations) == 0 && len(r.tool_errors) == 0 {
+	if len(r.violations) == 0 && len(r.tool_errors) == 0 && r.coverage.complete {
 		fmt.printfln("ok: %d files, %d ignored", r.summary.files, r.summary.ignored)
+	} else if len(r.violations) == 0 && len(r.tool_errors) == 0 {
+		fmt.printfln(
+			"no findings in completed checks: %d files, %d ignored",
+			r.summary.files,
+			r.summary.ignored,
+		)
 	}
 }
 
