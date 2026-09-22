@@ -146,13 +146,17 @@ collect_coverage :: proc(c: ^Ctx, o: Opts) {
 			c.r.coverage.source_scope,
 			p.parse_result,
 		)
+		tags := native
+		if !c.cfg.odin.audit_file_tags {
+			tags = {.not_applicable, "odin.audit_file_tags is false"}
+		}
 		add_coverage(
 			c,
 			&p,
 			"odx/feature-optout",
 			"native_tokens",
 			"file feature tags require a same-line reason comment",
-			native,
+			tags,
 		)
 		add_coverage(
 			c,
@@ -160,7 +164,7 @@ collect_coverage :: proc(c: ^Ctx, o: Opts) {
 			"odx/vet-disable",
 			"native_tokens",
 			"file vet-disable tags compared with configured allow-list",
-			native,
+			tags,
 		)
 		compiler := p.compiler_result
 		if compiler.status == .not_run {

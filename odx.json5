@@ -16,7 +16,7 @@
     service: { may_import: ["pure", "service", "core:*"] },
     edge: { may_import: ["pure", "service", "edge", "core:*", "vendor:*"] },
   },
-  exclude: [".odx/**", "rules/**", "tests/**", "evals/**", "vendor/**", "build/**"],
+  exclude: [".odx/**", "rules/**", "tests/**", "evals/**", "examples/**", "vendor/**", "build/**"],
   // disabled: { "allocators/R2": "reason of at least ten characters" },
   odin: {
     flags: ["-vet", "-vet-tabs", "-vet-cast", "-strict-style", "-warnings-as-errors"],

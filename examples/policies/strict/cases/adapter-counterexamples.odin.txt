@@ -1,0 +1,7 @@
+package adapters
+
+foreign import libc "system:c"
+
+Domain_Failure :: enum { None, Invalid }
+additional_state: int
+unchecked :: proc() -> Domain_Failure { return .None }

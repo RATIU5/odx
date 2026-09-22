@@ -1,0 +1,4 @@
+#+vet explicit-allocators
+package domain
+
+unchecked :: proc() -> Domain_Failure { return .Invalid }

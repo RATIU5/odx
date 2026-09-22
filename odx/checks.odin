@@ -178,6 +178,7 @@ vet_tag_names :: proc(f: ^ast.File) -> []string {
 
 // `#+feature` opt-outs need a same-line `// reason:`.
 check_vet_disables :: proc(c: ^Ctx, f: ^ast.File) {
+	if !c.cfg.odin.audit_file_tags {return}
 	// a comment token, not a substring of the line: `// reason:` inside a string literal is not a reason
 	has_reason :: proc(f: ^ast.File, line: int) -> bool {
 		for g in f.comments {
@@ -239,7 +240,15 @@ check_explicit_allocators :: proc(c: ^Ctx, p: ^Package, a: ^Active_Rule) {
 	for f in p.files {
 		if slice.contains(vet_tag_names(f), "explicit-allocators") {continue}
 		file, _ := rel_of(c.root, f.fullpath)
-		report(c, a, file, 1, 1, "file must contain `#+vet explicit-allocators` before the package declaration", file)
+		report(
+			c,
+			a,
+			file,
+			1,
+			1,
+			"file must contain `#+vet explicit-allocators` before the package declaration",
+			file,
+		)
 	}
 }
 
@@ -321,6 +330,7 @@ visit_call :: proc(v: ^ast.Visitor, n: ^ast.Node) -> ^ast.Visitor {
 // Only on a full run: a narrowed scan would report false staleness. may_import is policy, not an
 // exception list, so it is not counted.
 report_stale_config :: proc(c: ^Ctx) {
+	if !c.cfg.odin.audit_file_tags {return}
 	for i in 0 ..< len(c.cfg.odin.allowed_vet_disables) {
 		key := fmt.tprintf("odin.allowed_vet_disables[%d]", i)
 		if c.hits[key] > 0 {continue}

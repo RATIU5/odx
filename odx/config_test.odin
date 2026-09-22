@@ -74,3 +74,26 @@ test_error_classification_config :: proc(t: ^testing.T) {
 		testing.expect_value(t, len(cfg.errors.types), 1 if i == 0 || i == 3 else 0)
 	}
 }
+
+@(test)
+test_file_tag_audit_config :: proc(t: ^testing.T) {
+	context.allocator = context.temp_allocator
+	defer free_all(context.temp_allocator)
+	for value in ([]string{"null", "0", `"false"`}) {
+		text := strings.concatenate({`{version:1,odin:{audit_file_tags:`, value, "}}"})
+		testing.expect(t, config_errors(t, text) != "", text)
+	}
+	root, err := os.make_directory_temp("", "odx-tag-cfg-*", context.allocator)
+	testing.expect(t, err == nil)
+	defer os.remove_all(root)
+	for text, i in ([]string{`{version:1}`, `{version:1,odin:{audit_file_tags:true}}`, `{version:1,odin:{audit_file_tags:false}}`}) {
+		testing.expect(t, os.write_entire_file(join({root, CONFIG_FILE}), text) == nil)
+		errs: [dynamic]string
+		cfg := load_config(root, &errs)
+		testing.expect_value(t, len(errs), 0)
+		testing.expect_value(t, cfg.odin.audit_file_tags, i != 2)
+	}
+	defaults := default_config()
+	testing.expect(t, defaults.odin.audit_file_tags)
+	testing.expect(t, defaults.errors.structural)
+}

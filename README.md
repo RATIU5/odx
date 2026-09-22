@@ -1,5 +1,11 @@
 # odx
 
+Copyable [minimal](examples/policies/minimal/README.md) and
+[strict](examples/policies/strict/README.md) projects demonstrate independent
+policies. The minimal library uses two source rules without roles; the strict
+application selects five constraints using its own role names. See the
+[milestone 6 decision record](docs/milestones/6-independent-policies.md).
+
 The [existing-policy semantics contract](docs/milestones/5-existing-policy-semantics.md)
 records allocator, declaration, and error-classification boundaries and compiler proofs.
 
@@ -43,6 +49,11 @@ doctor errors below it and asks you to raise it as coverage grows. `odx doctor -
 `odx check` enforces the per-file half: a missing allocator tag is `allocators/R1`, a
 `#+feature` opt-out without a `// reason: <why>` on its line is `odx/feature-optout`, a
 `#+vet !x` not listed in `odin.allowed_vet_disables` is `odx/vet-disable`.
+The latter two audits default on. Set `odin.audit_file_tags: false` to opt out;
+their coverage becomes `not_applicable`, and the unused vet-disable allow-list
+is not audited for staleness. This does not disable allocator-tag rules, compiler
+diagnostics, or validation of odx suppressions. `doctor` remains a separate
+configuration audit with its own recommendations.
 
 ## Rules
 
@@ -97,6 +108,15 @@ procedures, `at: "package_scope", mutable: true` for declarations, plus `roles`/
 `odx rule add <topic>` scaffolds the next id, `odx rule test <topic>/<id>` compiles its
 blocks. The evidence bar is the one `allocators/R1` and `errors/R3` meet: a compiler version
 and a command whose output shows the failure. Anything less stays a reader check.
+
+Rule examples run in a scratch `sample` package assigned the rule's `role`
+(default `edge`). They retain project compiler settings, error classification,
+disabled rules and dependency layers. An explicitly tested rule is enabled for
+both blocks even if disabled in the project. Source paths and role globs are
+synthetic; snippets must supply their own required declarations and imports.
+Relative collection settings are rebased to their original locations, but
+outside-project dependencies still respect the documented graph boundary.
+Other applicable rules must also accept each example.
 
 Optional rule frontmatter `fix_hint` gives a nonempty desired correction. If absent,
 the rule statement is the compatibility fallback. Keep rationale in `why` and the

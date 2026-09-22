@@ -1,7 +1,7 @@
 <!-- odx:begin v1 -->
 ## odx
 
-Policy fingerprint (generation 2): `0d3bc0e3ce984ce057b653d3c0394cc4a022de9da584f657fc1ec18c56fb7e04`
+Policy fingerprint (generation 2): `1b89dce6085c4e2a263881d74745d236eed3a33caabd2b6358ec0193550a282f`
 
 Scope: all discovered project packages. Rules below are the union applicable to this selection; each rule retains its own scope.
 - Package `docs/milestones`: role `(unmapped)`
@@ -11,6 +11,7 @@ Scope: all discovered project packages. Rules below are the union applicable to 
 - Package `docs/milestones/4-probe`: role `(unmapped)`
 - Package `docs/milestones/5-allocator-probe`: role `(unmapped)`
 - Package `docs/milestones/5-probe`: role `(unmapped)`
+- Package `docs/milestones/6-probe`: role `(unmapped)`
 - Package `odx`: role `edge`
 
 Run `odx check --json` for findings and coverage. Warnings fail with `--strict`; baselines soften findings and suppressions remove accepted findings. Exit 0 alone does not prove complete analysis. Guidance freshness checks policy synchronization, not source compliance.
@@ -20,7 +21,7 @@ Use `odx guidance check <markdown-file> [package-path]` to check this section an
 Configured policy (effective defaults included; no compiler run is implied):
 
 ```json
-{"version":1,"roles":{"edge":["odx","odx/**"],"pure":[],"service":[]},"default_role":"","exclude":[".odx/**","rules/**","tests/**","evals/**","vendor/**","build/**"],"disabled":{},"dependencies":{"edge":{"may_import":["pure","service","edge","core:*","vendor:*"],"deny":[]},"pure":{"may_import":["pure","core:*"],"deny":["core:os","core:os/*","core:net","core:sys/*","core:thread","core:sync","core:dynlib","core:c/libc","vendor:*"]},"service":{"may_import":["pure","service","core:*"],"deny":[]}},"odin":{"flags":["-vet","-vet-tabs","-vet-cast","-strict-style","-warnings-as-errors"],"forbidden_flags":["-no-bounds-check","-disable-assert","-no-type-assert","-ignore-unknown-attributes"],"required_flags":["-sanitize:address","-define:ODIN_TEST_FAIL_ON_BAD_MEMORY=true"],"collections":{},"custom_attributes":[],"allowed_vet_disables":[],"explicit_allocators":"pure","declined":{"-vet-semicolon":"not evaluated; see odx doctor","-vet-style":"not evaluated; see odx doctor","-vet-unused-procedures":"not evaluated; see odx doctor","-vet-using-param":"not evaluated; see odx doctor"},"tagged_files_min":0,"version":"dev-2026-09","path":""},"errors":{"types":["Error"],"structural":true}}
+{"version":1,"roles":{"edge":["odx","odx/**"],"pure":[],"service":[]},"default_role":"","exclude":[".odx/**","rules/**","tests/**","evals/**","examples/**","vendor/**","build/**"],"disabled":{},"dependencies":{"edge":{"may_import":["pure","service","edge","core:*","vendor:*"],"deny":[]},"pure":{"may_import":["pure","core:*"],"deny":["core:os","core:os/*","core:net","core:sys/*","core:thread","core:sync","core:dynlib","core:c/libc","vendor:*"]},"service":{"may_import":["pure","service","core:*"],"deny":[]}},"odin":{"flags":["-vet","-vet-tabs","-vet-cast","-strict-style","-warnings-as-errors"],"forbidden_flags":["-no-bounds-check","-disable-assert","-no-type-assert","-ignore-unknown-attributes"],"required_flags":["-sanitize:address","-define:ODIN_TEST_FAIL_ON_BAD_MEMORY=true"],"collections":{},"custom_attributes":[],"allowed_vet_disables":[],"audit_file_tags":true,"explicit_allocators":"pure","declined":{"-vet-semicolon":"not evaluated; see odx doctor","-vet-style":"not evaluated; see odx doctor","-vet-unused-procedures":"not evaluated; see odx doctor","-vet-using-param":"not evaluated; see odx doctor"},"tagged_files_min":0,"version":"dev-2026-09","path":""},"errors":{"types":["Error"],"structural":true}}
 ```
 
 ### dependencies: Project-defined ordinary import boundaries, checked against the project source graph

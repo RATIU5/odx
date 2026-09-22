@@ -38,7 +38,8 @@ cmd_selftest :: proc(o: Opts) {
 // check_rule_blocks: a rule's `fires` must produce that rule and no other finding, its
 // `silent` nothing; every fires/silent block in topic.md (the reader checks) must compile and
 // produce nothing. Each block is a one-file package (prelude as a sibling) under a scratch
-// project whose only role is the rule's `role` (edge for topic blocks).
+// project assigned the rule's `role` (edge for topic blocks). Effective policy is
+// retained; an explicitly tested rule is enabled even if project-disabled.
 // only narrows to one "topic/Rn"; "" runs them all.
 check_rule_blocks :: proc(root: string, only: string) -> (failed: int) {
 	p := load_project(root)
@@ -58,7 +59,7 @@ check_rule_blocks :: proc(root: string, only: string) -> (failed: int) {
 					failed += 1
 					continue
 				}
-				bad := run_block(&p, r.role, r.prelude, block, id if which == 0 else "")
+				bad := run_block(&p, r.role, r.prelude, block, id if which == 0 else "", id)
 				fmt.printfln("%s %s %s", "ok  " if bad == 0 else "FAIL", id, name)
 				failed += bad
 			}
@@ -75,23 +76,51 @@ check_rule_blocks :: proc(root: string, only: string) -> (failed: int) {
 
 // expect is the one rule id the block must produce; "" means it must be clean.
 @(private = "file")
-run_block :: proc(base: ^Project, role, prelude, block, expect: string) -> (bad: int) {
+run_block :: proc(
+	base: ^Project,
+	role, prelude, block, expect: string,
+	target := "",
+) -> (
+	bad: int,
+) {
 	tmp, terr := os.make_directory_temp("", "odx-rule-*", context.allocator)
 	if terr != nil {fail("cannot create temp dir")}
+	tmp = canonical(tmp)
 	defer os.remove_all(tmp)
 	pkg := join({tmp, "sample"})
 	os.make_directory_all(pkg)
 	// generated names never start with `_` (the compiler skips those)
 	write_or_fail(join({pkg, "block.odin"}), block_source(block, "sample"))
 	if prelude != "" {write_or_fail(join({pkg, "prelude.odin"}), block_source(prelude, "sample"))}
-	cfg := fmt.tprintf(
-		`{{ version: 1, roles: {{ %q: ["sample"] }}, dependencies: {{ %q: {{ may_import: ["core:*", "vendor:*"] }} }}, odin: {{ flags: ["-vet", "-vet-cast", "-strict-style"] }} }}`,
-		role,
-		role,
-	)
-	write_or_fail(join({tmp, CONFIG_FILE}), cfg)
-	sp := load_project(tmp)
-	sp.rb = base.rb // the real rulebook, including project topics, not the scratch dir's
+	cfg := base.cfg
+	cfg.default_role = ""
+	cfg.exclude = nil
+	cfg.roles = make(map[string][]string)
+	for name in sorted_keys(base.cfg.roles) {cfg.roles[name] = nil}
+	cfg.roles[role] = {"sample"}
+	cfg.disabled = make(map[string]string)
+	for id, reason in base.cfg.disabled {
+		if id != target {cfg.disabled[id] = reason}
+	}
+	cfg.dependencies = make(map[string]Layer)
+	for name, layer in base.cfg.dependencies {cfg.dependencies[name] = layer}
+	if role not_in cfg.dependencies {
+		cfg.dependencies[role] = {
+			may_import = {"core:*", "vendor:*"},
+		}
+	}
+	cfg.odin.collections = make(map[string]string)
+	for name, path in base.cfg.odin.collections {
+		rel, err := filepath.rel(tmp, canonical(join({base.root, path})))
+		if err != nil {fail("cannot resolve example collection %s: %v", name, err)}
+		cfg.odin.collections[name] = rel
+	}
+	sp := Project {
+		root = tmp,
+		cfg  = cfg,
+		rb   = base.rb,
+	}
+	validate_project(&sp)
 	for e in sp.errs {fmt.println("  config:", e)}
 	if len(sp.errs) > 0 {return 1}
 	c := make_ctx(&sp, nil)

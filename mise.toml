@@ -70,7 +70,16 @@ done
 
 [tasks.ci]
 description = "Everything CI runs, in order"
-depends = ["build", "test", "fixtures", "exemplars", "audit", "self", "evidence", "architecture", "contracts", "guidance", "semantics"]
+depends = ["build", "test", "fixtures", "exemplars", "audit", "self", "evidence", "architecture", "contracts", "guidance", "semantics", "policies"]
+
+[tasks.policies]
+description = "Verify independent minimal and strict project policies"
+depends = ["build"]
+run = '''
+ODX_ODIN="$(command -v odin)" odin run docs/milestones/6-probe -out:$OUT/odx_policies -vet -strict-style
+$ODX guidance check AGENTS.md --root examples/policies/minimal
+$ODX guidance check AGENTS.md --root examples/policies/strict
+'''
 
 [tasks.semantics]
 description = "Verify existing policy semantics and compiler counterexamples"

@@ -44,6 +44,7 @@ Odin_Cfg :: struct {
 	collections:          map[string]string,
 	custom_attributes:    []string,
 	allowed_vet_disables: []string,
+	audit_file_tags:      bool,
 	explicit_allocators:  Explicit_Allocators,
 	declined:             map[string]string, // flag -> why this project considered and refused it
 	tagged_files_min:     int, // floor for `#+vet explicit-allocators` coverage; doctor errors below it
@@ -75,6 +76,7 @@ ODIN_KEYS := []string {
 	"collections",
 	"custom_attributes",
 	"allowed_vet_disables",
+	"audit_file_tags",
 	"explicit_allocators",
 	"declined",
 	"tagged_files_min",
@@ -120,6 +122,11 @@ load_config :: proc(root: string, errs: ^[dynamic]string) -> (cfg: Config) {
 	odin_obj, _ := tree["odin"].(json.Object)
 	check_keys(errs, path, "odin.", odin_obj, ODIN_KEYS)
 	check_enum(errs, path, odin_obj, "odin.explicit_allocators", Explicit_Allocators)
+	if "audit_file_tags" not_in odin_obj {
+		cfg.odin.audit_file_tags = true
+	} else if _, valid := odin_obj["audit_file_tags"].(json.Boolean); !valid {
+		errf(errs, "%s: odin.audit_file_tags must be a boolean", path)
+	}
 	errors_obj, _ := tree["errors"].(json.Object)
 	check_keys(errs, path, "errors.", errors_obj, ERRORS_KEYS)
 	// unmarshal leaves an empty array nil: presence in the tree is the real signal

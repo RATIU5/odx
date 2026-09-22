@@ -208,6 +208,7 @@ INIT_CONFIG_BODY :: `  version: 1,
   exclude: [".odx/**", "rules/**", "vendor/**", "build/**"],
   // disabled: { "errors/R3": "reason of at least ten characters" },
   odin: {
+    audit_file_tags: true, // require feature reasons and audit vet-disable allow-list
     flags: ["-vet", "-vet-tabs", "-vet-cast", "-strict-style", "-warnings-as-errors"],
     forbidden_flags: ["-no-bounds-check", "-disable-assert", "-no-type-assert", "-ignore-unknown-attributes"],
     required_flags: ["-sanitize:address", "-define:ODIN_TEST_FAIL_ON_BAD_MEMORY=true"],
@@ -215,9 +216,9 @@ INIT_CONFIG_BODY :: `  version: 1,
     // tagged_files_min: 0, // #+vet explicit-allocators coverage may not drop below this; raise it as it grows
     version: "dev-2026-09",
   },
-  // type-name suffixes errors/R3 treats as an error result, besides any enum with a None/Ok
-  // variant or nil-able union, which need no name
-  errors: { types: ["Error"] },
+  // Canonical named-result suffixes; structural inference also selects None/Ok enums
+  // and nil-able named unions. Set structural:false for suffix-only classification.
+  errors: { types: ["Error"], structural: true },
 }
 `
 

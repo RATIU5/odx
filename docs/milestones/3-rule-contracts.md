@@ -123,7 +123,9 @@ still apply to `domain` through its own selector.
   IDs, ignores, and baselines; matching is not a project-cleanliness verdict.
 - `rule test` resolves its target first. Unknown or retired rules exit 2 instead
   of succeeding without work. Active disabled definitions remain testable.
-  Example tests use their synthetic configuration and effective rulebook.
+  Example tests use a synthetic package and the effective rulebook. Milestone 6
+  [preserves project configuration](6-independent-policies.md) in that package,
+  re-enabling only the explicitly tested rule when it is disabled.
 - All five public matchers remain. Previously ignored fields now fail rather
   than acquiring speculative semantics. Explicit empty `from`/`on` must be
   omitted or replaced with their supported constants. False narrowing flags
