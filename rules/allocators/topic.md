@@ -1,6 +1,6 @@
 ---
 name: "allocators",
-summary: "Explicit allocator parameters in pure code; each allocation's lifetime is chosen at the call site",
+summary: "Required allocator vet directives and review of allocation ownership",
 tags: ["allocators", "memory", "arena", "defer", "leaks"],
 aliases: ["memory management", "allocation", "context.allocator"],
 applies_to: { roles: ["pure", "service"] },
@@ -8,30 +8,42 @@ related: ["errors", "dependencies"],
 example_roles: { "example/core": "pure" },
 ---
 
-Memory ownership is part of a procedure's contract. In pure and service code the allocator is
-a parameter, so each allocation's lifetime is chosen at the call site by a specific allocator
-rather than inherited implicitly, and the compiler (`#+vet explicit-allocators`) refuses an
-allocation that forgot to say. odx checks that the tag is present; whether an allocator matches
-its intended lifetime is outside any static checker's reach.
+Memory ownership is part of a procedure's contract. This project's default policy
+requires `#+vet explicit-allocators` in pure and service files. odx checks for the
+directive before the package declaration. The compiler rejects affected calls
+that omit allocator parameters; this does not detect all allocation, require an
+allocator parameter on every allocating procedure, or prove ownership and lifetime.
 
-- Edge packages (main, platform) may use `context.allocator` freely; they own the process.
-- `context.temp_allocator` is fine for values that die before the next frame or request; say so in a comment.
-- A file whose job is to set `context.allocator` (an arena for a subsystem) is the interception
-  point the context system exists for; it is not what R1 is about.
-- R1 and R2 do not conflict: the tag rejects *relying* on the default at a call site, not
-  declaring `allocator := context.allocator` as a parameter. Inside a tagged file the default
-  is unreachable from other tagged files, so it serves untagged callers.
-- Sanitized tests (`-sanitize:address -define:ODIN_TEST_FAIL_ON_BAD_MEMORY=true`) are a
-  guarantee `odx doctor` checks in mise.toml, not a rule (the former R3, retired).
+- Explicit `context.allocator` and `context.temp_allocator` arguments are allowed.
+- `append` uses the container's allocator; even appending to a zero-initialized
+  dynamic array can inherit context without an explicit allocator argument.
+  APIs such as `fmt.tprintf` can allocate scratch memory internally.
+- Replacing context to intercept a subsystem is a legitimate Odin design. It
+  does not exempt a file from R1 or an affected call from compiler vetting.
+  Choose role/configuration scope or a reasoned file ignore for deliberate exceptions.
+- Declaring `allocator := context.allocator` remains valid. Tagged callers must
+  supply that argument; untagged callers can use the default.
+- `odx doctor` checks configured sanitizer flags in mise.toml. Configuration
+  inspection and sanitized test execution do not prove memory safety for all inputs.
 
 ## Reader checks
 
 Conventions a reader enforces in review; `odx explain --checklist` lists them and
-`odx self-test` compiles every block below, so the examples cannot rot. Nothing here fires.
+`odx self-test` compiles the blocks below to check language validity. Compilation
+does not establish that a reader followed the convention. Nothing here fires.
 
-### A procedure that allocates takes `allocator := context.allocator` as its last parameter and documents who frees.
+### Review allocation ownership and choose explicit parameters or documented context/container allocation deliberately.
 
-Callers pick arenas or trackers ('a good API offers a way to specify the allocator to use'); the doc comment says who frees because a signature cannot. Inside a tagged file the default is unreachable from other tagged files, so it serves untagged callers; R1 and R2 do not conflict.
+For caller-owned results, an allocator parameter can let callers choose an arena
+or tracker. Document who frees the result and which allocator to use. A parameter
+does not prove that the implementation uses it. Owned containers, internal scratch
+work, and deliberate context interception are legitimate alternatives when their
+contracts fit the API. Parameter position is a project style choice.
+
+Scratch values must not outlive the reset or other invalidation of their actual
+allocator; that boundary may occur before the next frame or request. Document
+the boundary and review any escaping references. The first example below leaves
+ownership implicit; the second documents a caller-owned result and allocator.
 
 ```odin fires
 words :: proc(s: string) -> []string {

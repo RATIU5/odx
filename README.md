@@ -1,5 +1,8 @@
 # odx
 
+The [existing-policy semantics contract](docs/milestones/5-existing-policy-semantics.md)
+records allocator, declaration, and error-classification boundaries and compiler proofs.
+
 The [rule contract](docs/milestones/3-rule-contracts.md) defines accepted selector
 fields, role scope, overrides, and trial behavior.
 
@@ -9,8 +12,8 @@ for milestone 2 decisions, graph boundaries, and validation.
 The [analysis and coverage contract](docs/milestones/1-analysis-and-coverage.md)
 defines what each check establishes. Dependency checks load the project source
 graph even when findings are scoped to selected files or packages. Rule selection
-now agrees across checking and generated guidance. Generated-file freshness and
-repair wording remain roadmap work.
+agrees across checking and generated guidance. Managed guidance supports freshness
+checks, and repair hints describe the desired correction.
 
 odx is a secondary vet pass for Odin: it checks that every guarantee the compiler offers is
 switched on, and enforces the few conventions a project has explicitly agreed on, with a
@@ -47,18 +50,35 @@ Four rules, all mechanical, all counting:
 
 | rule              | what                                                                                                                  | how                                  |
 | ----------------- | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
-| `allocators/R1`   | pure/service files start with `#+vet explicit-allocators`                                                             | file tag                             |
+| `allocators/R1`   | selected files contain `#+vet explicit-allocators` before the package declaration | file tag |
 | `dependencies/R2` | ordinary imports obey `may_import` and `deny`, including denied imports reached through project production source | native AST and project source graph |
 | `dependencies/R3` | no mutable package-level variables in pure/service packages                                                           | AST                                  |
-| `errors/R3`       | an exported proc whose last result is an error type carries `@(require_results)`                                      | compiler entity table (`odin doc`)   |
+| `errors/R3`       | exported non-test procedures whose named final result matches project error classification carry `@(require_results)` | compiler entity table (`odin doc`) |
 
 Roles are opt-in: `odx.json5` assigns `pure`, `service` or `edge` per package directory and
 says who may import whom. Unrestricted rules also apply to packages without a role;
-`check.roles: [""]` explicitly selects those packages. `errors/R3` decides what an
-error type is from the checked entity table: a name ending in one of `errors.types` (default
-`["Error"]`), or, whatever its name, an enum with a `None`/`Ok` variant or a union that admits
-`nil`. Nothing else in the Odin toolchain rejects a dropped error result: `x, _ := f()` and a
-bare `g()` both pass `-vet -vet-cast` on dev-2026-09.
+`check.roles: [""]` explicitly selects those packages. `errors/R3` classifies a
+canonical named final-result type by a suffix in `errors.types` (default
+`["Error"]`), or, with `errors.structural: true` (the compatibility default), an
+underlying enum with `None`/`Ok` or a union admitting `nil`. This is a project
+heuristic: optional/status values can match without representing failures.
+Set `errors.structural: false` for suffix-only classification; combine it with
+`types: []` to classify nothing. Aliases use the compiler's canonical name;
+distinct types retain their own name. Anonymous results are outside this check.
+
+`@(require_results)` rejects a bare call to an attributed procedure, but permits
+`_ = f()` and `x, _ := g()`. It does not prove callers inspect, handle, or propagate
+failures. Predicates, lookup success flags, several error domains per package,
+and either explicit branches or `or_return` are legitimate design choices.
+
+Allocator R1 verifies the directive only. Scratch allocation and deliberate
+context replacement have no inferred exemption; use role configuration, disabling,
+or a reasoned suppression for a project exception. The compiler's tag checks
+affected allocator defaults, not all allocation, ownership, or lifetime.
+
+Mutable declaration checks include package `when` branches (even inactive ones),
+foreign-block variables, and thread-local declarations. They stop before procedure
+bodies and report grouped variables once. This restriction does not prove purity.
 
 Each rule is one file, `rules/<topic>/<id>.odx.md`: JSON5 frontmatter (`key: "value",` per
 line) with `statement`, `why`, `instead_of`, `evidence`, `cost`, `severity` and `check`, then

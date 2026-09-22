@@ -16,7 +16,7 @@ check_pattern :: proc(c: ^Ctx, p: ^Package, a: ^Active_Rule) {
 	// run_family_b batches every call rule into one walk per file (check_calls)
 	case "import":
 		for f in p.files {
-			for d in f.decls {
+			for d in package_declarations(f) {
 				imp, ok := d.derived.(^ast.Import_Decl)
 				if !ok {continue}
 				path, _, decoded := strconv.unquote_string(imp.relpath.text)
@@ -29,7 +29,7 @@ check_pattern :: proc(c: ^Ctx, p: ^Package, a: ^Active_Rule) {
 	case "foreign":
 		in_role := strings.concatenate({" in a ", p.role, " package"}, context.temp_allocator)
 		for f in p.files {
-			for d in f.decls {
+			for d in package_declarations(f) {
 				#partial switch fd in d.derived {
 				case ^ast.Foreign_Import_Decl:
 					report_at(
@@ -52,7 +52,7 @@ check_pattern :: proc(c: ^Ctx, p: ^Package, a: ^Active_Rule) {
 		}
 	case "decl":
 		for f in p.files {
-			for d in f.decls {
+			for d in package_declarations(f) {
 				vd, ok := d.derived.(^ast.Value_Decl)
 				if !ok || (spec.mutable && !vd.is_mutable) {continue}
 				report_at(
@@ -66,7 +66,7 @@ check_pattern :: proc(c: ^Ctx, p: ^Package, a: ^Active_Rule) {
 		}
 	case "proc":
 		for f in p.files {
-			for d in f.decls {
+			for d in package_declarations(f) {
 				vd, ok := d.derived.(^ast.Value_Decl)
 				if !ok || len(vd.values) != 1 {continue}
 				pl, is_proc := vd.values[0].derived.(^ast.Proc_Lit)
@@ -93,6 +93,28 @@ check_pattern :: proc(c: ^Ctx, p: ^Package, a: ^Active_Rule) {
 			}
 		}
 	}
+}
+
+// Only declaration containers preserve package scope; procedure bodies and types do not.
+package_declarations :: proc(f: ^ast.File) -> []^ast.Stmt {
+	decls := make([dynamic]^ast.Stmt, context.temp_allocator)
+	collect :: proc(s: ^ast.Stmt, decls: ^[dynamic]^ast.Stmt) {
+		if s == nil {return}
+		#partial switch x in s.derived {
+		case ^ast.When_Stmt:
+			collect(x.body, decls)
+			collect(x.else_stmt, decls)
+		case ^ast.Block_Stmt:
+			for child in x.stmts {collect(child, decls)}
+		case ^ast.Foreign_Block_Decl:
+			append(decls, s)
+			collect(x.body, decls)
+		case ^ast.Value_Decl, ^ast.Import_Decl, ^ast.Foreign_Import_Decl:
+			append(decls, s)
+		}
+	}
+	for d in f.decls {collect(d, &decls)}
+	return decls[:]
 }
 
 is_private :: proc(vd: ^ast.Value_Decl) -> bool {

@@ -239,7 +239,7 @@ check_explicit_allocators :: proc(c: ^Ctx, p: ^Package, a: ^Active_Rule) {
 	for f in p.files {
 		if slice.contains(vet_tag_names(f), "explicit-allocators") {continue}
 		file, _ := rel_of(c.root, f.fullpath)
-		report(c, a, file, 1, 1, "file must start with `#+vet explicit-allocators`", file)
+		report(c, a, file, 1, 1, "file must contain `#+vet explicit-allocators` before the package declaration", file)
 	}
 }
 

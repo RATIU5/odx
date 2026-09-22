@@ -17,6 +17,10 @@
 !docs/milestones/3-probe/*.odin
 !docs/milestones/4-probe/
 !docs/milestones/4-probe/*.odin
+!docs/milestones/5-probe/
+!docs/milestones/5-probe/*.odin
+!docs/milestones/5-allocator-probe/
+!docs/milestones/5-allocator-probe/*.odin
 ROADMAP.md
 !ols.json
 !mise.toml

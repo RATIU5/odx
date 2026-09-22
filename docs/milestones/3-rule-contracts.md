@@ -31,6 +31,10 @@ explicitly distinguish raw trials from configured project checks.
 
 ## Executable selector reference
 
+Milestone 5 expands package declaration traversal as reflected below; see the
+[semantics decision record](5-existing-policy-semantics.md) for compatibility
+and counterexamples.
+
 All selectors require `kind`. All accept optional `roles` and `except_roles`
 arrays. Fields not listed for that selector are errors even when their value is
 false, null, empty, or otherwise seemingly harmless. Unknown nested fields,
@@ -43,10 +47,10 @@ null primitive values, and empty required strings fail before source checking.
 | `banned_import` | `from` | Reads the package role's dependency layer. Omit `from` or use exactly `"dependencies.may_import"`; it is a compatibility alias, not configurable indirection. See milestone 2 for graph semantics. |
 | `require_attribute` | Required `attribute`; optional `on` | `on` absent or `"exported_procs"` means compiler-exported non-test procedures whose final result is classified as an error. Reports absence of the named attribute. It is not an attribute requirement on every procedure. |
 | `pattern`, `match:"call"` | `name`, `names` | At least one nonempty spelling. Exact union of both fields, deduplicated. Recursive syntactic call matching with file-import alias normalization. No glob or resolved-callee semantics. |
-| `pattern`, `match:"import"` | Required `name` | Direct file-level ordinary imports. Decoded path matches exactly, or by prefix when `name` ends in `*`. Plural `names` is unsupported. |
-| `pattern`, `match:"proc"` | `exported`, `requires_param` | Direct file-level procedure literals. `exported:true` excludes syntactically private declarations; absent/false includes both. No `name` filter is implemented: supplying one now fails. |
-| `pattern`, `match:"decl"` | Required `at:"package_scope"`; optional `mutable` | Direct file-level value declarations. `mutable:true` selects mutable declarations; absent/false includes mutable and immutable declarations. |
-| `pattern`, `match:"foreign"` | None | Direct file-level foreign imports and foreign blocks. No transitive, conditional-block, or runtime foreign-access claim. |
+| `pattern`, `match:"import"` | Required `name` | Package-scope ordinary imports, including conditional branches. Decoded path matches exactly, or by prefix when `name` ends in `*`. Plural `names` is unsupported. |
+| `pattern`, `match:"proc"` | `exported`, `requires_param` | Package-scope procedure literals, including conditional and foreign blocks. `exported:true` excludes declarations with their own private attribute, not inherited privacy; absent/false includes both. No `name` filter is implemented. |
+| `pattern`, `match:"decl"` | Required `at:"package_scope"`; optional `mutable` | Package-scope value declarations, including all conditional branches and foreign-block variables, excluding procedure bodies. `mutable:true` selects mutable declarations; absent/false includes both. Grouped variables produce one finding. |
+| `pattern`, `match:"foreign"` | None | Package-scope foreign imports and foreign blocks, including conditional branches. No transitive or runtime foreign-access claim. |
 
 `requires_param` is an object with required nonempty `type_suffix` and optional
 `index` (default zero). Its only other accepted key is that index. It reports a

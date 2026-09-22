@@ -1,7 +1,7 @@
 #+vet explicit-allocators
 package core
 
-// A pure package: values in, values out, no globals, no I/O.
+// This example passes state as values; the project's pure role selects its policies.
 
 MAX_HP :: 100
 

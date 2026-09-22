@@ -10,7 +10,7 @@ import "core:slice"
 import "core:strings"
 
 // Bump when interpreter semantics change without changing serialized policy.
-GUIDANCE_REVISION :: 1
+GUIDANCE_REVISION :: 2
 
 Guidance_Package :: struct {
 	path: string,

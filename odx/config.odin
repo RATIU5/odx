@@ -23,14 +23,14 @@ Config :: struct {
 	errors:       Errors_Cfg,
 }
 
-// errors.types: the type-name suffixes errors/R3 treats as an error result, on top of the
-// structural test (an enum with a None/Ok variant, or a nil-able union) that needs no name.
+// Classification uses canonical named-result suffixes and optional structural heuristics.
 Errors_Cfg :: struct {
-	types: []string, // absent = DEFAULT_ERROR_TYPES
+	types:      []string,
+	structural: bool,
 }
 
 DEFAULT_ERROR_TYPES := []string{"Error"}
-ERRORS_KEYS := []string{"types"}
+ERRORS_KEYS := []string{"types", "structural"}
 
 Layer :: struct {
 	may_import: []string, // roles or import globs (`core:*`)
@@ -125,6 +125,16 @@ load_config :: proc(root: string, errs: ^[dynamic]string) -> (cfg: Config) {
 	// unmarshal leaves an empty array nil: presence in the tree is the real signal
 	if "exclude" not_in tree {cfg.exclude = DEFAULT_EXCLUDE}
 	if "types" not_in errors_obj {cfg.errors.types = DEFAULT_ERROR_TYPES}
+	if "structural" not_in errors_obj {
+		cfg.errors.structural = true
+	} else if _, valid := errors_obj["structural"].(json.Boolean); !valid {
+		errf(errs, "%s: errors.structural must be a boolean", path)
+	}
+	for suffix, i in cfg.errors.types {
+		if strings.trim_space(suffix) == "" {
+			errf(errs, "%s: errors.types[%d] must be a nonempty type-name suffix", path, i)
+		}
+	}
 	for role in sorted_keys(cfg.roles) {
 		if strings.trim_space(role) ==
 		   "" {errf(errs, "%s: configured role names must not be empty; an empty selector role denotes unmapped packages", path)}

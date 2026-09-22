@@ -70,7 +70,15 @@ done
 
 [tasks.ci]
 description = "Everything CI runs, in order"
-depends = ["build", "test", "fixtures", "exemplars", "audit", "self", "evidence", "architecture", "contracts", "guidance"]
+depends = ["build", "test", "fixtures", "exemplars", "audit", "self", "evidence", "architecture", "contracts", "guidance", "semantics"]
+
+[tasks.semantics]
+description = "Verify existing policy semantics and compiler counterexamples"
+depends = ["build"]
+run = '''
+ODX_ODIN="$(command -v odin)" odin run docs/milestones/5-probe -out:$OUT/odx_semantics -vet -strict-style
+ODX_ODIN="$(command -v odin)" odin run docs/milestones/5-allocator-probe -out:$OUT/odx_allocator_semantics -vet -strict-style
+'''
 
 [tasks.guidance]
 description = "Exercise guidance freshness and verify this repository's managed instructions"

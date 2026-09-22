@@ -1,6 +1,6 @@
 package platform
 
-// An edge package: the only place that may import core:os and hold process state.
+// This example's edge policy permits core:os imports and package state.
 
 import "core:fmt"
 import "core:os"

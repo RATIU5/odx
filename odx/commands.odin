@@ -192,13 +192,13 @@ strip_fences :: proc(md: string) -> string {
 // INIT_CONFIG_HEAD + BODY is both what `odx init` writes and, parsed, the default Config.
 INIT_CONFIG_HEAD :: `{
   // Package roles: each glob is a directory path relative to this file (17.5).
-  // Every package must match exactly one role. Detected package directories:
+  // Roles are optional; a package may match at most one role. Detected packages:
 `
 INIT_CONFIG_BODY :: `  version: 1,
   roles: {
-    pure: [],    // no os, no foreign, no I/O, no mutable globals
-    service: [], // takes capabilities as parameters
-    edge: [],    // os, foreign, I/O allowed
+    pure: [],    // project role with import, allocator-tag, and mutable-declaration policies
+    service: [], // project role with import, allocator-tag, and mutable-declaration policies
+    edge: [],    // project role with import policies
   },
   dependencies: {
     pure: { may_import: ["pure", "core:*"] },

@@ -1,6 +1,6 @@
 ---
 name: "errors",
-summary: "Typed errors, @(require_results), or_return; never discard a failure",
+summary: "Project-selected result acknowledgement and contextual error review",
 tags: ["errors", "results", "or_return", "require_results"],
 aliases: ["error handling", "failure", "fallible", "boolean result", "ok flag"],
 applies_to: { roles: ["pure", "service", "edge"] },
@@ -8,111 +8,77 @@ related: ["dependencies"],
 example_roles: { "example/core": "pure" },
 ---
 
-Failures are values. Every fallible procedure says so in its signature and the compiler refuses
-to let a caller drop that value. Handle it where it occurs when you can; when a package's
-operations genuinely chain, `or_return` carries it up to the one place that can act on it.
-
-- `_ = f()` is only acceptable at the top of a program where the error is logged and the
-  process exits. Write the log line.
-- `Error` may be a `union` when a package wraps errors from several dependencies.
+Choose error representations for the decisions callers need to make. The active declaration
+rule requires `@(require_results)` on selected exported APIs, using configurable canonical
+name suffixes and optional structural heuristics. It does not prove error intent or correct
+handling. The compiler permits explicit discard, including just the error result.
 
 ## Reader checks
 
-Conventions a reader enforces in review; `odx explain --checklist` lists them and
-`odx self-test` compiles every block below, so the examples cannot rot. Nothing here fires.
+These questions guide review; `odx check` does not enforce them. Executable examples show
+valid Odin, not proof of caller behavior. Neither example form below is a policy finding.
 
-### Exported procedures that can fail return an error type as the last result, not a bool.
+### Does the result communicate the information callers need?
 
-A bool, and equally a single universal error type, is 'all the same degenerate value: error or not... a fancy boolean'. Callers cannot branch on it or report it.
-
-A bool says that something failed, never what.
-
-```odin fires
-open :: proc(path: string) -> (handle: int, ok: bool) {
-	return 0, len(path) > 0
-}
-```
+Predicates and lookup success flags legitimately return bool. Use richer error values when
+callers need failure details; a bool result alone does not establish an error-design defect.
 
 ```odin silent
-Error :: enum {
-	None,
-	Not_Found,
-	Permission,
+contains :: proc(values: map[int]int, key: int) -> bool {
+	_, ok := values[key]
+	return ok
 }
 
-@(require_results)
-open :: proc(path: string) -> (handle: int, err: Error) {
-	return 0, .Not_Found if len(path) == 0 else .None
-}
-```
-
-### Each package declares one Error enum or union; no string or any errors.
-
-'Having an error value type defined per package is absolutely fine (and ergonomic too)'. A typed error is exhaustively switchable and greppable; strings and any are neither.
-
-One switchable type per package; a `union` when it wraps several dependencies.
-
-```odin fires
-load :: proc(path: string) -> (size: int, problem: string) {
-	if len(path) == 0 {return 0, "empty path"}
-	return len(path), ""
+lookup :: proc(values: map[int]int, key: int) -> (int, bool) {
+	value, ok := values[key]
+	return value, ok
 }
 ```
+
+### Do error domains fit their operations and callers?
+
+Several error types in one package, a shared domain, and dependency error reuse can each be
+appropriate. Consider whether callers can inspect and report useful details. No exactly-one
+error-type or blanket string/any prohibition is enforced here.
 
 ```odin silent
-Error :: enum {
-	None,
-	Empty_Path,
-}
+Read_Error :: enum {None, Missing}
+Write_Error :: enum {None, Full}
 
 @(require_results)
-load :: proc(path: string) -> (size: int, err: Error) {
-	if len(path) == 0 {return 0, .Empty_Path}
-	return len(path), .None
-}
+read :: proc() -> Read_Error {return .Missing}
+
+@(require_results)
+write :: proc() -> Write_Error {return .Full}
 ```
 
-### Handle an error where it occurs when you can; when a package's operations genuinely chain, prefer or_return over hand-written `if err != nil { return }`.
+### Is handling or propagation clear, and is explicit discard intentional?
 
-'You make your mess; you clean it.' Local handling is the default; or_return is a per-package tool ('when a package needs it, it REALLY needs it') that keeps a chained happy path linear.
+Review recovery and ownership where the operation occurs. Explicit branches and `or_return`
+are both valid propagation styles. `@(require_results)` establishes acknowledgement only;
+it permits storing an unchecked result or explicitly discarding one. Review the consequences
+of discard in context; no universal logging or process-exit requirement follows from Odin.
 
-The hand-written form says the same thing in four lines that `or_return` says in one token.
-
-```odin fires
-Error :: enum {
-	None,
-	Bad,
-}
+```odin silent
+Error :: enum {None, Bad}
 
 @(require_results)
-step :: proc(x: int) -> Error {
-	return .Bad if x < 0 else .None
-}
+step :: proc(x: int) -> Error {return .Bad if x < 0 else .None}
 
 @(require_results)
-run :: proc(x: int) -> Error {
+explicit :: proc(x: int) -> Error {
 	err := step(x)
-	if err != .None {
-		return err
-	}
+	if err != .None {return err}
 	return step(x + 1)
 }
-```
-
-```odin silent
-Error :: enum {
-	None,
-	Bad,
-}
 
 @(require_results)
-step :: proc(x: int) -> Error {
-	return .Bad if x < 0 else .None
-}
-
-@(require_results)
-run :: proc(x: int) -> Error {
+propagate :: proc(x: int) -> Error {
 	step(x) or_return
 	return step(x + 1)
+}
+
+acknowledge :: proc() {
+	_ = step(-1)
 }
 ```

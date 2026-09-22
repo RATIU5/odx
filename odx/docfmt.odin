@@ -144,7 +144,14 @@ check_entities :: proc(c: ^Ctx, p: ^Package, h: ^doc.Header, rules: []^Active_Ru
 			attrs := make(map[string]bool, context.temp_allocator)
 			for at in doc.from_array(h, e.attributes) {attrs[doc.from_string(h, at.name)] = true}
 			if "test" in attrs {continue}
-			last, is_err := last_result_error(h, types, ents, e.type, c.cfg.errors.types)
+			last, is_err := last_result_error(
+				h,
+				types,
+				ents,
+				e.type,
+				c.cfg.errors.types,
+				c.cfg.errors.structural,
+			)
 			for a in rules {
 				if !check_applies(c.cfg, &a.rule.check, p.role) {continue}
 				if a.rule.check.attribute in attrs || !is_err {continue}
@@ -173,10 +180,8 @@ check_entities :: proc(c: ^Ctx, p: ^Package, h: ^doc.Header, rules: []^Active_Ru
 	}
 }
 
-// last_result_error: the name of a procedure's last result type and whether it is an error
-// type: a name ending in one of `suffixes` (odx.json5 errors.types), or, regardless of name,
-// an enum with a None/Ok variant or a union that admits nil. The name is the entry point a
-// grep could do; the structure is what only the checked entity table can say.
+// Aliases use the compiler's canonical name; distinct types retain their own name.
+// Structural matching is a project heuristic, not evidence of failure intent.
 @(private = "file")
 last_result_error :: proc(
 	h: ^doc.Header,
@@ -184,6 +189,7 @@ last_result_error :: proc(
 	ents: []doc.Entity,
 	ti: doc.Type_Index,
 	suffixes: []string,
+	structural: bool,
 ) -> (
 	name: string,
 	is_err: bool,
@@ -198,6 +204,7 @@ last_result_error :: proc(
 	if last.kind != .Named {return}
 	name = doc.from_string(h, last.name)
 	for suf in suffixes {if strings.has_suffix(name, suf) {return name, true}}
+	if !structural {return}
 	named := doc.from_array(h, last.types)
 	if len(named) == 0 {return}
 	base := types[named[0]]

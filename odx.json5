@@ -1,15 +1,15 @@
 {
   version: 1,
   // Package roles: each glob is a directory path relative to this file (17.5).
-  // Every package must match exactly one role. Detected package directories:
+  // Roles are optional; a package may match at most one role. Detected packages:
   //   odx
   //   rules/errors/example/core
   //   rules/dependencies/example/core
   //   rules/dependencies/example/platform
   roles: {
-    pure: [],    // no os, no foreign, no I/O, no mutable globals
-    service: [], // takes capabilities as parameters
-    edge: ["odx", "odx/**"], // os, foreign, I/O allowed
+    pure: [],    // project role with import, allocator-tag, and mutable-declaration policies
+    service: [], // project role with import, allocator-tag, and mutable-declaration policies
+    edge: ["odx", "odx/**"], // project role with import policies
   },
   dependencies: {
     pure: { may_import: ["pure", "core:*"] },

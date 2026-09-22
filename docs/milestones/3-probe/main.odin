@@ -173,26 +173,26 @@ main :: proc() {
 		1,
 	)
 	trial(&p, "import glob", `{kind:"pattern",match:"import",name:"core:*"}`, 1)
-	trial(&p, "procedures default", `{kind:"pattern",match:"proc"}`, 5)
-	trial(&p, "procedures explicit false", `{kind:"pattern",match:"proc",exported:false}`, 5)
-	trial(&p, "procedures exported", `{kind:"pattern",match:"proc",exported:true}`, 4)
+	trial(&p, "procedures default", `{kind:"pattern",match:"proc"}`, 6)
+	trial(&p, "procedures explicit false", `{kind:"pattern",match:"proc",exported:false}`, 6)
+	trial(&p, "procedures exported", `{kind:"pattern",match:"proc",exported:true}`, 5)
 	trial(
 		&p,
 		"largest valid index",
 		`{kind:"pattern",match:"proc",requires_param:{index:9223372036854775807,type_suffix:"Ctx"}}`,
-		5,
+		6,
 	)
 	trial(
 		&p,
 		"first parameter default",
 		`{kind:"pattern",match:"proc",requires_param:{type_suffix:"Ctx"}}`,
-		3,
+		4,
 	)
 	trial(
 		&p,
 		"grouped second parameter",
 		`{kind:"pattern",match:"proc",requires_param:{index:1,type_suffix:"Ctx"}}`,
-		4,
+		5,
 	)
 	trial(
 		&p,
@@ -200,12 +200,12 @@ main :: proc() {
 		`{kind:"pattern",match:"decl",at:"package_scope",mutable:true}`,
 		1,
 	)
-	trial(&p, "all declarations default", `{kind:"pattern",match:"decl",at:"package_scope"}`, 8)
+	trial(&p, "all declarations default", `{kind:"pattern",match:"decl",at:"package_scope"}`, 9)
 	trial(
 		&p,
 		"all declarations explicit false",
 		`{kind:"pattern",match:"decl",at:"package_scope",mutable:false}`,
-		8,
+		9,
 	)
 	trial(&p, "foreign categories", `{kind:"pattern",match:"foreign"}`, 2)
 	trial(&p, "path role", `{kind:"path_role"}`, 0)
@@ -222,7 +222,7 @@ main :: proc() {
 		`{kind:"require_attribute",attribute:"require_results",on:"exported_procs"}`,
 		0,
 	)
-	trial(&p, "custom role", `{kind:"pattern",match:"proc",roles:["domain"]}`, 5)
+	trial(&p, "custom role", `{kind:"pattern",match:"proc",roles:["domain"]}`, 6)
 	trial(
 		&p,
 		"exclusion wins",
@@ -230,15 +230,15 @@ main :: proc() {
 		0,
 	)
 	source(&p, "odx.json5", `{version:1,odin:{explicit_allocators:"off"}}`)
-	trial(&p, "unrestricted no-role", `{kind:"pattern",match:"proc"}`, 5)
-	trial(&p, "explicit no-role inclusion", `{kind:"pattern",match:"proc",roles:[""]}`, 5)
+	trial(&p, "unrestricted no-role", `{kind:"pattern",match:"proc"}`, 6)
+	trial(&p, "explicit no-role inclusion", `{kind:"pattern",match:"proc",roles:[""]}`, 6)
 	trial(&p, "explicit no-role exclusion", `{kind:"pattern",match:"proc",except_roles:[""]}`, 0)
 	source(
 		&p,
 		"odx.json5",
 		`{version:1,roles:{domain:[]},default_role:"domain",odin:{explicit_allocators:"off"}}`,
 	)
-	trial(&p, "default custom role", `{kind:"pattern",match:"proc",roles:["domain"]}`, 5)
+	trial(&p, "default custom role", `{kind:"pattern",match:"proc",roles:["domain"]}`, 6)
 
 	fresh(&p, "authoring")
 	source(&p, "other/other.odin", "package other\nstate: int\n")

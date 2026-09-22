@@ -29,7 +29,10 @@ test_config_validation :: proc(t: ^testing.T) {
 	e = config_errors(t, `{ version: 1, odin: { explicit_allocators: "pur" } }`)
 	testing.expect(t, strings.contains(e, "explicit_allocators"), e)
 	// dependencies naming a role that is not declared, and may_import naming neither a role nor a glob
-	e = config_errors(t, `{ version: 1, roles: { pure: [] }, dependencies: { edge: { may_import: ["nope"] } } }`)
+	e = config_errors(
+		t,
+		`{ version: 1, roles: { pure: [] }, dependencies: { edge: { may_import: ["nope"] } } }`,
+	)
 	testing.expect(t, strings.contains(e, "dependencies.edge is not a declared role"), e)
 	testing.expect(t, strings.contains(e, `"nope" is neither a role nor a collection glob`), e)
 	// wrong version, bad default_role, short disabled reason
@@ -40,9 +43,34 @@ test_config_validation :: proc(t: ^testing.T) {
 	// missing pure deny falls back to the default set
 	tmp, _ := os.make_directory_temp("", "odx-cfg-*", context.allocator)
 	defer os.remove_all(tmp)
-	_ = os.write_entire_file(join({tmp, CONFIG_FILE}), transmute([]byte)string(`{ version: 1, roles: { pure: [] }, dependencies: { pure: { may_import: ["core:*"] } } }`))
+	_ = os.write_entire_file(
+		join({tmp, CONFIG_FILE}),
+		transmute([]byte)string(
+			`{ version: 1, roles: { pure: [] }, dependencies: { pure: { may_import: ["core:*"] } } }`,
+		),
+	)
 	errs: [dynamic]string
 	cfg := load_config(tmp, &errs)
 	testing.expect_value(t, len(errs), 0)
 	testing.expect(t, len(cfg.dependencies["pure"].deny) > 0)
+}
+
+@(test)
+test_error_classification_config :: proc(t: ^testing.T) {
+	context.allocator = context.temp_allocator
+	defer free_all(context.temp_allocator)
+	for source in ([]string{`{version:1,errors:{structural:"false"}}`, `{version:1,errors:{structural:0}}`, `{version:1,errors:{structural:null}}`, `{version:1,errors:{types:[""]}}`, `{version:1,errors:{types:["  "]}}`}) {
+		testing.expect(t, config_errors(t, source) != "", source)
+	}
+	tmp, err := os.make_directory_temp("", "odx-error-cfg-*", context.allocator)
+	testing.expect(t, err == nil)
+	defer os.remove_all(tmp)
+	for source, i in ([]string{`{version:1}`, `{version:1,errors:{types:[]}}`, `{version:1,errors:{types:[],structural:false}}`, `{version:1,errors:{types:["Failure"],structural:true}}`}) {
+		testing.expect(t, os.write_entire_file(join({tmp, CONFIG_FILE}), source) == nil)
+		errs: [dynamic]string
+		cfg := load_config(tmp, &errs)
+		testing.expect_value(t, len(errs), 0)
+		testing.expect_value(t, cfg.errors.structural, i != 2)
+		testing.expect_value(t, len(cfg.errors.types), 1 if i == 0 || i == 3 else 0)
+	}
 }

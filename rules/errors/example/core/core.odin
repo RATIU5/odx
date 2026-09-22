@@ -14,7 +14,7 @@ Config :: struct {
 }
 
 // open is the fallible primitive: an error type last, and the attribute so a
-// dropped result is a compile error.
+// bare call is a compile error; explicit discard remains valid Odin.
 @(require_results)
 open :: proc(path: string) -> (h: Handle, err: Error) {
 	if path == "" {

@@ -87,14 +87,18 @@ rule_evidence :: proc(spec: Check_Spec) -> (source, boundary: string) {
 			"recursive ordinary source imports with direct test allow exceptions; dependency *_test.odin edges omitted; unconfigured core/base/vendor collections are opaque leaves; required missing/excluded/unknown/outside project evidence is unavailable; no foreign or runtime effect guarantee"
 	case .require_attribute:
 		return "compiler_entities",
-			"compiler-selected exported procedure declarations, excluding @(test); inferred final error-result types and attribute presence; no caller-handling proof"
+			"compiler-selected exported procedure declarations, excluding @(test); canonical named final-result suffixes and optional structural classification from errors configuration; attribute presence only, no error-intent or caller-handling proof"
 	case .pattern:
 		if spec.match == "call" {
 			return "native_ast",
 				"recursive syntactic calls in all branches; file import aliases normalized without lexical name resolution; indirect calls not resolved"
 		}
+		if spec.match == "proc" {
+			return "native_ast",
+				"package-scope procedure literals through all when branches and foreign blocks; procedure bodies excluded; exported excludes only declarations with their own @(private) attribute, not inherited privacy; parameter types matched by written suffix, not resolved identity"
+		}
 		return "native_ast", fmt.tprintf(
-			"direct file-level %s declarations only; declarations inside when/foreign blocks and nested procedures are outside this selector",
+			"package-scope %s declarations through all when branches and foreign blocks; one finding per matching declaration; procedure bodies excluded; syntax only, no resolved identity or runtime effect proof",
 			spec.match,
 		)
 	}
