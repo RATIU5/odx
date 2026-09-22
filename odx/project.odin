@@ -79,6 +79,7 @@ Package :: struct {
 	parse_result:    Evidence_Result,
 	compiler_result: Evidence_Result,
 	doc_result:      Evidence_Result,
+	import_result:   Evidence_Result,
 }
 
 Diag :: struct {

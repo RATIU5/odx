@@ -9,16 +9,17 @@ import "core:strings"
 // Family B: syntax checks over the AST.
 
 Ctx :: struct {
-	root:          string,
-	cfg:           ^Config,
-	rb:            ^Rulebook,
-	pkgs:          []Package,
-	rules:         []Active_Rule,
-	r:             ^Report,
-	hits:          map[string]int, // config allow-list entries that matched something this run
-	paths:         []string,
-	partial_graph: bool,
-	native_ran:    bool,
+	root:             string,
+	cfg:              ^Config,
+	rb:               ^Rulebook,
+	pkgs:             []Package,
+	rules:            []Active_Rule,
+	r:                ^Report,
+	hits:             map[string]int, // config allow-list entries that matched something this run
+	paths:            []string,
+	graph:            Import_Graph,
+	selection_reason: string,
+	native_ran:       bool,
 }
 
 make_ctx :: proc(p: ^Project, paths: []string, only_topics: []string = nil) -> Ctx {
@@ -36,8 +37,12 @@ make_ctx :: proc(p: ^Project, paths: []string, only_topics: []string = nil) -> C
 		rels = select_packages(p.root, rels, paths)
 		if len(rels) == 0 {fail("no packages under %v", paths)}
 	}
-	c.partial_graph = len(rels) != len(p.dirs)
-	c.pkgs = load_packages(p.root, &p.cfg, rels)
+	all := load_packages(p.root, &p.cfg, p.dirs)
+	c.graph = make_import_graph(p.root, &p.cfg, all)
+	c.pkgs = make([]Package, len(rels))
+	for rel, i in rels {
+		c.pkgs[i] = all[c.graph.by_dir[canonical(join({p.root, rel}))]]
+	}
 	return c
 }
 
@@ -238,112 +243,6 @@ check_explicit_allocators :: proc(c: ^Ctx, p: ^Package, a: ^Active_Rule) {
 		file, _ := rel_of(c.root, f.fullpath)
 		report(c, a, file, 1, 1, "file must start with `#+vet explicit-allocators`", file)
 	}
-}
-
-import_target :: proc(c: ^Ctx, p: ^Package, path: string) -> (label: string, role: string) {
-	coll, _, rest := strings.partition(path, ":")
-	base, sub := p.dir, path // relative import
-	if rest != "" {
-		cpath, is_project := c.cfg.odin.collections[coll]
-		if !is_project {return path, ""} 	// core:, base:, vendor: or an unknown collection
-		base, sub = join({c.root, cpath}), rest
-	}
-	dir, _ := filepath.clean(join({base, sub}), context.temp_allocator)
-	rel, _ := rel_of(c.root, dir)
-	role, _ = role_of(c.cfg, rel)
-	return rel, role
-}
-
-check_imports :: proc(c: ^Ctx, p: ^Package, a: ^Active_Rule) {
-	layer, has_layer := c.cfg.dependencies[p.role]
-	if !has_layer {return}
-	deny := layer.deny
-	for f in p.files {
-		is_test := strings.has_suffix(f.fullpath, "_test.odin")
-		for d in f.decls {
-			imp, ok := d.derived.(^ast.Import_Decl)
-			if !ok {continue}
-			path := strings.trim(imp.relpath.text, `"`) // text includes the quotes
-			label, target_role := import_target(c, p, path)
-			allowed :=
-				import_matches(ALWAYS_ALLOWED, path) ||
-				(is_test && slice.contains(TEST_ALLOWED, path))
-			for m in layer.may_import {
-				allowed ||= (target_role != "" && m == target_role) || import_glob(m, path)
-			}
-			if allowed && !import_matches(deny, path) {
-				// an allowed project import may still reach a denied collection further down:
-				// report it here, at the line that opens the path
-				if !strings.contains(path, ":") || target_role != "" {
-					for denied, via in reach_denied(c, label, deny) {
-						report_at(
-							c,
-							a,
-							&imp.node,
-							fmt.tprintf("%s package reaches %s via %s", p.role, denied, via),
-							strings.concatenate({path, " -> ", denied}),
-						)
-					}
-				}
-				continue
-			}
-			what :=
-				label if target_role == "" else strings.concatenate({label, " (role ", target_role, ")"}, context.temp_allocator)
-			report_at(
-				c,
-				a,
-				&imp.node,
-				strings.concatenate({p.role, " package may not import ", what}),
-				path,
-			)
-		}
-	}
-}
-
-// reach_denied walks the project packages reachable from start (a root-relative package dir)
-// and returns every denied collection import found, with the first import chain that reaches
-// it. Packages outside the project are leaves: the compiler's own graph owns those.
-// ponytail: recomputed per direct import; memoise per package if a project makes this slow.
-reach_denied :: proc(c: ^Ctx, start: string, deny: []string) -> map[string]string {
-	found := make(map[string]string, context.temp_allocator)
-	visited := make(map[string]bool, context.temp_allocator)
-	walk :: proc(
-		c: ^Ctx,
-		rel, chain: string,
-		deny: []string,
-		found: ^map[string]string,
-		visited: ^map[string]bool,
-	) {
-		if rel in visited {return}
-		visited[rel] = true
-		for &q in c.pkgs {
-			if q.rel != rel {continue}
-			for f in q.files {
-				if strings.has_suffix(f.fullpath, "_test.odin") {continue}
-				for d in f.decls {
-					imp, ok := d.derived.(^ast.Import_Decl)
-					if !ok {continue}
-					path := strings.trim(imp.relpath.text, `"`)
-					label, role := import_target(c, &q, path)
-					if strings.contains(path, ":") && role == "" {
-						if import_matches(deny, path) && path not_in found {found[path] = chain}
-						continue
-					}
-					walk(
-						c,
-						label,
-						strings.concatenate({chain, " -> ", label}, context.temp_allocator),
-						deny,
-						found,
-						visited,
-					)
-				}
-			}
-			break
-		}
-	}
-	walk(c, start, start, deny, &found, &visited)
-	return found
 }
 
 // Import strings are not paths: `core:*` means any core package, `core:sys/*` any package under

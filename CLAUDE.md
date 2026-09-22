@@ -20,10 +20,10 @@ Conventions a reader enforces in review; `odx explain --checklist` lists them an
 
 Callers pick arenas or trackers ('a good API offers a way to specify the allocator to use'); the doc comment says who frees because a signature cannot. Inside a tagged file the default is unreachable from other tagged files, so it serves untagged callers; R1 and R2 do not conflict.
 
-### dependencies: What each package reaches (OS, network, threads, foreign) is reported from the compiler's import graph; roles are an optional preset that turns a reach into a rule
+### dependencies: Project-defined ordinary import boundaries, checked against the project source graph
 Applies to roles pure, service, edge (odx.json5).
-- **dependencies/R2** A package imports only what its role's may_import allows; a pure package never reaches os, net, thread, or foreign.
-  Why: The compiler forbids cycles but says nothing about direction; a package that reaches the OS cannot be tested without it. Roles are a graph the project chose, not a hierarchy odx imposes.
+- **dependencies/R2** Ordinary imports obey the role's may_import and deny policy; deny also follows imports through included project production source, stopping at built-in collection boundaries.
+  Why: The compiler checks import validity; a project chooses allowed dependencies. Source import boundaries do not prove foreign-access freedom or runtime purity.
   Instead of: Letting any package import anything and discovering the OS dependency in a test that needs the world.
 - **dependencies/R3** No mutable package-level variables in pure or service packages; pass state as a parameter.
   Why: 'Globals and/or thread local variables... are just dreadful solutions.' Hidden state makes two calls with the same arguments give different answers. Edge packages own the process and are the one place a global may live.

@@ -11,6 +11,8 @@
 !docs/milestones/1-alternatives/*.txt
 !docs/milestones/1-probe/
 !docs/milestones/1-probe/*.odin
+!docs/milestones/2-probe/
+!docs/milestones/2-probe/*.odin
 ROADMAP.md
 !ols.json
 !mise.toml

@@ -15,24 +15,28 @@ cmd_check :: proc(o: Opts) {
 	}
 	for t in o.topics {if find_topic(&p.rb, t) == nil {fail("unknown topic %q", t)}}
 	paths := o.args[:]
+	selection_reason := ""
 	if o.since != "" {
-		in_git: bool
-		paths, in_git = changed_odin_files(p.root, o.since)
-		if !in_git {fail("--since needs a git worktree")}
-		if len(paths) == 0 {
+		changed, ok := changed_check_inputs(p.root, o.since)
+		if !ok {fail("--since could not read changes; check the git worktree and reference %q", o.since)}
+		if len(changed) == 0 {
 			c := Ctx {
-				root = p.root,
-				cfg  = &p.cfg,
-				rb   = &p.rb,
-				r    = new(Report),
+				root             = p.root,
+				cfg              = &p.cfg,
+				rb               = &p.rb,
+				r                = new(Report),
+				selection_reason = "no changed project source or policy inputs; no packages checked",
 			}
 			init_coverage(&c, o)
 			code := finalize(c.r, o.strict)
 			print_report(c.r, o.json)
 			os.exit(code)
 		}
+		paths = nil
+		selection_reason = "changed source or policy inputs trigger full current-project reporting, including unchanged dependents"
 	}
 	c := make_ctx(&p, paths, o.topics[:])
+	c.selection_reason = selection_reason
 	code := run_checks(&c, o)
 	print_report(c.r, o.json)
 	os.exit(code)

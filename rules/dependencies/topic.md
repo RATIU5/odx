@@ -1,6 +1,6 @@
 ---
 name: "dependencies",
-summary: "What each package reaches (OS, network, threads, foreign) is reported from the compiler's import graph; roles are an optional preset that turns a reach into a rule",
+summary: "Project-defined ordinary import boundaries, checked against the project source graph",
 tags: ["dependencies", "imports", "globals", "foreign", "capabilities", "packages"],
 aliases: ["package structure", "layering", "import rules", "modules", "what does this depend on"],
 applies_to: { roles: ["pure", "service", "edge"] },
@@ -8,19 +8,37 @@ related: ["errors"],
 example_roles: { "example/core": "pure", "example/platform": "edge" },
 ---
 
-Know what you depend on. `odx doctor` and `odx for` report, for every package and with no
-configuration, whether it transitively reaches the OS (`core:os`), the network (`core:net`),
-threads (`core:thread`, `core:sync`) or a `foreign` block, and through which import. That is the
-compiler's own import graph (`-show-import-graph`), not a taxonomy: "it is a very good idea that
-you know what you are depending on in your project."
+Assign project roles to package directories and configure their `may_import` and
+`deny` entries in `odx.json5`. A direct ordinary import is permitted when its
+target role or import path matches `may_import`, subject to `deny`. Import paths
+match exactly, or by prefix when the entry ends in `*`. The built-in `base:*` and
+`core:testing` allowances remain; test files additionally allow `core:log` and
+`core:fmt`. Deny entries take precedence.
 
-Turning a reach into a rule is opt-in. The preset is three roles assigned per package directory
-in `odx.json5`:
+Import strings are decoded. Within unconfigured built-in collections, path dot
+segments are normalized for matching too: `core:fmt/../os` matches `core:os`.
+Configured collections take precedence over built-in names and resolve to
+canonical project package paths. Escapes outside a built-in collection are
+unavailable evidence.
 
-| role    | may import                          | may hold           |
-| ------- | ----------------------------------- | ------------------ |
-| pure    | pure, `core:*` (no os/net/thread)   | constants only     |
-| service | pure, service, `core:*`             | state via params   |
-| edge    | anything, `vendor:*`, `foreign`     | process-wide state |
+Deny checks follow ordinary imports through included project packages, including
+packages with no role. They inspect the selected package's own test imports but
+exclude dependencies' `*_test.odin` files during transitive traversal. Platform,
+build-tagged, generated, and inactive source remains in the source graph; this is
+not a compiler-selected target graph.
 
-A package with no role gets the report and no rule. A package is never annotated in source.
+Built-in `base:`, `core:`, and `vendor:` imports end traversal. Their import names
+are checked, but their internal dependencies are outside the policy boundary.
+Required excluded, missing, unknown-collection, or outside-project dependencies
+produce unsupported evidence rather than a clean architecture result.
+
+Selecting a file or package limits reported findings, not graph evidence.
+Incremental and hook scans reconsider the full current project after relevant
+source or policy changes, including deletion and rename. Empty change selections
+do not establish project compliance.
+
+Foreign imports and foreign blocks are separate constructs; this ordinary import
+policy does not check them or establish absence of foreign access, side effects,
+or mutable state. The `pure`, `service`, and `edge` names are optional project
+roles, not language guarantees. Packages without applicable dependency policies
+receive no dependency finding of their own, but remain traversable graph evidence.

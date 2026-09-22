@@ -1,7 +1,6 @@
 package odx
 
 import "core:fmt"
-import "core:odin/ast"
 import "core:strings"
 
 Evidence_Status :: enum {
@@ -34,18 +33,20 @@ Source_Coverage :: struct {
 }
 
 Coverage :: struct {
-	selection:      string,
-	paths:          []string,
-	since:          string,
-	topics:         []string,
-	exclude:        []string,
-	source_scope:   string,
-	compiler_scope: string,
-	compiler:       string,
-	compiler_flags: []string,
-	complete:       bool,
-	packages:       []Source_Coverage,
-	checks:         [dynamic]Check_Coverage,
+	selection:        string,
+	selection_reason: string,
+	graph_packages:   []string,
+	paths:            []string,
+	since:            string,
+	topics:           []string,
+	exclude:          []string,
+	source_scope:     string,
+	compiler_scope:   string,
+	compiler:         string,
+	compiler_flags:   []string,
+	complete:         bool,
+	packages:         []Source_Coverage,
+	checks:           [dynamic]Check_Coverage,
 }
 
 init_coverage :: proc(c: ^Ctx, o: Opts) {
@@ -55,6 +56,11 @@ init_coverage :: proc(c: ^Ctx, o: Opts) {
 	if o.since != "" {v.selection = "since"}
 	if o.exemplar != "" {v.selection = "exemplar"}
 	v.paths = c.paths
+	v.selection_reason = c.selection_reason
+	if v.selection_reason ==
+	   "" {v.selection_reason = "explicit reporting selection; dependency evidence uses all discovered project packages"}
+	v.graph_packages = make([]string, len(c.graph.packages))
+	for p, i in c.graph.packages {v.graph_packages[i] = p.rel}
 	v.since = o.since
 	v.topics = o.topics[:]
 	v.exclude = c.cfg.exclude
@@ -78,7 +84,7 @@ rule_evidence :: proc(spec: Check_Spec) -> (source, boundary: string) {
 		return "native_tokens", "file tag presence only; no allocator behavior or lifetime proof"
 	case .banned_import:
 		return "source_import_graph",
-			"direct file-level ordinary imports with test-specific allow exceptions; transitive traversal excludes *_test.odin; external/excluded packages are leaves; not a compiler-resolved or foreign graph"
+			"recursive ordinary source imports with direct test allow exceptions; dependency *_test.odin edges omitted; unconfigured core/base/vendor collections are opaque leaves; required missing/excluded/unknown/outside project evidence is unavailable; no foreign or runtime effect guarantee"
 	case .require_attribute:
 		return "compiler_entities",
 			"compiler-selected exported procedure declarations, excluding @(test); inferred final error-result types and attribute presence; no caller-handling proof"
@@ -190,47 +196,16 @@ collect_coverage :: proc(c: ^Ctx, o: Opts) {
 					result = {.skipped, "compiler entity checks were not requested"}
 					if o.fast {result.reason = "--fast omits compiler entity checks"}
 				}
-			case spec.kind == .banned_import &&
-			     len(c.cfg.dependencies[p.role].deny) > 0 &&
-			     result.status == .complete &&
-			     (c.partial_graph || !import_evidence_available(c, &p)):
-				result = {
-					.unsupported,
-					"project import graph is incomplete in this scan; transitive compliance is not established",
+			case spec.kind == .banned_import && result.status == .complete:
+				result = p.import_result
+				if result.status != .complete {
+					tool_error(c.r, "%s in %s: %s", a.id, p.rel, result.reason)
 				}
-				tool_error(c.r, "%s in %s: %s", a.id, p.rel, result.reason)
 			}
 			add_coverage(c, &p, a.id, evidence, boundary, result)
 		}
 	}
 	refresh_coverage(c.r)
-}
-
-// Only reachable parser failures can invalidate a package's outbound reach check.
-import_evidence_available :: proc(c: ^Ctx, start: ^Package) -> bool {
-	queue := make([dynamic]^Package, context.temp_allocator)
-	append(&queue, start)
-	seen := make(map[string]bool, context.temp_allocator)
-	for i := 0; i < len(queue); i += 1 {
-		p := queue[i]
-		if p.rel in seen {continue}
-		seen[p.rel] = true
-		if p.parse_result.status != .complete {return false}
-		for f in p.files {
-			if p != start && strings.has_suffix(f.fullpath, "_test.odin") {continue}
-			for d in f.decls {
-				imp, ok := d.derived.(^ast.Import_Decl)
-				if !ok {continue}
-				path := strings.trim(imp.relpath.text, `"`)
-				label, role := import_target(c, p, path)
-				if strings.contains(path, ":") && role == "" {continue}
-				for &target in c.pkgs {
-					if target.rel == label {append(&queue, &target)}
-				}
-			}
-		}
-	}
-	return true
 }
 
 refresh_coverage :: proc(r: ^Report) {
@@ -250,6 +225,12 @@ coverage_text :: proc(r: ^Report) -> string {
 		r.coverage.selection,
 		len(r.coverage.packages),
 		"complete" if r.coverage.complete else "incomplete",
+	)
+	fmt.sbprintfln(
+		&b,
+		"  selection: %s; graph evidence: %d project packages",
+		r.coverage.selection_reason,
+		len(r.coverage.graph_packages),
 	)
 	strings.write_string(
 		&b,

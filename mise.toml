@@ -70,7 +70,12 @@ done
 
 [tasks.ci]
 description = "Everything CI runs, in order"
-depends = ["build", "test", "fixtures", "exemplars", "audit", "self", "evidence"]
+depends = ["build", "test", "fixtures", "exemplars", "audit", "self", "evidence", "architecture"]
+
+[tasks.architecture]
+description = "Exercise complete architecture evidence and incremental scan coverage"
+depends = ["build"]
+run = 'ODX_ODIN="$(command -v odin)" odin run docs/milestones/2-probe -out:$OUT/odx_architecture -vet -strict-style'
 
 [tasks.evidence]
 description = "Exercise analysis coverage and unavailable compiler evidence through the CLI"

@@ -225,8 +225,9 @@ main :: proc() {
 	hook_output, _ := run_cli(&p, "hook compiler error", 0, {"hook", "edit"})
 	expect(
 		&p,
-		strings.contains(hook_output, "source rules were not executed"),
-		"hook compiler error: source rules explicitly skipped",
+		!strings.contains(hook_output, "source rules were not executed") &&
+		strings.contains(hook_output, "odin/error"),
+		"hook compiler error: diagnostics retained while source rules run",
 	)
 	write(source, "package lib\nanswer :: 42\n")
 
@@ -335,13 +336,13 @@ exit 1
 	r = run(
 		&p,
 		"scoped dependency graph",
-		2,
+		1,
 		{"--ci", "--topic", "dependencies", "dependencies_r2_via"},
 	)
 	expect(
 		&p,
-		!r.coverage.complete && has_status(r, "unsupported"),
-		"scoped dependency graph: incomplete graph disclosed",
+		r.coverage.complete && !has_status(r, "unsupported") && len(r.violations) > 0,
+		"scoped dependency graph: complete graph produces finding",
 	)
 	p.root = root
 	command("git", "-C", root, "init", "-q")
