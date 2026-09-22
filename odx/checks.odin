@@ -4,6 +4,7 @@ import "core:fmt"
 import "core:odin/ast"
 import "core:path/filepath"
 import "core:slice"
+import "core:strconv"
 import "core:strings"
 
 // Family B: syntax checks over the AST.
@@ -127,12 +128,12 @@ run_family_b :: proc(c: ^Ctx) {
 		for &a in c.rules {
 			if a.rule.check.kind == .pattern &&
 			   a.rule.check.match == "call" &&
-			   role_applies(&a.rule.check, p.role) {append(&calls, &a)}
+			   check_applies(c.cfg, &a.rule.check, p.role) {append(&calls, &a)}
 		}
 		if len(calls) > 0 {check_calls(c, &p, calls[:])}
 		for &a in c.rules {
 			spec := &a.rule.check
-			if !role_applies(spec, p.role) {continue}
+			if !check_applies(c.cfg, spec, p.role) {continue}
 			switch spec.kind {
 			case .path_role:
 				if p.role_count == 0 {
@@ -231,13 +232,6 @@ check_vet_disables :: proc(c: ^Ctx, f: ^ast.File) {
 
 // odin.explicit_allocators: "all" extends the requirement beyond pure/service, "off" drops it.
 check_explicit_allocators :: proc(c: ^Ctx, p: ^Package, a: ^Active_Rule) {
-	switch c.cfg.odin.explicit_allocators {
-	case .off:
-		return
-	case .all:
-	case .pure:
-		if p.role != "pure" && p.role != "service" {return}
-	}
 	for f in p.files {
 		if slice.contains(vet_tag_names(f), "explicit-allocators") {continue}
 		file, _ := rel_of(c.root, f.fullpath)
@@ -273,7 +267,8 @@ check_calls :: proc(c: ^Ctx, p: ^Package, rules: []^Active_Rule) {
 		w := Walk{c, rules, make(map[string]string, context.temp_allocator)}
 		for d in f.decls {
 			if imp, ok := d.derived.(^ast.Import_Decl); ok {
-				path := strings.trim(imp.relpath.text, `"`)
+				path, _, valid := strconv.unquote_string(imp.relpath.text, context.temp_allocator)
+				if !valid {continue}
 				w.aliases[imp.name.text if imp.name.text != "" else import_pkg_name(path)] = path
 			}
 		}

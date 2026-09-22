@@ -103,19 +103,7 @@ rule_evidence :: proc(spec: Check_Spec) -> (source, boundary: string) {
 
 coverage_applies :: proc(c: ^Ctx, p: ^Package, spec: Check_Spec) -> bool {
 	spec := spec
-	if !role_applies(&spec, p.role) {return false}
-	#partial switch spec.kind {
-	case .vet_tag:
-		return(
-			c.cfg.odin.explicit_allocators == .all ||
-			(c.cfg.odin.explicit_allocators == .pure &&
-					(p.role == "pure" || p.role == "service")) \
-		)
-	case .banned_import:
-		return p.role in c.cfg.dependencies
-	case:
-		return true
-	}
+	return check_applies(c.cfg, &spec, p.role)
 }
 
 add_coverage :: proc(

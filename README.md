@@ -1,13 +1,16 @@
 # odx
 
+The [rule contract](docs/milestones/3-rule-contracts.md) defines accepted selector
+fields, role scope, overrides, and trial behavior.
+
 See the [architecture and incremental contract](docs/milestones/2-architecture-and-incremental.md)
 for milestone 2 decisions, graph boundaries, and validation.
 
 The [analysis and coverage contract](docs/milestones/1-analysis-and-coverage.md)
 defines what each check establishes. Dependency checks load the project source
-graph even when findings are scoped to selected files or packages. Generated guidance can still disagree
-with rule scope; the [original baseline](docs/milestones/0-contract-and-baseline.md)
-records that remaining work.
+graph even when findings are scoped to selected files or packages. Rule selection
+now agrees across checking and generated guidance. Generated-file freshness and
+repair wording remain roadmap work.
 
 odx is a secondary vet pass for Odin: it checks that every guarantee the compiler offers is
 switched on, and enforces the few conventions a project has explicitly agreed on, with a
@@ -50,7 +53,8 @@ Four rules, all mechanical, all counting:
 | `errors/R3`       | an exported proc whose last result is an error type carries `@(require_results)`                                      | compiler entity table (`odin doc`)   |
 
 Roles are opt-in: `odx.json5` assigns `pure`, `service` or `edge` per package directory and
-says who may import whom. A package with no role gets no rule. `errors/R3` decides what an
+says who may import whom. Unrestricted rules also apply to packages without a role;
+`check.roles: [""]` explicitly selects those packages. `errors/R3` decides what an
 error type is from the checked entity table: a name ending in one of `errors.types` (default
 `["Error"]`), or, whatever its name, an enum with a `None`/`Ok` variant or a union that admits
 `nil`. Nothing else in the Odin toolchain rejects a dropped error result: `x, _ := f()` and a
@@ -67,7 +71,7 @@ artifact. Conventions only a reader can enforce live in `rules/<topic>/topic.md`
 
 Adding a rule is a text edit. `check: { kind: "pattern", match: <class>, ... }` selects an
 AST node class (`call`, `import`, `proc`, `decl`, `foreign`) and filters it: `name`/`names`
-for calls and import globs, `exported` and `requires_param: { index, type_suffix }` for
+for calls, singular `name` for an import glob, `exported` and `requires_param: { index, type_suffix }` for
 procedures, `at: "package_scope", mutable: true` for declarations, plus `roles`/`except_roles`.
 `odx rule try '<check json5>' [paths]` prints every match before any file exists,
 `odx rule add <topic>` scaffolds the next id, `odx rule test <topic>/<id>` compiles its

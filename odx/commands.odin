@@ -15,7 +15,12 @@ print_json :: proc(v: any) {
 
 list_topics :: proc(o: Opts, p: ^Project) {
 	if o.json {
-		print_json(p.rb.topics[:])
+		topics := slice.clone(p.rb.topics[:], context.temp_allocator)
+		for &t in topics {
+			t.rules = slice.clone(t.rules, context.temp_allocator)
+			for &r in t.rules {r = describe_rule(&p.cfg, t.name, r)}
+		}
+		print_json(topics)
 		return
 	}
 	w := 0
@@ -29,10 +34,12 @@ list_topics :: proc(o: Opts, p: ^Project) {
 
 cmd_explain :: proc(o: Opts) {
 	if o.checklist {
+		if o.rule != "" {fail("--checklist cannot be combined with --rule")}
 		cmd_checklist(o)
 		return
 	}
-	if len(o.args) > 1 {fail("usage: odx explain [<topic>] [--rule R3]")}
+	if len(o.args) > 1 ||
+	   (o.rule != "" && len(o.args) != 1) {fail("usage: odx explain [<topic>] [--rule R3]")}
 	p := must_load(o, false)
 	if len(o.args) == 0 {
 		list_topics(o, &p)
@@ -40,8 +47,16 @@ cmd_explain :: proc(o: Opts) {
 	}
 	t := find_topic(&p.rb, o.args[0])
 	if t == nil {fail("unknown topic %q (see `odx explain`)", o.args[0])}
+	shown_topic := t^
+	visible := make([dynamic]Rule)
+	for r in t.rules {
+		if !r.retired &&
+		   (o.rule == "" || r.id == o.rule) {append(&visible, describe_rule(&p.cfg, t.name, r))}
+	}
+	if o.rule != "" && len(visible) == 0 {fail("no active rule %s in topic %s", o.rule, t.name)}
+	shown_topic.rules = visible[:]
 	if o.json {
-		print_json(t^)
+		print_json(shown_topic)
 		return
 	}
 	fmt.printfln("%s: %s", t.name, t.summary)
@@ -49,7 +64,7 @@ cmd_explain :: proc(o: Opts) {
 	   0 {fmt.printfln("related: %s", strings.join(t.related, ", ", context.temp_allocator))}
 	fmt.println()
 	shown := 0
-	for r in t.rules {
+	for &r in t.rules {
 		if r.retired || (o.rule != "" && r.id != o.rule) {continue}
 		shown += 1
 		id := strings.concatenate({t.name, "/", r.id}, context.temp_allocator)
@@ -71,6 +86,7 @@ cmd_explain :: proc(o: Opts) {
 			"",
 			how,
 		)
+		fmt.printfln("%-14s scope: %s", "", check_scope(&p.cfg, &r.check))
 		if r.prose != "" {fmt.printfln("\n%s", r.prose)}
 		if r.fires != "" {fmt.printfln("\nfires:\n%s", indent(r.fires))}
 		if r.silent != "" {fmt.printfln("\nsilent (compiles and passes):\n%s", indent(r.silent))}
@@ -94,6 +110,7 @@ reader_checks :: proc(t: Topic) -> string {
 
 cmd_checklist :: proc(o: Opts) {
 	p := must_load(o, false)
+	for name in o.args {if find_topic(&p.rb, name) == nil {fail("unknown topic %q", name)}}
 	for t in p.rb.topics {
 		if len(o.args) > 0 && !slice.contains(o.args[:], t.name) {continue}
 		if rc := reader_checks(t); rc != "" {fmt.printfln("## %s\n\n%s\n", t.name, rc)}
@@ -103,32 +120,28 @@ cmd_checklist :: proc(o: Opts) {
 cmd_for :: proc(o: Opts) {
 	if o.emit && len(o.args) == 0 {
 		p := must_load(o, true)
-		fmt.print(claude_md(&p, p.rb.topics[:]))
+		fmt.print(claude_md(&p, applicable_topics(&p, p.dirs, len(p.dirs) == 0)))
 		return
 	}
 	if len(o.args) != 1 {fail("usage: odx for <path> | odx for --emit-claude-md [<path>]")}
 	p := must_load(o, true)
-	abs, _ := filepath.abs(o.args[0])
-	rel, inside := rel_of(p.root, abs if os.is_directory(abs) else filepath.dir(abs))
-	if !inside {fail("%s is outside the project root %s", o.args[0], p.root)}
-	if is_excluded(&p.cfg, rel) {fail("%s is excluded by odx.json5", rel)}
+	rels := select_packages(p.root, p.dirs, o.args[:])
+	if len(rels) !=
+	   1 {fail("odx for requires exactly one included package (selected %d)", len(rels))}
+	rel := rels[0]
 	role, n := role_of(&p.cfg, rel)
 	if n > 1 {fail("%s matches more than one role in odx.json5", rel)}
-	matched: [dynamic]Topic
-	for t in p.rb.topics {
-		if len(t.applies_to.roles) == 0 ||
-		   slice.contains(t.applies_to.roles, role) {append(&matched, t)}
-	}
+	matched := applicable_topics(&p, rels)
 	if o.json {
 		print_json(struct {
 			package_dir: string,
 			role:        string,
 			topics:      []Topic,
-		}{rel, role, matched[:]})
+		}{rel, role, matched})
 		return
 	}
 	if o.emit {
-		fmt.print(claude_md(&p, matched[:]))
+		fmt.print(claude_md(&p, matched))
 		return
 	}
 	shown := rel if rel != "" else "."
@@ -148,13 +161,11 @@ cmd_for :: proc(o: Opts) {
 			for r in t.rules {
 				if r.retired {continue}
 				id := strings.concatenate({t.name, "/", r.id}, context.temp_allocator)
-				if reason, dis := p.cfg.disabled[id]; dis {
-					fmt.printfln("  %-14s disabled: %s", id, reason)
-					continue
-				}
 				fmt.printfln("  %-14s %s\n  %-14s why: %s", id, r.statement, "", r.why)
 			}
-			if rc := reader_checks(t); rc != "" {fmt.printfln("\n  reader checks (odx explain --checklist %s):\n%s", t.name, indent(strip_fences(rc)))}
+			if rc := reader_checks(t);
+			   rc !=
+			   "" {fmt.printfln("\n  reader checks (odx explain --checklist %s):\n%s", t.name, indent(strip_fences(rc)))}
 		}
 	}
 }
@@ -305,30 +316,42 @@ CLAUDE_MD_HEAD ::
 claude_md :: proc(p: ^Project, topics: []Topic) -> string {
 	b := strings.builder_make()
 	strings.write_string(&b, CLAUDE_MD_HEAD)
+	if len(p.dirs) == 0 {
+		strings.write_string(
+			&b,
+			"\nNo packages discovered. This is a conditional rule catalog; no package applicability has been established.\n",
+		)
+	}
 	for t in topics {
 		fmt.sbprintfln(&b, "\n### %s: %s", t.name, t.summary)
-		if len(t.applies_to.roles) > 0 {
-			fmt.sbprintfln(
-				&b,
-				"Applies to roles %s (odx.json5).",
-				strings.join(t.applies_to.roles, ", ", context.temp_allocator),
-			)
-		}
-		for r in t.rules {
+		for &r in t.rules {
 			if r.retired {continue}
 			id := strings.concatenate({t.name, "/", r.id}, context.temp_allocator)
 			if id in p.cfg.disabled {continue}
 			fmt.sbprintfln(
 				&b,
-				"- **%s** %s\n  Why: %s\n  Instead of: %s",
+				"- **%s** %s\n  Scope: %s\n  Why: %s\n  Instead of: %s",
 				id,
 				r.statement,
+				check_scope(&p.cfg, &r.check),
 				r.why,
 				r.instead_of,
 			)
 		}
 		if rc := reader_checks(t); rc != "" {
-			fmt.sbprintfln(&b, "\nReader checks for %s (not enforced by `odx check`):\n\n%s", t.name, strip_fences(rc))
+			if len(t.applies_to.roles) > 0 {
+				fmt.sbprintfln(
+					&b,
+					"\nReviewer advice scope: roles %s; this does not restrict the mechanical rules above.",
+					scope_roles(t.applies_to.roles),
+				)
+			}
+			fmt.sbprintfln(
+				&b,
+				"\nReader checks for %s (not enforced by `odx check`):\n\n%s",
+				t.name,
+				strip_fences(rc),
+			)
 		}
 	}
 	return strings.to_string(b)
@@ -347,10 +370,13 @@ write_hooks :: proc(p: ^Project) {
 	md := join({p.root, "CLAUDE.md"})
 	data, _ := os.read_entire_file(md, context.allocator)
 	if strings.contains(string(data), "## odx") {
-		fmt.printfln("%s already has an odx section; refresh it with `odx for --emit-claude-md`", md)
+		fmt.printfln(
+			"%s already has an odx section; refresh it with `odx for --emit-claude-md`",
+			md,
+		)
 		return
 	}
-	section := claude_md(p, p.rb.topics[:])
+	section := claude_md(p, applicable_topics(p, p.dirs, len(p.dirs) == 0))
 	if err := os.write_entire_file(md, strings.concatenate({string(data), section}));
 	   err != nil {fail("write %s: %v", md, err)}
 	fmt.println("appended odx section to", md)

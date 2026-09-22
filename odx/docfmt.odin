@@ -16,7 +16,12 @@ is_family_c :: proc(k: Check_Kind) -> bool {
 
 run_family_c :: proc(c: ^Ctx) {
 	rules := make([dynamic]^Active_Rule)
-	for &a in c.rules {if is_family_c(a.rule.check.kind) {append(&rules, &a)}}
+	for &a in c.rules {
+		if !is_family_c(a.rule.check.kind) {continue}
+		for p in c.pkgs {
+			if check_applies(c.cfg, &a.rule.check, p.role) {append(&rules, &a); break}
+		}
+	}
 	if len(rules) == 0 {return}
 	tmp, terr := os.make_directory_temp("", "odx-doc-*", context.allocator)
 	if terr != nil {
@@ -31,6 +36,9 @@ run_family_c :: proc(c: ^Ctx) {
 	flags := odin_flags(c)
 
 	for &p, i in c.pkgs {
+		applicable := make([dynamic]^Active_Rule, context.temp_allocator)
+		for a in rules {if check_applies(c.cfg, &a.rule.check, p.role) {append(&applicable, a)}}
+		if len(applicable) == 0 {continue}
 		h, status := doc_package(c, &p, tmp, i, flags)
 		switch status {
 		case .Fatal:
@@ -39,7 +47,7 @@ run_family_c :: proc(c: ^Ctx) {
 			p.doc_skipped = true
 			continue
 		case .Ok:
-			check_entities(c, &p, h, rules[:])
+			check_entities(c, &p, h, applicable[:])
 		}
 	}
 }
@@ -86,7 +94,12 @@ doc_package :: proc(
 	if !ok {return nil, .Fatal}
 	if code != 0 {
 		p.doc_result.reason = fmt.aprintf("odin doc exited %d: %s", code, text)
-		tool_error(c.r, "%s: %s; compiler entity rules were not checked", p.rel, p.doc_result.reason)
+		tool_error(
+			c.r,
+			"%s: %s; compiler entity rules were not checked",
+			p.rel,
+			p.doc_result.reason,
+		)
 		return nil, .Skipped
 	}
 	data, rerr := os.read_entire_file(out, context.allocator)
@@ -133,7 +146,7 @@ check_entities :: proc(c: ^Ctx, p: ^Package, h: ^doc.Header, rules: []^Active_Ru
 			if "test" in attrs {continue}
 			last, is_err := last_result_error(h, types, ents, e.type, c.cfg.errors.types)
 			for a in rules {
-				if !role_applies(&a.rule.check, p.role) {continue}
+				if !check_applies(c.cfg, &a.rule.check, p.role) {continue}
 				if a.rule.check.attribute in attrs || !is_err {continue}
 				fname := doc.from_string(h, files[e.pos.file].name)
 				file, _ := rel_of(c.root, join({p.dir, filepath.base(fname)}))

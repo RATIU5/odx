@@ -2,6 +2,7 @@ package odx
 
 import "core:fmt"
 import "core:odin/ast"
+import "core:strconv"
 import "core:strings"
 
 // Pattern checks: `match` picks the AST node class, the other keys narrow it.
@@ -18,7 +19,8 @@ check_pattern :: proc(c: ^Ctx, p: ^Package, a: ^Active_Rule) {
 			for d in f.decls {
 				imp, ok := d.derived.(^ast.Import_Decl)
 				if !ok {continue}
-				path := strings.trim(imp.relpath.text, `"`)
+				path, _, decoded := strconv.unquote_string(imp.relpath.text)
+				if !decoded {continue}
 				if import_glob(spec.name, path) {
 					report_at(c, a, &imp.node, strings.concatenate({"import of ", path}), path)
 				}
@@ -30,9 +32,21 @@ check_pattern :: proc(c: ^Ctx, p: ^Package, a: ^Active_Rule) {
 			for d in f.decls {
 				#partial switch fd in d.derived {
 				case ^ast.Foreign_Import_Decl:
-					report_at(c, a, &fd.node, strings.concatenate({"foreign import", in_role}), ident_name(fd.name))
+					report_at(
+						c,
+						a,
+						&fd.node,
+						strings.concatenate({"foreign import", in_role}),
+						ident_name(fd.name),
+					)
 				case ^ast.Foreign_Block_Decl:
-					report_at(c, a, &fd.node, strings.concatenate({"foreign block", in_role}), ident_name(fd.foreign_library))
+					report_at(
+						c,
+						a,
+						&fd.node,
+						strings.concatenate({"foreign block", in_role}),
+						ident_name(fd.foreign_library),
+					)
 				}
 			}
 		}
@@ -85,7 +99,8 @@ is_private :: proc(vd: ^ast.Value_Decl) -> bool {
 	for at in vd.attributes {
 		for e in at.elems {
 			if ident_name(e) == "private" {return true}
-			if fv, ok := e.derived.(^ast.Field_Value); ok && ident_name(fv.field) == "private" {return true}
+			if fv, ok := e.derived.(^ast.Field_Value);
+			   ok && ident_name(fv.field) == "private" {return true}
 		}
 	}
 	return false

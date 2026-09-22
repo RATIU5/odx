@@ -10,47 +10,49 @@ RULE_SUFFIX :: ".odx.md"
 PROJECT_TOPICS_DIR :: ".odx/topics"
 
 Topic :: struct {
-	name:              string,
-	summary:           string,
-	tags:              []string,
-	aliases:           []string,
-	applies_to:        struct {
+	name:          string,
+	summary:       string,
+	tags:          []string,
+	aliases:       []string,
+	applies_to:    struct {
 		roles: []string,
 	},
-	related:           []string,
-	example_roles:     map[string]string,
-	rules:             []Rule,
+	related:       []string,
+	example_roles: map[string]string,
+	rules:         []Rule,
 	// runtime only, not frontmatter keys
-	prose:             string,
-	blocks:            []string, // fires/silent blocks in topic.md: reader checks, compiled by self-test
-	exemplar:          string, // example .odin sources concatenated
-	source:            string, // "builtin" or the directory it came from
-	overrides:         bool,
+	prose:         string,
+	blocks:        []string, // fires/silent blocks in topic.md: reader checks, compiled by self-test
+	exemplar:      string, // example .odin sources concatenated
+	source:        string, // "builtin" or the directory it came from
+	overrides:     bool,
 }
 
 // Metadata comes from the <id>.odx.md frontmatter. Enum fields unmarshal from lowercase names;
 // validate_rule checks presence and spelling against the parsed tree because json.unmarshal
 // leaves an unknown name at the zero value.
 Rule :: struct {
-	id:           string,
-	statement:    string,
-	why:          string,
-	instead_of:   string,
-	evidence:     string,
-	cost:         string,
-	severity:     Severity,
-	class:        string, // stable greppable name, e.g. "dependencies_hidden_state"
-	ignorable:    bool, // default true; set at load when absent
-	baselineable: bool, // has a stable subject
-	retired:      bool,
-	role:         string, // role the fires/silent blocks are checked under (default edge)
-	check:        Check_Spec,
+	id:              string,
+	statement:       string,
+	why:             string,
+	instead_of:      string,
+	evidence:        string,
+	cost:            string,
+	severity:        Severity,
+	class:           string, // stable greppable name, e.g. "dependencies_hidden_state"
+	ignorable:       bool, // default true; set at load when absent
+	baselineable:    bool, // has a stable subject
+	retired:         bool,
+	role:            string, // role the fires/silent blocks are checked under (default edge)
+	check:           Check_Spec,
 	// runtime only, from the .odx.md body
-	prose:        string,
-	prelude:      string, // setup shared by fires and silent
-	fires:        string, // must produce this rule and no other
-	silent:       string, // must compile and produce nothing
-	file:         string,
+	prose:           string,
+	prelude:         string, // setup shared by fires and silent
+	fires:           string, // must produce this rule and no other
+	silent:          string, // must compile and produce nothing
+	file:            string,
+	scope:           string, // runtime description of effective selector/configuration scope
+	disabled_reason: string, // runtime project disabling reason, empty when enabled
 }
 
 // Every kind runs and every finding blocks; conventions a reader enforces live as prose and
@@ -80,20 +82,20 @@ Param_Req :: struct {
 // One field bag for every kind because core:encoding/json cannot pick a union variant by a
 // discriminator field. validate_rule enforces the per-kind shape at load time.
 Check_Spec :: struct {
-	kind:               Check_Kind,
-	attribute:          string, // require_attribute
-	on:                 string, // require_attribute: "" | "exported_procs"
-	from:               string, // banned_import: documentation only
-	names:              []string, // call: canonical `pkg.name` or bare `name`
-	roles:              []string,
-	except_roles:       []string,
+	kind:           Check_Kind,
+	attribute:      string, // require_attribute
+	on:             string, // require_attribute: "" | "exported_procs"
+	from:           string, // banned_import: documentation only
+	names:          []string, // call: canonical `pkg.name` or bare `name`
+	roles:          []string,
+	except_roles:   []string,
 	// pattern
-	match:              string, // one of PATTERN_MATCHES
-	name:               string, // call: one name (sugar for names); import: an import glob
-	exported:           bool, // proc: only exported (not @(private)) procedures
-	requires_param:     Param_Req, // proc: report a proc whose param at index lacks type_suffix
-	at:                 string, // decl: "package_scope" (the only scope today)
-	mutable:            bool, // decl: only `x: T` / `x := v`, not `::`
+	match:          string, // one of PATTERN_MATCHES
+	name:           string, // call: one name (sugar for names); import: an import glob
+	exported:       bool, // proc: only exported (not @(private)) procedures
+	requires_param: Param_Req, // proc: report a proc whose param at index lacks type_suffix
+	at:             string, // decl: "package_scope" (the only scope today)
+	mutable:        bool, // decl: only `x: T` / `x := v`, not `::`
 }
 
 TOPIC_KEYS := []string {
@@ -156,8 +158,12 @@ load_rulebook :: proc(root: string, errs: ^[dynamic]string) -> (rb: Rulebook) {
 		   rerr == nil {
 			for fi in entries {
 				if fi.type != .Regular {continue}
-				if data, ferr := os.read_entire_file(fi.fullpath, context.allocator);
-				   ferr == nil {files[fi.name] = string(data)}
+				if fi.name != TOPIC_FILE && !strings.has_suffix(fi.name, RULE_SUFFIX) {continue}
+				if data, ferr := os.read_entire_file(fi.fullpath, context.allocator); ferr == nil {
+					files[fi.name] = string(data)
+				} else {
+					errf(errs, "%s: cannot read policy file (%v)", fi.fullpath, ferr)
+				}
 			}
 		}
 		ex := make([dynamic]string)
@@ -220,7 +226,29 @@ add_topic :: proc(
 		blocks   = tf.blocks[:],
 		exemplar = exemplar,
 	}
-	if _, ok := unmarshal_json5(tf.frontmatter, &t, at, TOPIC_KEYS, errs); !ok {return}
+	topic_obj, topic_ok := unmarshal_json5(tf.frontmatter, &t, at, TOPIC_KEYS, errs)
+	if !topic_ok {return}
+	if value, present := topic_obj["applies_to"]; present {
+		if advice, valid := value.(json.Object); valid {
+			check_keys(errs, at, "applies_to.", advice, {"roles"})
+			if roles, supplied := advice["roles"]; supplied {
+				if items, roles_valid := roles.(json.Array); roles_valid {
+					for item in items {
+						if role, is_string := item.(json.String);
+						   !is_string || (role != "" && strings.trim_space(role) == "") {
+							errf(
+								errs,
+								"%s: applies_to.roles entries must be role strings (empty means unmapped)",
+								at,
+							)
+						}
+					}
+				} else {errf(errs, "%s: applies_to.roles must be an array", at)}
+			}
+		} else {
+			errf(errs, "%s: applies_to must be an object", at)
+		}
+	}
 	if t.name != dir_name {errf(errs, "%s: name %s does not match directory", at, t.name)}
 	if t.summary == "" {errf(errs, "%s: summary is required", at)}
 	if t.prose == "" {errf(errs, "%s: body prose is required", at)}
@@ -250,9 +278,7 @@ add_topic :: proc(
 		if strings.trim_suffix(name, RULE_SUFFIX) !=
 		   r.id {errf(errs, "%s: file name does not match id %s", rat, r.id)}
 		seen[r.id] = true
-		if "ignorable" not_in obj {r.ignorable = true}
-		if "baselineable" not_in obj {r.baselineable = true}
-		if r.role == "" {r.role = "edge"}
+		default_rule_fields(&r, obj)
 		if !r.retired {validate_rule(&r, obj, rat, errs)}
 		append(&rules, r)
 	}
@@ -267,8 +293,20 @@ add_topic :: proc(
 	append(&rb.topics, t)
 }
 
-@(private = "file")
+default_rule_fields :: proc(r: ^Rule, obj: json.Object) {
+	if "ignorable" not_in obj {r.ignorable = true}
+	if "baselineable" not_in obj {r.baselineable = true}
+	if r.role == "" {r.role = "edge"}
+}
+
 validate_rule :: proc(r: ^Rule, obj: json.Object, at: string, errs: ^[dynamic]string) {
+	if !strings.has_prefix(r.id, "R") {errf(errs, "%s: rule id must start with R", at)}
+	for key in ([]string{"ignorable", "baselineable", "retired"}) {
+		if value, present := obj[key]; present {
+			if _, valid := value.(json.Boolean);
+			   !valid {errf(errs, "%s: %s must be a boolean", at, key)}
+		}
+	}
 	if r.statement == "" {errf(errs, "%s: statement is required", at)}
 	if r.why == "" {errf(errs, "%s: why is required", at)}
 	// a rule cannot reach a user without its justification
@@ -280,34 +318,6 @@ validate_rule :: proc(r: ^Rule, obj: json.Object, at: string, errs: ^[dynamic]st
 	check_enum(errs, at, obj, "severity", Severity)
 	spec, _ := obj["check"].(json.Object)
 	validate_check(&r.check, spec, at, errs)
-}
-
-// `odx rule try` runs this on an inline spec.
-validate_check :: proc(c: ^Check_Spec, spec: json.Object, at: string, errs: ^[dynamic]string) {
-	check_keys(errs, at, "check.", spec, CHECK_KEYS)
-	require_key(errs, at, spec, "kind") // a missing kind would silently become the zero variant
-	check_enum(errs, at, spec, "kind", Check_Kind)
-	switch c.kind {
-	case .pattern:
-		if !slice.contains(PATTERN_MATCHES, c.match) {errf(errs, "%s: check.match must be one of %v", at, PATTERN_MATCHES)}
-		if c.name != "" && c.match == "call" {c.names = slice.concatenate([][]string{c.names, {c.name}})}
-		switch c.match {
-		case "call":
-			if len(c.names) == 0 {errf(errs, "%s: match: call needs name or names", at)}
-		case "import":
-			if c.name == "" {errf(errs, "%s: match: import needs name (an import glob)", at)}
-		case "proc":
-			if "requires_param" in spec && c.requires_param.type_suffix == "" {errf(errs, "%s: requires_param.type_suffix is required", at)}
-		case "decl":
-			if c.at != "package_scope" {errf(errs, "%s: match: decl needs at: package_scope", at)}
-		case "foreign":
-		}
-	case .path_role, .banned_import, .vet_tag:
-	case .require_attribute:
-		if c.attribute == "" {errf(errs, "%s: check.attribute is required", at)}
-		if c.on != "" &&
-		   c.on != "exported_procs" {errf(errs, "%s: check.on must be exported_procs", at)}
-	}
 }
 
 find_topic :: proc(rb: ^Rulebook, name: string) -> ^Topic {

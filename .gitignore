@@ -13,6 +13,8 @@
 !docs/milestones/1-probe/*.odin
 !docs/milestones/2-probe/
 !docs/milestones/2-probe/*.odin
+!docs/milestones/3-probe/
+!docs/milestones/3-probe/*.odin
 ROADMAP.md
 !ols.json
 !mise.toml

@@ -1,6 +1,5 @@
 package odx
 
-import "core:encoding/json"
 import "core:fmt"
 import "core:os"
 import "core:strconv"
@@ -14,10 +13,12 @@ cmd_rule :: proc(o: Opts) {
 	case "add":
 		rule_add(o)
 	case "test":
-		if len(o.args) < 2 {fail("usage: odx rule test <topic>/<id>")}
-		root := find_root(o.root)
-		if root == "" {fail("no %s found", CONFIG_FILE)}
-		if check_rule_blocks(root, o.args[1]) > 0 {os.exit(EXIT_VIOLATION)}
+		if len(o.args) != 2 {fail("usage: odx rule test <topic>/<id>")}
+		p := must_load(o, true)
+		r := find_rule(&p.rb, o.args[1])
+		if r == nil {fail("unknown rule %q", o.args[1])}
+		if r.retired {fail("rule %s is retired and has no active check to test", o.args[1])}
+		if check_rule_blocks(p.root, o.args[1]) > 0 {os.exit(EXIT_VIOLATION)}
 	case:
 		fail("unknown rule subcommand %q (try, add, test)", o.args[0])
 	}
@@ -27,6 +28,7 @@ cmd_rule :: proc(o: Opts) {
 rule_try :: proc(o: Opts) {
 	r := new(Rule)
 	r.severity = .error
+	r.ignorable = true
 	errs: [dynamic]string
 	paths := o.args[1:]
 	if o.file != "" {
@@ -36,8 +38,12 @@ rule_try :: proc(o: Opts) {
 		if perr != "" {fail("%s: %s", o.file, perr)}
 		obj, ok := unmarshal_json5(rf.frontmatter, r, o.file, RULE_KEYS, &errs)
 		if ok {
-			spec, _ := obj["check"].(json.Object)
-			validate_check(&r.check, spec, o.file, &errs)
+			default_rule_fields(r, obj)
+			if r.retired {
+				errf(&errs, "%s: retired rules cannot be trialed", o.file)
+			} else {
+				validate_rule(r, obj, o.file, &errs)
+			}
 		}
 	} else {
 		if len(o.args) < 2 {fail("usage: odx rule try '<check json5>' [<path>...] [--count]")}
@@ -49,14 +55,13 @@ rule_try :: proc(o: Opts) {
 	for e in errs {fmt.eprintln("odx:", e)}
 	if len(errs) > 0 {os.exit(EXIT_TOOL)}
 	if r.id == "" {r.id = "try"}
-	r.ignorable = true
 	p := must_load(o, true)
 	c := make_ctx(&p, paths)
 	c.rules = {Active_Rule{strings.concatenate({"try/", r.id}), r}}
 	init_coverage(&c, o)
 	c.r.coverage.selection = "rule_trial"
 	run_family_b(&c)
-	if is_family_c(r.check.kind) {run_family_c(&c)}
+	if !o.fast && is_family_c(r.check.kind) {run_family_c(&c)}
 	collect_coverage(&c, o)
 	print_tool_errors(c.r)
 	fmt.eprint(coverage_text(c.r))

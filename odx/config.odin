@@ -125,8 +125,13 @@ load_config :: proc(root: string, errs: ^[dynamic]string) -> (cfg: Config) {
 	// unmarshal leaves an empty array nil: presence in the tree is the real signal
 	if "exclude" not_in tree {cfg.exclude = DEFAULT_EXCLUDE}
 	if "types" not_in errors_obj {cfg.errors.types = DEFAULT_ERROR_TYPES}
+	for role in sorted_keys(cfg.roles) {
+		if strings.trim_space(role) ==
+		   "" {errf(errs, "%s: configured role names must not be empty; an empty selector role denotes unmapped packages", path)}
+	}
 	for flag, reason in cfg.odin.declined {
-		if len(reason) < 10 {errf(errs, "%s: odin.declined %s needs a reason of 10+ characters", path, flag)}
+		if len(reason) <
+		   10 {errf(errs, "%s: odin.declined %s needs a reason of 10+ characters", path, flag)}
 	}
 	dependencies_obj, _ := tree["dependencies"].(json.Object)
 	for role in sorted_keys(cfg.dependencies) {
@@ -185,11 +190,34 @@ unmarshal_json5 :: proc(
 	tree: json.Object,
 	ok: bool,
 ) {
+	// The reference JSON decoder ignores integer parse overflow. Check token text
+	// before conversion can turn an invalid policy number into a valid-looking int.
+	tokens := json.make_tokenizer(text, spec = .JSON5, parse_integers = true)
+	for {
+		token, err := json.get_token(&tokens)
+		if err == .EOF {break}
+		if err != nil {
+			errf(errs, "%s: %v", at, err)
+			return
+		}
+		if token.kind == .EOF {break}
+		if token.kind == .Integer {
+			if !policy_integer_fits(token.text) {
+				errf(
+					errs,
+					"%s: integer %s is outside the supported signed 64-bit range",
+					at,
+					token.text,
+				)
+				return
+			}
+		}
+	}
 	if uerr := json.unmarshal_string(text, v, spec = .JSON5); uerr != nil {
 		errf(errs, "%s: %v", at, uerr)
 		return
 	}
-	val, perr := json.parse_string(text, spec = .JSON5)
+	val, perr := json.parse_string(text, spec = .JSON5, parse_integers = true)
 	if perr != nil {
 		errf(errs, "%s: %v", at, perr)
 		return
@@ -200,6 +228,35 @@ unmarshal_json5 :: proc(
 	}
 	check_keys(errs, at, "", tree, keys)
 	return
+}
+
+policy_integer_fits :: proc(text: string) -> bool {
+	s := text
+	limit := u64(max(i64))
+	if strings.has_prefix(s, "-") {limit += 1}
+	if strings.has_prefix(s, "-") || strings.has_prefix(s, "+") {s = s[1:]}
+	base: u64 = 10
+	if strings.has_prefix(s, "0x") || strings.has_prefix(s, "0X") {
+		base = 16
+		s = s[2:]
+	}
+	value: u64
+	for c in s {
+		digit: u64
+		switch {
+		case c >= '0' && c <= '9':
+			digit = u64(c - '0')
+		case c >= 'a' && c <= 'f':
+			digit = u64(c - 'a') + 10
+		case c >= 'A' && c <= 'F':
+			digit = u64(c - 'A') + 10
+		case:
+			return false
+		}
+		if digit >= base || value > (limit - digit) / base {return false}
+		value = value * base + digit
+	}
+	return len(s) > 0
 }
 
 check_keys :: proc(
