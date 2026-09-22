@@ -3,6 +3,10 @@
 
 !.gitignore
 !README.md
+!docs/
+!docs/milestones/
+!docs/milestones/*.md
+!docs/milestones/*.odin
 !ols.json
 !mise.toml
 !odx/
@@ -23,4 +27,5 @@
 !CLAUDE.md
 !.github/
 !.github/**
+
 .odx/cache/

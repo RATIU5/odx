@@ -1,5 +1,10 @@
 # odx
 
+The [milestone 0 contract and baseline](docs/milestones/0-contract-and-baseline.md)
+records current limitations, including scoped dependency false negatives and
+generated guidance that can disagree with rule scope. The command reference
+below describes the existing implementation.
+
 odx is a secondary vet pass for Odin: it checks that every guarantee the compiler offers is
 switched on, and enforces the few conventions a project has explicitly agreed on, with a
 reason for every rule and an escape hatch for every reason. Agents and CI call it the same
@@ -20,8 +25,8 @@ per-file tag with no global switch. `odx doctor` lists every guarantee the insta
 offers, whether `odin.flags` in `odx.json5` turns it on, which files opt out via `#+vet !x` or
 `#+feature`, and how many pure/service files carry the allocator tag. It warns when the
 compiler gained a flag the project has not adopted, so the set ratchets as Odin grows. A flag
-considered and refused goes in `odin.declined: { "-vet-style": "why" }`, so *considered* and
-*not yet seen* stay distinct. `odin.tagged_files_min` is a floor on allocator-tag coverage:
+considered and refused goes in `odin.declined: { "-vet-style": "why" }`, so _considered_ and
+_not yet seen_ stay distinct. `odin.tagged_files_min` is a floor on allocator-tag coverage:
 doctor errors below it and asks you to raise it as coverage grows. `odx doctor --json` returns
 `{schema, errors, warnings, guarantees: {flags: [{flag, on, declined}], tagged, needed}}`.
 
@@ -33,12 +38,12 @@ doctor errors below it and asks you to raise it as coverage grows. `odx doctor -
 
 Four rules, all mechanical, all counting:
 
-| rule | what | how |
-|---|---|---|
-| `allocators/R1` | pure/service files start with `#+vet explicit-allocators` | file tag |
+| rule              | what                                                                                                                  | how                                  |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
+| `allocators/R1`   | pure/service files start with `#+vet explicit-allocators`                                                             | file tag                             |
 | `dependencies/R2` | a package imports only what its role's `may_import` allows, and reaches no denied collection through project packages | AST plus a walk over project imports |
-| `dependencies/R3` | no mutable package-level variables in pure/service packages | AST |
-| `errors/R3` | an exported proc whose last result is an error type carries `@(require_results)` | compiler entity table (`odin doc`) |
+| `dependencies/R3` | no mutable package-level variables in pure/service packages                                                           | AST                                  |
+| `errors/R3`       | an exported proc whose last result is an error type carries `@(require_results)`                                      | compiler entity table (`odin doc`)   |
 
 Roles are opt-in: `odx.json5` assigns `pure`, `service` or `edge` per package directory and
 says who may import whom. A package with no role gets no rule. `errors/R3` decides what an
@@ -101,11 +106,11 @@ inline where they cost nothing per turn. Regenerate the section after editing `r
 The loop that blocked a session until `odx check` was clean was piloted on ten tasks under
 three conditions before being removed:
 
-| condition | compiled | tests pass | turns |
-|---|---|---|---|
-| bare | 10/10 | 9/10 | 71 |
-| `odx for` in the prompt | 8/10 | 7/10 | 66 |
-| edit + stop hooks | 8/10 | 7/10 | 104 |
+| condition               | compiled | tests pass | turns |
+| ----------------------- | -------- | ---------- | ----- |
+| bare                    | 10/10    | 9/10       | 71    |
+| `odx for` in the prompt | 8/10     | 7/10       | 66    |
+| edit + stop hooks       | 8/10     | 7/10       | 104   |
 
 The independent columns regressed under both odx conditions and the hook cost 46% more
 turns. A rerun of the two failing tasks passed everywhere, so the failures were noise, but
