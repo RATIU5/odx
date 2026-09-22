@@ -22,7 +22,7 @@ Topic :: struct {
 	rules:         []Rule,
 	// runtime only, not frontmatter keys
 	prose:         string,
-	blocks:        []string, // fires/silent blocks in topic.md: reader checks, compiled by self-test
+	blocks:        []string, // fires/silent blocks in topic.md: reader checks, compiled by native tests
 	exemplar:      string, // example .odin sources concatenated
 	source:        string, // "builtin" or the directory it came from
 	overrides:     bool,
@@ -72,6 +72,7 @@ PATTERN_MATCHES := []string {
 	"proc", // exported / requires_param: package-level procedures
 	"decl", // at: package_scope, mutable: package-level value declarations
 	"foreign", // foreign import and foreign block declarations
+	"if", // braced then-body with one return, call, or assignment and no else
 }
 
 Param_Req :: struct {
@@ -371,7 +372,7 @@ role_applies :: proc(spec: ^Check_Spec, role: string) -> bool {
 	return true
 }
 
-// Config for `odx check --exemplar <topic>`: the topic's example/ directory is the root.
+// Native test configuration: the topic's example/ directory is the root.
 exemplar_config :: proc(t: ^Topic, base: ^Config) -> (cfg: Config) {
 	cfg = default_config()
 	cfg.odin = base.odin

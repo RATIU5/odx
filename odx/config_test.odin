@@ -21,6 +21,12 @@ test_config_validation :: proc(t: ^testing.T) {
 	defer free_all(context.temp_allocator)
 	// the default config loads clean
 	testing.expect_value(t, config_errors(t, INIT_CONFIG_HEAD + INIT_CONFIG_BODY), "")
+	testing.expect(t, strings.contains(config_errors(t, `{version:1,odin:{flags:["-no-bounds-check"],forbidden_flags:["-no-bounds-check"]}}`), "forbidden flag"))
+	testing.expect(t, strings.contains(config_errors(t, `{version:1,odin:{flags:["-define:X=true"],forbidden_flags:["-define"]}}`), "forbidden flag"))
+	testing.expect_value(t, config_errors(t, `{version:1,odin:{flags:["-define:Y=true"],forbidden_flags:["-define:X=true"]}}`), "")
+	for field in ([]string{"required_flags:[]", "declined:{}", "tagged_files_min:0", `version:"dev-2026-09"`}) {
+		testing.expect(t, config_errors(t, strings.concatenate({"{version:1,odin:{", field, "}}"})) != "", "removed task-audit fields must not be silently ignored")
+	}
 	// unknown key, top level and under odin
 	e := config_errors(t, `{ version: 1, rolez: {}, odin: { flagz: [] } }`)
 	testing.expect(t, strings.contains(e, "rolez"), e)

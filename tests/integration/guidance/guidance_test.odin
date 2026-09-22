@@ -8,7 +8,7 @@ import "core:strings"
 import "core:testing"
 
 Probe :: struct {
-	t: ^testing.T,
+	t:               ^testing.T,
 	bin, root, base: string,
 	passed, failed:  int,
 }
@@ -16,7 +16,10 @@ Probe :: struct {
 Report :: struct {
 	schema:     int,
 	violations: []struct {
-		rule, fix_hint, instead_of, evidence, boundary: string,
+		rule: string,
+	},
+	rules:      map[string]struct {
+		fix_hint, instead_of, evidence, boundary: string,
 	},
 }
 
@@ -86,11 +89,11 @@ rule :: proc(p: ^Probe, name, id, selector: string) {
 }
 stale :: proc(p: ^Probe, name: string) {
 	before := read(p, "AGENTS.md")
-	run(p, name, 1, {"guidance", "check", "AGENTS.md"})
+	run(p, name, 1, {"policy", "--verify", "AGENTS.md"})
 	expect(p, read(p, "AGENTS.md") == before, fmt.tprintf("%s leaves document untouched", name))
-	run(p, fmt.tprintf("%s regenerate", name), 0, {"guidance", "write", "AGENTS.md"})
+	run(p, fmt.tprintf("%s regenerate", name), 0, {"policy", "--write", "AGENTS.md"})
 	expect(p, read(p, "AGENTS.md") != before, fmt.tprintf("%s changes owned content", name))
-	run(p, fmt.tprintf("%s now current", name), 0, {"guidance", "check", "AGENTS.md"})
+	run(p, fmt.tprintf("%s now current", name), 0, {"policy", "--verify", "AGENTS.md"})
 }
 
 @(test)
@@ -102,21 +105,21 @@ test_guidance :: proc(t: ^testing.T) {
 	defer os.remove_all(base)
 	bin, _ := filepath.abs("build/odx")
 	p := Probe {
-		t = t,
+		t    = t,
 		bin  = bin,
 		base = base,
 	}
 	fresh(&p, "ownership")
-	run(&p, "missing document stale", 1, {"guidance", "check", "AGENTS.md"})
+	run(&p, "missing document stale", 1, {"policy", "--verify", "AGENTS.md"})
 	expect(
 		&p,
 		!os.exists(fmt.tprintf("%s/AGENTS.md", p.root)),
 		"missing check does not create document",
 	)
 	source(&p, "AGENTS.md", PREFIX)
-	run(&p, "missing block stale", 1, {"guidance", "check", "AGENTS.md"})
+	run(&p, "missing block stale", 1, {"policy", "--verify", "AGENTS.md"})
 	expect(&p, read(&p, "AGENTS.md") == PREFIX, "missing block check preserves human content")
-	run(&p, "append owned block", 0, {"guidance", "write", "AGENTS.md"})
+	run(&p, "append owned block", 0, {"policy", "--write", "AGENTS.md"})
 	generated := read(&p, "AGENTS.md")
 	expect(
 		&p,
@@ -126,20 +129,18 @@ test_guidance :: proc(t: ^testing.T) {
 		"generated block follows human prefix",
 	)
 	source(&p, "AGENTS.md", strings.concatenate({generated, SUFFIX}))
-	run(&p, "human suffix permitted", 0, {"guidance", "check", "AGENTS.md"})
+	run(&p, "human suffix permitted", 0, {"policy", "--verify", "AGENTS.md"})
 	before := read(&p, "AGENTS.md")
-	run(&p, "idempotent write", 0, {"guidance", "write", "AGENTS.md"})
+	run(&p, "idempotent write", 0, {"policy", "--write", "AGENTS.md"})
 	expect(&p, read(&p, "AGENTS.md") == before, "second write is byte identical")
-	neutral := run(&p, "generic Markdown emission", 0, {"for", "--emit-md"})
-	legacy := run(&p, "legacy Markdown alias", 0, {"for", "--emit-claude-md"})
+	run(&p, "portable target creation", 0, {"policy", "--write", "POLICY.md"})
+	run(&p, "portable target freshness", 0, {"policy", "--verify", "POLICY.md"})
+	neutral := read(&p, "POLICY.md")
 	expect(
 		&p,
-		neutral == legacy && strings.contains(neutral, BEGIN),
-		"emission aliases share marked renderer",
+		strings.contains(before, neutral),
+		"managed rendering is identical across destinations",
 	)
-	run(&p, "CLAUDE target creation", 0, {"guidance", "write", "CLAUDE.md"})
-	run(&p, "CLAUDE target freshness", 0, {"guidance", "check", "CLAUDE.md"})
-	expect(&p, read(&p, "CLAUDE.md") == neutral, "document vendor does not change policy block")
 
 	source(
 		&p,
@@ -148,13 +149,13 @@ test_guidance :: proc(t: ^testing.T) {
 odin:{explicit_allocators:"off"}, roles:{domain:["sample"]}, version:1,
 }`,
 	)
-	run(&p, "config comments and key order stable", 0, {"guidance", "check", "AGENTS.md"})
+	run(&p, "config comments and key order stable", 0, {"policy", "--verify", "AGENTS.md"})
 	source(&p, "sample/sample.odin", "package sample\nvalue :: 43\n")
 	run(
 		&p,
 		"source body edits preserve instruction freshness",
 		0,
-		{"guidance", "check", "AGENTS.md"},
+		{"policy", "--verify", "AGENTS.md"},
 	)
 	source(
 		&p,
@@ -224,21 +225,81 @@ odin:{explicit_allocators:"off"}, roles:{domain:["sample"]}, version:1,
 	source(&p, "other/other.odin", "package other\n")
 	topic(&p, "local")
 	rule(&p, "local", "R1", `{kind:"pattern",match:"call",name:"fmt.println",roles:["domain"]}`)
-	run(&p, "package-scoped write", 0, {"guidance", "write", "AGENTS.md", "sample"})
+	policy_json := run(
+		&p,
+		"scoped policy context",
+		0,
+		{"policy", "sample", "--topic", "local", "--rule", "R1", "--json"},
+	)
+	policy: struct {
+		schema:   int,
+		packages: []struct {
+			path, role: string,
+		},
+		rules:    []struct {
+			id, statement, fix_hint: string,
+		},
+		advice:   []struct {
+			topic, advice: string,
+		},
+	}
+	expect(&p, json.unmarshal_string(policy_json, &policy) == nil, "policy context JSON decodes")
+	expect(
+		&p,
+		policy.schema == 2 && len(policy.packages) == 1 && len(policy.rules) == 1,
+		"policy context selects one package and rule",
+	)
+	if len(policy.rules) ==
+	   1 {expect(&p, policy.rules[0].id == "local/R1" && policy.rules[0].fix_hint == "Use project wrappers", "policy context preserves correction")}
+	expect(&p, len(policy.advice) == 0, "single rule context excludes unrelated reviewer advice")
+	checklist := run(
+		&p,
+		"scoped reader checklist",
+		0,
+		{"policy", "sample", "--topic", "local", "--checklist", "--json"},
+	)
+	policy = {}
+	expect(
+		&p,
+		json.unmarshal_string(checklist, &policy) == nil &&
+		len(policy.rules) == 0 &&
+		len(policy.advice) == 1,
+		"checklist separates advice from enforcement",
+	)
+	run(
+		&p,
+		"partial managed export rejected",
+		2,
+		{"policy", "--topic", "local", "--write", "PARTIAL.md", "--json"},
+	)
+	expect(
+		&p,
+		!os.exists(fmt.tprintf("%s/PARTIAL.md", p.root)),
+		"rejected partial export never creates file",
+	)
+	run(
+		&p,
+		"conflicting managed modes rejected",
+		2,
+		{"policy", "--write", "A.md", "--verify", "B.md"},
+	)
+	run(&p, "unknown policy topic rejected", 2, {"policy", "--topic", "missing", "--json"})
+	run(&p, "rule requires topic", 2, {"policy", "--rule", "R1", "--json"})
+	run(&p, "package-scoped write", 0, {"policy", "--write", "AGENTS.md", "sample"})
 	run(
 		&p,
 		"equivalent absolute scope",
 		0,
 		{
-			"guidance",
-			"check",
+			"policy",
+			"--verify",
 			fmt.tprintf("%s/AGENTS.md", p.root),
 			fmt.tprintf("%s/sample", p.root),
 		},
 	)
-	run(&p, "different package scope stale", 1, {"guidance", "check", "AGENTS.md", "other"})
-	run(&p, "whole-project scope stale", 1, {"guidance", "check", "AGENTS.md"})
-	run(&p, "excluded rule package", 0, {"guidance", "write", "CLAUDE.md", "other"})
+	run(&p, "different package scope stale", 1, {"policy", "--verify", "AGENTS.md", "other"})
+	run(&p, "whole-project scope stale", 1, {"policy", "--verify", "AGENTS.md"})
+	run(&p, "excluded rule package", 0, {"policy", "--write", "CLAUDE.md", "other"})
 	expect(
 		&p,
 		strings.contains(read(&p, "AGENTS.md"), "local/R1") &&
@@ -254,19 +315,20 @@ odin:{explicit_allocators:"off"}, roles:{domain:["sample"]}, version:1,
 	result := run(&p, "corrective JSON finding", 1, {"check", "--fast", "--json"})
 	report: Report
 	expect(&p, json.unmarshal_string(result, &report) == nil, "corrective finding JSON decodes")
-	expect(&p, report.schema == 1, "diagnostic schema remains compatible")
+	expect(&p, report.schema == 2, "diagnostic schema is version 2")
 	found := false
 	for v in report.violations {
 		if v.rule != "local/R1" {continue}
 		found = true
 		expect(
 			&p,
-			v.fix_hint == "Use project wrappers" && v.instead_of == "Unrestricted calls",
+			report.rules[v.rule].fix_hint == "Use project wrappers" &&
+			report.rules[v.rule].instead_of == "Unrestricted calls",
 			"repair direction and discouraged alternative are separate",
 		)
 		expect(
 			&p,
-			v.evidence != "" && v.boundary != "",
+			report.rules[v.rule].evidence != "" && report.rules[v.rule].boundary != "",
 			"finding carries evidence and coverage boundary",
 		)
 	}
@@ -283,17 +345,17 @@ odin:{explicit_allocators:"off"}, roles:{domain:["sample"]}, version:1,
 	}
 	for contents, i in malformed {
 		source(&p, "AGENTS.md", contents)
-		run(&p, fmt.tprintf("malformed %d check", i), 2, {"guidance", "check", "AGENTS.md"})
-		run(&p, fmt.tprintf("malformed %d write", i), 2, {"guidance", "write", "AGENTS.md"})
+		run(&p, fmt.tprintf("malformed %d check", i), 2, {"policy", "--verify", "AGENTS.md"})
+		run(&p, fmt.tprintf("malformed %d write", i), 2, {"policy", "--write", "AGENTS.md"})
 		expect(&p, read(&p, "AGENTS.md") == contents, "malformed ownership is never overwritten")
 	}
 	source(&p, "AGENTS.md", "# Human text\n\n## odx\nLegacy mixed content.\n")
 	before = read(&p, "AGENTS.md")
-	run(&p, "legacy heading write refused", 2, {"guidance", "write", "AGENTS.md"})
+	run(&p, "legacy heading write refused", 2, {"policy", "--write", "AGENTS.md"})
 	expect(&p, read(&p, "AGENTS.md") == before, "legacy ambiguous content preserved")
-	run(&p, "directory read error", 2, {"guidance", "check", "sample"})
+	run(&p, "directory read error", 2, {"policy", "--verify", "sample"})
 	source(&p, "odx.json5", `{version:1,unknown_policy:true}`)
-	run(&p, "invalid policy cannot certify freshness", 2, {"guidance", "check", "AGENTS.md"})
+	run(&p, "invalid policy cannot certify freshness", 2, {"policy", "--verify", "AGENTS.md"})
 	expect(&p, read(&p, "AGENTS.md") == before, "invalid policy check preserves document")
 
 	fmt.printfln("%d assertions passed; %d failed", p.passed, p.failed)

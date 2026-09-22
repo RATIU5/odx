@@ -3,85 +3,29 @@ package odx
 import "core:fmt"
 import "core:os"
 
+analysis_options :: proc(o: Opts) -> Analysis_Options {
+	return {
+		root = o.root,
+		paths = o.args[:],
+		topics = o.topics[:],
+		since = o.since,
+		fast = o.fast,
+		strict = o.strict,
+		max_violations = o.max_violations,
+	}
+}
+
 cmd_check :: proc(o: Opts) {
-	p := must_load(o, o.exemplar == "")
-	if o.exemplar != "" {
-		t := find_topic(&p.rb, o.exemplar)
-		if t == nil {fail("unknown topic %q", o.exemplar)}
-		if p.root == "" {p.root, _ = os.get_working_directory(context.allocator)}
-		p.root = join({p.root, "rules", o.exemplar, "example"})
-		p.cfg = exemplar_config(t, &p.cfg)
-		p.dirs = package_dirs(p.root, &p.cfg)
-	}
-	for t in o.topics {if find_topic(&p.rb, t) == nil {fail("unknown topic %q", t)}}
-	paths := o.args[:]
-	selection_reason := ""
-	if o.since != "" {
-		changed, ok := changed_check_inputs(p.root, o.since)
-		if !ok {fail("--since could not read changes; check the git worktree and reference %q", o.since)}
-		if len(changed) == 0 {
-			c := Ctx {
-				root             = p.root,
-				cfg              = &p.cfg,
-				rb               = &p.rb,
-				r                = new(Report),
-				selection_reason = "no changed project source or policy inputs; no packages checked",
-			}
-			init_coverage(&c, o)
-			apply_baseline(&c, false)
-			refresh_coverage(c.r)
-			code := finalize(c.r, o.strict)
-			print_report(c.r, o.json)
-			os.exit(code)
-		}
-		paths = nil
-		selection_reason = "changed source or policy inputs trigger full current-project reporting, including unchanged dependents"
-	}
-	c := make_ctx(&p, paths, o.topics[:])
-	c.selection_reason = selection_reason
-	code := run_checks(&c, o)
-	print_report(c.r, o.json)
+	r, code := analyze(analysis_options(o))
+	print_report(r, o.json)
 	os.exit(code)
-}
-
-run_checks :: proc(c: ^Ctx, o: Opts, use_baseline := true) -> int {
-	full := !o.fast && len(o.topics) == 0 && len(o.args) == 0 && o.since == ""
-	init_coverage(c, o)
-	run_family_b(c)
-	igs := project_ignores(c)
-	if !o.fast {
-		run_family_a(c)
-		run_family_c(c)
-	}
-	collect_coverage(c, o)
-	ran := make(map[string]bool, context.temp_allocator)
-	for a in c.rules {if !(o.fast && is_family_c(a.rule.check.kind)) {ran[a.id] = true}}
-	apply_ignores(c, igs, ran)
-	source_complete := c.native_ran
-	for p in c.pkgs {source_complete &&= p.parse_result.status == .complete}
-	if full && source_complete {report_stale_config(c)}
-	if use_baseline {apply_baseline(c, full && c.r.coverage.complete)}
-	refresh_coverage(c.r)
-	return finalize(c.r, o.strict, o.max_violations)
-}
-
-project_ignores :: proc(c: ^Ctx) -> []Ignore {
-	igs: [dynamic]Ignore
-	for p in c.pkgs {
-		if p.parse_result.status == .failed {continue}
-		for f in p.files {
-			rel, _ := rel_of(c.root, f.fullpath)
-			collect_ignores(c.r, c.rb, f, rel, &igs)
-		}
-	}
-	return igs[:]
 }
 
 cmd_ignores :: proc(o: Opts) {
 	p := must_load(o, true)
 	c := make_ctx(&p, nil)
 	if o.stale {
-		run_checks(&c, Opts{}, use_baseline = false)
+		run_checks(&c, Analysis_Options{}, use_baseline = false)
 		code := 0
 		for v in c.r.violations {
 			if v.rule == "odx/stale-ignore" || v.rule == "odx/bad-ignore" {code = EXIT_VIOLATION}
@@ -90,13 +34,29 @@ cmd_ignores :: proc(o: Opts) {
 		print_report(c.r, o.json)
 		os.exit(code)
 	}
+	for pkg in c.pkgs {
+		if pkg.parse_result.status == .failed {
+			tool_error(
+				c.r,
+				"cannot list ignores in %s: %s",
+				pkg.rel if pkg.rel != "" else ".",
+				pkg.parse_result.reason,
+			)
+		}
+	}
+	if len(c.r.tool_errors) > 0 {
+		code := finalize(c.r, false)
+		print_report(c.r, o.json)
+		os.exit(code)
+	}
 	igs := project_ignores(&c)
 	sort_violations(c.r.violations[:])
 	if o.json {
 		print_json(struct {
+			schema:  int,
 			ignores: []Ignore,
 			bad:     []Violation,
-		}{igs, c.r.violations[:]})
+		}{2, igs, c.r.violations[:]})
 		return
 	}
 	for ig in igs {
@@ -105,4 +65,24 @@ cmd_ignores :: proc(o: Opts) {
 	}
 	for v in c.r.violations {fmt.printfln("%s:%d:%d: %s %s", v.file, v.line, v.col, v.rule, v.message)}
 	fmt.printfln("%d ignores, %d bad. Not ignorable: odin/*, odx/*", len(igs), len(c.r.violations))
+}
+
+must_load :: proc(o: Opts, need_config: bool) -> Project {
+	p := load_project(o.root)
+	if need_config && p.root == "" {
+		errf(&p.errs, "no %s found here or in any parent (use --root)", CONFIG_FILE)
+	}
+	if len(p.errs) > 0 {
+		if o.json {
+			r := Report {
+				tool_errors = p.errs,
+			}
+			code := finalize(&r, false)
+			print_report(&r, true)
+			os.exit(code)
+		}
+		for e in p.errs {fmt.eprintln("odx:", e)}
+		os.exit(EXIT_TOOL)
+	}
+	return p
 }

@@ -4,8 +4,9 @@ import "core:fmt"
 import "core:os"
 import "core:path/filepath"
 import "core:strings"
+import "core:testing"
 
-// `odx self-test`: each tests/fixtures/<name>/ project's violations are diffed both ways
+// Fixture project findings are compared in both directions
 // against `// want: topic/R1 other/R2` markers. A package-level violation is satisfied by a
 // marker on line 1 of any file in that directory.
 
@@ -19,9 +20,12 @@ Want :: struct {
 FIXTURES_DIR :: "tests/fixtures"
 WANT_PREFIX :: "// want:"
 
-cmd_selftest :: proc(o: Opts) {
-	root := find_root(o.root)
-	if root == "" {fail("no %s found; run from the odx repo", CONFIG_FILE)}
+@(test)
+test_fixture_projects_and_rule_examples :: proc(t: ^testing.T) {
+	context.allocator = context.temp_allocator
+	defer free_all(context.temp_allocator)
+	root := find_root("")
+	if !testing.expect(t, root != "", "run tests from the repository root") {return}
 	fixtures := project_subdirs(root, FIXTURES_DIR)
 	if len(fixtures) == 0 {fail("no fixtures under %s/%s", root, FIXTURES_DIR)}
 	failed := 0
@@ -32,7 +36,28 @@ cmd_selftest :: proc(o: Opts) {
 		failed += bad
 	}
 	failed += check_rule_blocks(root, "")
-	if failed > 0 {os.exit(EXIT_VIOLATION)}
+	for id in ([]string{"library/R1", "library/R2"}) {
+		failed += check_rule_blocks(join({root, "examples", "policies", "minimal"}), id)
+	}
+	failed += check_rule_blocks(join({root, "examples", "policies", "strict"}), "")
+	testing.expect_value(t, failed, 0)
+}
+
+@(test)
+test_builtin_example_projects :: proc(t: ^testing.T) {
+	context.allocator = context.temp_allocator
+	defer free_all(context.temp_allocator)
+	root := find_root("")
+	p := load_project(root)
+	for &topic in p.rb.topics {
+		example := Project{root = join({root, "rules", topic.name, "example"}), rb = p.rb}
+		example.cfg = exemplar_config(&topic, &p.cfg)
+		validate_project(&example)
+		testing.expect_value(t, len(example.errs), 0)
+		c := make_ctx(&example, nil, {topic.name})
+		testing.expect_value(t, run_checks(&c, Analysis_Options{topics = {topic.name}}), 0)
+		testing.expect(t, c.r.coverage.complete)
+	}
 }
 
 // check_rule_blocks: a rule's `fires` must produce that rule and no other finding, its
@@ -124,7 +149,7 @@ run_block :: proc(
 	for e in sp.errs {fmt.println("  config:", e)}
 	if len(sp.errs) > 0 {return 1}
 	c := make_ctx(&sp, nil)
-	run_checks(&c, Opts{})
+	run_checks(&c, Analysis_Options{})
 	hit := false
 	for v in c.r.violations {
 		if expect != "" && v.rule == expect {
@@ -159,7 +184,7 @@ run_fixture :: proc(dir: string) -> (bad: int) {
 		return len(p.errs)
 	}
 	c := make_ctx(&p, nil)
-	run_checks(&c, Opts{})
+	run_checks(&c, Analysis_Options{})
 	for e in c.r.tool_errors {
 		fmt.println("  tool error:", e)
 		bad += 1

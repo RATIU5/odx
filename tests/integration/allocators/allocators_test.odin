@@ -13,11 +13,12 @@ Probe :: struct {
 }
 
 Report :: struct {
+	rules: map[string]struct {boundary, fix_hint: string},
 	coverage:   struct {
 		complete: bool,
 	},
 	violations: []struct {
-		rule, message, boundary, fix_hint: string,
+		rule, message: string,
 	},
 }
 
@@ -74,12 +75,12 @@ policy_case :: proc(p: ^Probe, name, body: string, findings: int) {
 		)
 		expect(
 			p,
-			strings.contains(v.boundary, "no allocator behavior or lifetime proof"),
+			strings.contains(r.rules[v.rule].boundary, "no allocator behavior or lifetime proof"),
 			fmt.tprintf("%s limited guarantee", name),
 		)
 		expect(
 			p,
-			strings.contains(v.fix_hint, "allocator arguments required by the compiler"),
+			strings.contains(r.rules[v.rule].fix_hint, "allocator arguments required by the compiler"),
 			fmt.tprintf("%s compiler repair guidance", name),
 		)
 	}

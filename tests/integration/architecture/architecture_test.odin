@@ -27,7 +27,7 @@ Report :: struct {
 }
 Probe :: struct {
 	bin, root, base: string,
-	t: ^testing.T,
+	t:               ^testing.T,
 }
 CONFIG :: `{
  version: 1, roles: {pure: ["app"], service: ["dep"]},
@@ -91,24 +91,6 @@ architecture_complete :: proc(r: Report, pkg := "app") -> bool {
 	}
 	return false
 }
-hook :: proc(p: ^Probe, name, path: string) -> string {
-	payload, _ := json.marshal(struct {
-		tool_input: struct {
-			file_path: string,
-		},
-	}{{path}})
-	input_path := fmt.tprintf("%s/hook-input.json", p.base)
-	write(input_path, string(payload))
-	input, err := os.open(input_path)
-	if err != nil {panic(fmt.tprintf("%v", err))}
-	defer os.close(input)
-	state, out, errors, run_err := os.process_exec(
-		{command = {p.bin, "hook", "edit", "--root", p.root}, stdin = input},
-		context.allocator,
-	)
-	expect(p, run_err == nil && state.exit_code == 0, fmt.tprintf("%s: hook exits zero", name))
-	return fmt.aprintf("%s%s", out, errors)
-}
 commit :: proc(p: ^Probe) {
 	command("git", "-C", p.root, "add", ".")
 	command(
@@ -139,7 +121,7 @@ test_architecture :: proc(t: ^testing.T) {
 	if err != nil {panic(fmt.tprintf("%v", err))}
 	defer os.remove_all(base)
 	p := Probe {
-		t = t,
+		t    = t,
 		bin  = bin,
 		base = base,
 	}
@@ -341,25 +323,11 @@ test_architecture :: proc(t: ^testing.T) {
 		findings(r) != "" && len(r.coverage.packages) == 2,
 		"changed dependency checks unchanged importer",
 	)
-	h := hook(&p, "dependency edit", fmt.tprintf("%s/dep/dep.odin", p.root))
-	expect(
-		&p,
-		strings.contains(h, "dependencies/R2") && strings.contains(h, "app/app.odin"),
-		"hook dependency edit checks importer",
-	)
-	h = hook(&p, "batch dependency edit", "")
-	expect(
-		&p,
-		strings.contains(h, "dependencies/R2") && strings.contains(h, "app/app.odin"),
-		"batch hook checks importer",
-	)
 	commit(&p)
 	changed_config, _ := strings.replace_all(CONFIG, `deny: ["core:os"]`, `deny: []`)
 	source(&p, "odx.json5", changed_config)
 	r = run(&p, "config-only change", 0, {"--since", "HEAD"})
 	expect(&p, len(r.coverage.packages) == 2, "config-only change scans project")
-	h = hook(&p, "configuration edit", fmt.tprintf("%s/odx.json5", p.root))
-	expect(&p, strings.contains(h, "coverage:"), "hook configuration edit checks project")
 	source(&p, "odx.json5", CONFIG)
 	source(&p, "dep/other.odin", "package dep\nvalue :: 42\n")
 	commit(&p)
@@ -367,8 +335,6 @@ test_architecture :: proc(t: ^testing.T) {
 	   remove_err != nil {panic(fmt.tprintf("%v", remove_err))}
 	r = run(&p, "deleted source", 0, {"--since", "HEAD"})
 	expect(&p, len(r.coverage.packages) == 2, "deleted source scans surviving project")
-	h = hook(&p, "deleted source", fmt.tprintf("%s/dep/dep.odin", p.root))
-	expect(&p, strings.contains(h, "coverage:"), "hook deleted source checks project")
 	commit(&p)
 	if rename_err := os.rename(
 		fmt.tprintf("%s/dep/other.odin", p.root),
@@ -376,8 +342,6 @@ test_architecture :: proc(t: ^testing.T) {
 	); rename_err != nil {panic(fmt.tprintf("%v", rename_err))}
 	r = run(&p, "renamed source", 0, {"--since", "HEAD"})
 	expect(&p, len(r.coverage.packages) == 2, "renamed source scans project")
-	h = hook(&p, "renamed source", fmt.tprintf("%s/dep/renamed.odin", p.root))
-	expect(&p, strings.contains(h, "coverage:"), "hook renamed source checks project")
 	commit(&p)
 	source(&p, ".odx/topics/research-note.txt", "Project policy change discovery probe.\n")
 	r = run(&p, "local policy-only change", 0, {"--since", "HEAD"})

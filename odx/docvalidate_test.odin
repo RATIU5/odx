@@ -73,3 +73,21 @@ unchecked :: proc() -> Alias {return .None}
 		testing.expect_value(t, version, mutation == 0)
 	}
 }
+
+@(private = "file")
+Scratch_File :: struct {
+	name, text: string,
+}
+
+scratch_project :: proc(t: ^testing.T, files: []Scratch_File) -> (p: Project) {
+	tmp, terr := os.make_directory_temp("", "odx-test-*", context.allocator)
+	testing.expect(t, terr == nil)
+	for f in files {
+		path := join({tmp, f.name})
+		os.make_directory_all(dir_of(path))
+		testing.expect(t, os.write_entire_file(path, transmute([]byte)f.text) == nil)
+	}
+	p.root = tmp
+	p.cfg = default_config()
+	return
+}

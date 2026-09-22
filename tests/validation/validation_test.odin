@@ -8,8 +8,8 @@ import "core:os"
 import "core:path/filepath"
 import "core:slice"
 import "core:strings"
-import "core:time"
 import "core:testing"
+import "core:time"
 
 MINIMAL :: `{
  version:1, exclude:[".odx/**","cases/**","build/**"],
@@ -21,7 +21,7 @@ STRICT :: `{
  dependencies:{domain:{may_import:["domain","core:*"],deny:["core:os","core:os/*","core:net","core:net/*","core:sys/*"]}},
  exclude:[".odx/**","cases/**","build/**"],
  errors:{types:["Error"],structural:false},
- odin:{flags:[],forbidden_flags:[],required_flags:[],explicit_allocators:"all",version:"dev-2026-09"},
+ odin:{flags:[],forbidden_flags:[],explicit_allocators:"all"},
 }`
 Sample :: struct {
 	name, path, digest: string,
@@ -39,12 +39,15 @@ SAMPLES := []Sample {
 	},
 }
 Finding :: struct {
-	rule, file, message, fix_hint, evidence, boundary, subject: string,
-	line, col:                                                  int,
-	baselined:                                                  bool,
+	rule, file, message, subject: string,
+	line, col:                    int,
+	baselined:                    bool,
 }
 Report :: struct {
 	schema:      int,
+	rules:       map[string]struct {
+		fix_hint, evidence, boundary: string,
+	},
 	coverage:    struct {
 		complete:  bool,
 		selection: string,
@@ -72,7 +75,7 @@ Outcome :: struct {
 	timings:                                                  []Timing,
 }
 Probe :: struct {
-	t:                               ^testing.T,
+	t:                                 ^testing.T,
 	bin, root, artifacts, last_report: string,
 	passed, failed, sequence:          int,
 }
@@ -148,13 +151,13 @@ check :: proc(
 	seconds: f64,
 ) {
 	command := make([dynamic]string)
-	append(&command, "check", "--ci", "--json"); append(&command, ..args)
+	append(&command, "check", "--json"); append(&command, ..args)
 	out: string
 	out, code, seconds = run(p, label, command[:])
 	p.last_report = out
 	if err := json.unmarshal_string(out, &report);
 	   err != nil {panic(fmt.tprintf("check report %s: %v", label, err))}
-	expect(p, report.schema == 1, fmt.tprintf("%s report schema", label))
+	expect(p, report.schema == 2, fmt.tprintf("%s report schema", label))
 	return
 }
 report_findings :: proc(raw: string) -> string {
@@ -290,7 +293,10 @@ test_public_source_policies :: proc(t: ^testing.T) {
 		host             = host,
 		artifacts        = base,
 	}
-	p := Probe {t = t, bin = bin}
+	p := Probe {
+		t   = t,
+		bin = bin,
+	}
 	for sample in SAMPLES {
 		source := read(fmt.tprintf("%s/%s", odin_root, sample.path))
 		if digest(source) !=
@@ -343,8 +349,8 @@ test_public_source_policies :: proc(t: ^testing.T) {
 				report_findings(p.last_report) == full_findings,
 				fmt.tprintf("%s scoped findings equal full", name),
 			)
-			_, write_code, _ := run(&p, "guidance-write", {"guidance", "write", "AGENTS.md"})
-			_, fresh_code, _ := run(&p, "guidance-check", {"guidance", "check", "AGENTS.md"})
+			_, write_code, _ := run(&p, "guidance-write", {"policy", "--write", "AGENTS.md"})
+			_, fresh_code, _ := run(&p, "guidance-check", {"policy", "--verify", "AGENTS.md"})
 			expect(
 				&p,
 				write_code == 0 && fresh_code == 0,

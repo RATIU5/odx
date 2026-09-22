@@ -8,5 +8,5 @@
   },
   exclude: [".odx/**", "cases/**", "build/**"],
   errors: { types: ["Domain_Failure", "Storage_Failure"], structural: false },
-  odin: { flags: [], forbidden_flags: [], required_flags: [], explicit_allocators: "all", version: "dev-2026-09" },
+  odin: { flags: [], forbidden_flags: [], explicit_allocators: "all" },
 }

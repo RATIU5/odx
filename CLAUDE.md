@@ -1,44 +1,29 @@
 <!-- odx:begin v1 -->
 ## odx
 
-Policy fingerprint (generation 4): `77ee6411fcfc9bcf939e4ec860c715fac48e02c61920657146853e878d211e63`
+Policy fingerprint (generation 5): `407097776316765c36d16171ad498bc819a73a494cbc73888719acf22786fd7e`
 
 Scope: all discovered project packages. Rules below are the union applicable to this selection; each rule retains its own scope.
 - Package `odx`: role `edge`
 
-Run `odx check --json` for findings and coverage. Warnings fail with `--strict`; baselines soften findings and suppressions remove accepted findings. Exit 0 alone does not prove complete analysis. Guidance freshness checks policy synchronization, not source compliance. Baselines accept occurrences in unchanged source snapshots; checks never rewrite them. Use `odx baseline add`, `prune`, or `regen` for explicit maintenance.
+Run `odx check --json` for findings and coverage. Exit 0 alone does not establish complete analysis. Use `odx policy --verify <file>` to check freshness or `odx policy --write <file>` to regenerate; repeat the selected package path.
 
-Use `odx guidance check <markdown-file> [package-path]` to check this section and `odx guidance write <markdown-file> [package-path]` to regenerate it. Repeat the same scope. Rebuild after changing embedded builtin rules; project overrides load directly.
-
-Configured policy (effective defaults included; no compiler run is implied):
-
-```json
-{"version":1,"roles":{"edge":["odx","odx/**"],"pure":[],"service":[]},"default_role":"","exclude":[".odx/**","rules/**","tests/**","evals/**","examples/**","vendor/**","build/**"],"disabled":{},"dependencies":{"edge":{"may_import":["pure","service","edge","core:*","vendor:*"],"deny":[]},"pure":{"may_import":["pure","core:*"],"deny":["core:os","core:os/*","core:net","core:sys/*","core:thread","core:sync","core:dynlib","core:c/libc","vendor:*"]},"service":{"may_import":["pure","service","core:*"],"deny":[]}},"odin":{"flags":["-vet","-vet-tabs","-vet-cast","-strict-style","-warnings-as-errors"],"forbidden_flags":["-no-bounds-check","-disable-assert","-no-type-assert","-ignore-unknown-attributes"],"required_flags":["-sanitize:address","-define:ODIN_TEST_FAIL_ON_BAD_MEMORY=true"],"collections":{},"custom_attributes":[],"allowed_vet_disables":[],"audit_file_tags":true,"explicit_allocators":"pure","declined":{"-vet-semicolon":"not evaluated; see odx doctor","-vet-style":"not evaluated; see odx doctor","-vet-unused-procedures":"not evaluated; see odx doctor","-vet-using-param":"not evaluated; see odx doctor"},"tagged_files_min":0,"version":"dev-2026-09","path":""},"errors":{"types":["Error"],"structural":true}}
-```
-
-### dependencies: Project-defined ordinary import boundaries, checked against the project source graph
-- **dependencies/R2** Ordinary imports obey the role's may_import and deny policy; deny also follows imports through included project production source, stopping at built-in collection boundaries.
+- **dependencies/R2** [error] Ordinary imports obey the role's may_import and deny policy; deny also follows imports through included project production source, stopping at built-in collection boundaries.
   Scope: all roles, including unmapped packages; requires a dependencies policy for the package role
   Why: The compiler checks import validity; a project chooses allowed dependencies. Source import boundaries do not prove foreign-access freedom or runtime purity.
-  Instead of: Letting any package import anything and discovering the OS dependency in a test that needs the world.
   Correction: Remove or restructure the reported import chain so direct imports satisfy may_import and no included dependency reaches a denied import under this role's policy.
-  Check evidence: source_import_graph; recursive ordinary source imports with direct test allow exceptions; dependency *_test.odin edges omitted; unconfigured core/base/vendor collections are opaque leaves; required missing/excluded/unknown/outside project evidence is unavailable; no foreign or runtime effect guarantee
-  Severity: error; suppressible: true; baselineable: true
+  Evidence: source_import_graph; recursive ordinary source imports with direct test allow exceptions; dependency *_test.odin edges omitted; unconfigured core/base/vendor collections are opaque leaves; required missing/excluded/unknown/outside project evidence is unavailable; no foreign or runtime effect guarantee
   Effective selector: `{"from":"dependencies.may_import","kind":"banned_import"}`
 
-### errors: Project-selected result acknowledgement and contextual error review
-- **errors/R3** Exported non-test procedures whose named final result matches the configured error classification carry @(require_results).
+- **errors/R3** [error] Exported non-test procedures whose named final result matches the configured error classification carry @(require_results).
   Scope: all roles, including unmapped packages
   Why: This project requires explicit result acknowledgement for selected APIs. The compiler rejects bare calls to attributed procedures but permits assigning any or all results to `_`.
-  Instead of: Trusting callers to check the error result by convention.
   Correction: Add @(require_results) to the reported procedure declaration; callers must acknowledge its results, including by explicit discard.
-  Check evidence: compiler_entities; compiler-selected exported procedure declarations, excluding @(test); canonical named final-result suffixes and optional structural classification from errors configuration; attribute presence only, no error-intent or caller-handling proof
-  Severity: error; suppressible: true; baselineable: true
+  Evidence: compiler_entities; compiler-selected exported procedure declarations, excluding @(test); canonical named final-result suffixes and optional structural classification from errors configuration; attribute presence only, no error-intent or caller-handling proof
   Effective selector: `{"attribute":"require_results","kind":"require_attribute","on":"exported_procs"}`
 
-Reviewer advice scope: roles pure, service, edge; this does not restrict the mechanical rules above.
-
-Reader checks for errors (not enforced by `odx check`):
+### errors: reviewer advice (not mechanically enforced)
+Roles: pure, service, edge
 
 These questions guide review; `odx check` does not enforce them. Executable examples show
 valid Odin, not proof of caller behavior. Neither example form below is a policy finding.

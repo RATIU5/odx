@@ -20,8 +20,8 @@ Evidence_Result :: struct {
 Check_Coverage :: struct {
 	package_dir: string,
 	rule:        string,
-	evidence:    string,
-	boundary:    string,
+	evidence:    string `json:"-"`,
+	boundary:    string `json:"-"`,
 	status:      Evidence_Status,
 	reason:      string,
 	findings:    int,
@@ -49,16 +49,15 @@ Coverage :: struct {
 	checks:           [dynamic]Check_Coverage,
 }
 
-init_coverage :: proc(c: ^Ctx, o: Opts) {
+init_coverage :: proc(c: ^Ctx, o: Analysis_Options) {
 	v := &c.r.coverage
 	v.selection = "project"
 	if len(c.paths) > 0 {v.selection = "paths"}
 	if o.since != "" {v.selection = "since"}
-	if o.exemplar != "" {v.selection = "exemplar"}
 	v.paths = c.paths
 	v.selection_reason = c.selection_reason
 	if v.selection_reason ==
-	   "" {v.selection_reason = "explicit reporting selection; dependency evidence uses all discovered project packages"}
+	   "" {v.selection_reason = "explicit reporting selection; project-wide graph evidence is loaded only for applicable dependency checks"}
 	v.graph_packages = make([]string, len(c.graph.packages))
 	for p, i in c.graph.packages {v.graph_packages[i] = p.rel}
 	v.since = o.since
@@ -92,6 +91,9 @@ rule_evidence :: proc(spec: Check_Spec) -> (source, boundary: string) {
 		if spec.match == "call" {
 			return "native_ast",
 				"recursive syntactic calls in all branches; file import aliases normalized without lexical name resolution; indirect calls not resolved"
+		}
+		if spec.match == "if" {
+			return "native_ast", "braced if then-body without else containing exactly one return, call statement, or assignment; includes nested and inactive bodies; excludes declarations, defer and nested control statements; counts syntax, not runtime effects"
 		}
 		if spec.match == "proc" {
 			return "native_ast",
@@ -133,7 +135,7 @@ add_coverage :: proc(
 	append(&c.r.coverage.checks, entry)
 }
 
-collect_coverage :: proc(c: ^Ctx, o: Opts) {
+collect_coverage :: proc(c: ^Ctx, o: Analysis_Options) {
 	for &p in c.pkgs {
 		native := p.parse_result
 		if !c.native_ran &&

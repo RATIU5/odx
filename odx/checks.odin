@@ -35,14 +35,33 @@ make_ctx :: proc(p: ^Project, paths: []string, only_topics: []string = nil) -> C
 	}
 	rels := p.dirs
 	if len(paths) > 0 {
-		rels = select_packages(p.root, rels, paths)
-		if len(rels) == 0 {fail("no packages under %v", paths)}
+		rels = select_packages(p.root, rels, paths, &c.r.tool_errors)
+		if len(c.r.tool_errors) > 0 {return c}
+		if len(rels) == 0 {
+			tool_error(c.r, "no packages under %v", paths)
+			return c
+		}
 	}
-	all := load_packages(p.root, &p.cfg, p.dirs)
-	c.graph = make_import_graph(p.root, &p.cfg, all)
-	c.pkgs = make([]Package, len(rels))
-	for rel, i in rels {
-		c.pkgs[i] = all[c.graph.by_dir[canonical(join({p.root, rel}))]]
+	needs_graph := false
+	for a in c.rules {
+		if a.rule.check.kind != .banned_import {continue}
+		for rel in rels {
+			role, _ := role_of(&p.cfg, rel)
+			if check_applies(&p.cfg, &a.rule.check, role) {needs_graph = true; break}
+		}
+		if needs_graph {break}
+	}
+	if needs_graph {
+		all := load_packages(p.root, &p.cfg, p.dirs)
+		c.graph = make_import_graph(p.root, &p.cfg, all)
+		c.pkgs = make([]Package, len(rels))
+		for rel, i in rels {
+			c.pkgs[i] = all[c.graph.by_dir[canonical(join({p.root, rel}))]]
+		}
+		c.selection_reason = "explicit reporting selection; dependency evidence uses all discovered project packages"
+	} else {
+		c.pkgs = load_packages(p.root, &p.cfg, rels)
+		c.selection_reason = "explicit reporting selection; selected rules do not require dependency graph evidence"
 	}
 	return c
 }
@@ -92,7 +111,7 @@ report :: proc(
 			statement = a.rule.statement,
 			why = a.rule.why,
 			subject = subject,
-			blocking = true,
+
 			fires = a.rule.fires,
 			silent = a.rule.silent,
 			fix_hint = rule_fix_hint(a.rule),

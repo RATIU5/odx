@@ -18,20 +18,19 @@ Violation :: struct {
 	check:         string,
 	message:       string,
 	ignorable:     bool,
-	class:         string, // stable greppable name from the rule's frontmatter; "" for odin/odx findings
-	statement:     string, // the rule's statement and why, so a block message is self-sufficient
-	why:           string,
+	class:         string `json:"-"`, // stable greppable name from the rule's frontmatter; "" for odin/odx findings
+	statement:     string `json:"-"`, // the rule's statement and why, so a block message is self-sufficient
+	why:           string `json:"-"`,
 	subject:       string, // rule-provided semantic label; baseline identity also binds source and position
 	baselined:     bool, // listed in odx.baseline: printed, never fails the build
-	blocking:      bool, // reserved schema-1 compatibility value; not the exit-status decision
-	fires:         string, // the rule's compiled violating and correct forms, "" for notes
-	silent:        string,
+	fires:         string `json:"-"`, // the rule's compiled violating and correct forms, "" for notes
+	silent:        string `json:"-"`,
 	// the agent contract: what to write instead, and the exact suppression line, so a
 	// consumer can act on one finding without a second call; "" for notes
-	fix_hint:      string,
-	instead_of:    string,
-	evidence:      string,
-	boundary:      string,
+	fix_hint:      string `json:"-"`,
+	instead_of:    string `json:"-"`,
+	evidence:      string `json:"-"`,
+	boundary:      string `json:"-"`,
 	ignore_syntax: string,
 }
 
@@ -44,8 +43,14 @@ ignore_syntax_of :: proc(file, rule: string) -> string {
 	return fmt.tprintf("// %s %s reason: <at least ten characters>", IGNORE_FILE_PREFIX, rule)
 }
 
+Rule_Metadata :: struct {
+	check, class, statement, why, fix_hint, instead_of: string `json:",omitempty"`,
+	fires, silent, evidence, boundary:                  string `json:",omitempty"`,
+}
+
 Report :: struct {
 	schema:      int,
+	rules:       map[string]Rule_Metadata,
 	coverage:    Coverage,
 	violations:  [dynamic]Violation,
 	tool_errors: [dynamic]string,
@@ -65,7 +70,6 @@ note :: proc(r: ^Report, rule, check, file: string, line, col: int, message: str
 			rule = rule,
 			check = check,
 			message = message,
-			blocking = true,
 		},
 	)
 }
@@ -86,7 +90,33 @@ sort_violations :: proc(vs: []Violation) {
 }
 
 finalize :: proc(r: ^Report, strict: bool, max_violations := 0) -> int {
-	r.schema = 1
+	r.schema = 2
+	r.rules = make(map[string]Rule_Metadata)
+	for entry in r.coverage.checks {
+		r.rules[entry.rule] = Rule_Metadata {
+			evidence = entry.evidence,
+			boundary = entry.boundary,
+		}
+	}
+	for v in r.violations {
+		metadata := r.rules[v.rule]
+		if v.check == "odin" {
+			compiler := r.rules["odin/check"]
+			if metadata.evidence == "" {metadata.evidence = compiler.evidence}
+			if metadata.boundary == "" {metadata.boundary = compiler.boundary}
+		}
+		if v.check != "" && (metadata.check == "" || v.statement != "") {metadata.check = v.check}
+		if v.class != "" {metadata.class = v.class}
+		if v.statement != "" {metadata.statement = v.statement}
+		if v.why != "" {metadata.why = v.why}
+		if v.fix_hint != "" {metadata.fix_hint = v.fix_hint}
+		if v.instead_of != "" {metadata.instead_of = v.instead_of}
+		if v.fires != "" {metadata.fires = v.fires}
+		if v.silent != "" {metadata.silent = v.silent}
+		if v.evidence != "" {metadata.evidence = v.evidence}
+		if v.boundary != "" {metadata.boundary = v.boundary}
+		r.rules[v.rule] = metadata
+	}
 	sort_violations(r.violations[:])
 	for v in r.violations {
 		if v.baselined {
@@ -136,10 +166,11 @@ BASELINED_TAG :: " [baselined]"
 
 report_text :: proc(r: ^Report) -> string {
 	b := strings.builder_make()
+	seen := make(map[string]bool, context.temp_allocator)
 	for v in r.violations {
 		topic, _, rule := strings.partition(v.rule, "/")
 		hint :=
-			"" if topic == "odin" || topic == "odx" else fmt.tprintf("; see `odx explain %s --rule %s`", topic, rule)
+			"" if topic == "odin" || topic == "odx" else fmt.tprintf("; see `odx policy --topic %s --rule %s`", topic, rule)
 		fmt.sbprintfln(
 			&b,
 			"%s:%d:%d: %s %s%s%s",
@@ -151,55 +182,11 @@ report_text :: proc(r: ^Report) -> string {
 			hint,
 			BASELINED_TAG if v.baselined else "",
 		)
+		if v.rule in seen {continue}
+		seen[v.rule] = true
 		if v.fix_hint != "" {fmt.sbprintfln(&b, "  repair: %s", v.fix_hint)}
 		if v.why != "" {fmt.sbprintfln(&b, "  why: %s", v.why)}
 		if v.boundary != "" {fmt.sbprintfln(&b, "  evidence: %s; %s", v.evidence, v.boundary)}
-	}
-	if r.summary.omitted >
-	   0 {fmt.sbprintfln(&b, "... %d more violations omitted (--max-violations)", r.summary.omitted)}
-	return strings.to_string(b)
-}
-
-// hook_text is report_text for the model: the first violation of each rule carries the
-// statement, the why, and the exact escape hatch (only when the rule takes one); later ones are
-// bare location lines. Compiler findings never have a body.
-hook_text :: proc(r: ^Report) -> string {
-	b := strings.builder_make()
-	seen := make(map[string]bool, context.temp_allocator)
-	for v in r.violations {
-		fmt.sbprintfln(
-			&b,
-			"%s:%d:%d: %s %s%s",
-			v.file,
-			v.line,
-			v.col,
-			v.rule,
-			v.message,
-			BASELINED_TAG if v.baselined else "",
-		)
-		if v.statement == "" || v.rule in seen || v.baselined {continue}
-		seen[v.rule] = true
-		fmt.sbprintfln(&b, "  rule: %s\n  why: %s", v.statement, v.why)
-		if v.fix_hint != "" {fmt.sbprintfln(&b, "  repair: %s", v.fix_hint)}
-		if v.boundary != "" {fmt.sbprintfln(&b, "  evidence: %s; %s", v.evidence, v.boundary)}
-		if v.fires != "" {fmt.sbprintfln(&b, "  violates, like this:\n%s", indent(v.fires))}
-		if v.silent != "" {fmt.sbprintfln(&b, "  passes, like this:\n%s", indent(v.silent))}
-		if v.ignorable {
-			if strings.has_suffix(v.file, ".odin") {
-				fmt.sbprintfln(
-					&b,
-					"  to suppress, on the line above it: %s",
-					ignore_syntax_of(v.file, v.rule),
-				)
-			} else {
-				fmt.sbprintfln(
-					&b,
-					"  to suppress, on line 1-3 of any file in %s/: %s",
-					v.file,
-					ignore_syntax_of(v.file, v.rule),
-				)
-			}
-		}
 	}
 	if r.summary.omitted >
 	   0 {fmt.sbprintfln(&b, "... %d more violations omitted (--max-violations)", r.summary.omitted)}

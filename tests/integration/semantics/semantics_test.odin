@@ -60,7 +60,7 @@ check :: proc(p: ^Probe, name: string, expected: []string) {
 		p,
 		name,
 		1 if len(expected) > 0 else 0,
-		{"check", "--ci", "--json", "--topic", "errors"},
+		{"check", "--json", "--topic", "errors"},
 	)
 	report: Report
 	expect(p, json.unmarshal_string(output, &report) == nil, "report decodes")
@@ -150,11 +150,11 @@ error_test :: proc(_: ^testing.T) -> Error {return .Bad}
 	check(&p, "distinct name retained", {"distinct_result"})
 	configure(&p, `{structural:false,types:[]}`)
 	check(&p, "no classification", {})
-	run(&p, "write guidance", 0, {"guidance", "write", "AGENTS.md"})
+	run(&p, "write guidance", 0, {"policy", "--write", "AGENTS.md"})
 	configure(&p, `{structural:true,types:[]}`)
-	run(&p, "structural change stales guidance", 1, {"guidance", "check", "AGENTS.md"})
-	run(&p, "regenerate guidance", 0, {"guidance", "write", "AGENTS.md"})
-	run(&p, "fresh guidance", 0, {"guidance", "check", "AGENTS.md"})
+	run(&p, "structural change stales guidance", 1, {"policy", "--verify", "AGENTS.md"})
+	run(&p, "regenerate guidance", 0, {"policy", "--write", "AGENTS.md"})
+	run(&p, "fresh guidance", 0, {"policy", "--verify", "AGENTS.md"})
 	for invalid in ([]string{`{structural:"false"}`, `{structural:0}`, `{structural:null}`, `{types:[""]}`, `{types:["  "]}`}) {
 		configure(&p, invalid)
 		run(&p, "invalid classification rejected", 2, {"check", "--fast"})

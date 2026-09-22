@@ -8,6 +8,7 @@ test_rendered_selectors_are_valid_policy_with_preserved_semantics :: proc(t: ^te
 	context.allocator = context.temp_allocator
 	defer free_all(context.temp_allocator)
 	sources := []string {
+		`{kind:"pattern",match:"if"}`,
 		`{kind:"path_role",roles:[""],except_roles:["edge"]}`,
 		`{kind:"vet_tag"}`,
 		`{kind:"banned_import"}`,
@@ -32,7 +33,7 @@ test_rendered_selectors_are_valid_policy_with_preserved_semantics :: proc(t: ^te
 		if !testing.expect(t, ok && len(errs) == 0, source) {continue}
 		p := Project{}
 		topics := []Topic{{name = "custom", rules = {{id = "R1", check = original}}}}
-		markdown := claude_md(&p, topics)
+		markdown := policy_topics_markdown(&p, topics)
 		_, marker, rest := strings.partition(markdown, "Effective selector: `")
 		if !testing.expect(t, marker != "", markdown) {continue}
 		rendered, _, _ := strings.partition(rest, "`\n")
@@ -49,6 +50,7 @@ test_selector_contract_rejects_ignored_and_invalid_fields :: proc(t: ^testing.T)
 	context.allocator = context.temp_allocator
 	defer free_all(context.temp_allocator)
 	invalid := []string {
+		`{kind:"pattern",match:"if",name:"ignored"}`,
 		`{kind:"path_role",name:"ignored"}`,
 		`{kind:"vet_tag",mutable:false}`,
 		`{kind:"banned_import",from:"unrelated"}`,
@@ -87,6 +89,7 @@ test_selector_contract_preserves_defaults_and_public_matchers :: proc(t: ^testin
 	context.allocator = context.temp_allocator
 	defer free_all(context.temp_allocator)
 	valid := []string {
+		`{kind:"pattern",match:"if"}`,
 		`{kind:"path_role"}`,
 		`{kind:"vet_tag"}`,
 		`{kind:"banned_import",from:"dependencies.may_import"}`,

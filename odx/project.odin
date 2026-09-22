@@ -11,7 +11,7 @@ import "core:strings"
 
 // odx is short-lived: loaders allocate on context.allocator and never free.
 Project :: struct {
-	root: string, // "" when no odx.json5 was found (topics/explain still work)
+	root: string, // "" when no odx.json5 was found (policy catalog still works)
 	rb:   Rulebook,
 	cfg:  Config,
 	dirs: []string, // every package directory under root, minus exclude, sorted
@@ -47,24 +47,6 @@ validate_project :: proc(p: ^Project) {
 			errf(&p.errs, "%s: %s matches more than one role", CONFIG_FILE, d if d != "" else ".")
 		}
 	}
-}
-
-must_load :: proc(o: Opts, need_config: bool) -> Project {
-	p := load_project(o.root)
-	if need_config && p.root == "" {
-		errf(&p.errs, "no %s found here or in any parent (use --root or `odx init`)", CONFIG_FILE)
-	}
-	if len(p.errs) > 0 {
-		if o.json {
-			r := Report {tool_errors = p.errs}
-			code := finalize(&r, false)
-			print_report(&r, true)
-			os.exit(code)
-		}
-		for e in p.errs {fmt.eprintln("odx:", e)}
-		os.exit(EXIT_TOOL)
-	}
-	return p
 }
 
 sorted_keys :: proc(m: map[string]$V) -> []string {
@@ -172,16 +154,27 @@ load_packages :: proc(root: string, cfg: ^Config, rels: []string) -> []Package {
 	return pkgs
 }
 
-select_packages :: proc(root: string, rels: []string, paths: []string) -> []string {
+select_packages :: proc(
+	root: string,
+	rels: []string,
+	paths: []string,
+	errs: ^[dynamic]string = nil,
+) -> []string {
 	want := make([dynamic]string, context.temp_allocator)
 	for a in paths {
 		// a relative path is tried from cwd first, then from the root (for `--root x sub/pkg`)
 		abs := canonical(a)
 		if !os.exists(abs) && !filepath.is_abs(a) {abs = canonical(join({root, a}))}
-		if !os.exists(abs) {fail("%s does not exist", a)}
+		if !os.exists(abs) {
+			if errs != nil {errf(errs, "%s does not exist", a)}
+			return nil
+		}
 		if !os.is_directory(abs) {abs = filepath.dir(abs)}
 		rel, inside := rel_of(root, abs)
-		if !inside {fail("%s is outside the project root %s", a, root)}
+		if !inside {
+			if errs != nil {errf(errs, "%s is outside the project root %s", a, root)}
+			return nil
+		}
 		append(&want, rel)
 	}
 	out := make([dynamic]string)

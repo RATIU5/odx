@@ -33,7 +33,7 @@ check:{kind:"require_attribute",attribute:"require_results",on:"exported_procs"}
 ---
 Independent policy must still report the same declaration.
 `)
-	output := run(p, "aliases preserve independent rule findings", 1, {"check", "--ci", "--json"})
+	output := run(p, "aliases preserve independent rule findings", 1, {"check", "--json"})
 	report: Report
 	expect(p, json.unmarshal_string(output, &report) == nil, "alias report decodes")
 	expect(p, report.coverage.complete, "aliased declarations have complete compiler evidence")

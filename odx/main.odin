@@ -2,176 +2,124 @@ package odx
 
 import "core:fmt"
 import "core:os"
+import "core:slice"
 import "core:strconv"
 import "core:strings"
 
-// Exit codes: 0 clean, 1 violations, 2 tool/config error.
 EXIT_VIOLATION :: 1
 EXIT_TOOL :: 2
 
 Opts :: struct {
-	json:           bool,
-	fast:           bool,
-	strict:         bool,
-	ci:             bool, // doctor: version drift is an error
-	checklist:      bool,
+	json, fast, strict, checklist, stale: bool,
 	max_violations: int,
-	hooks:          bool,
-	brief:          bool,
-	emit:           bool, // for --emit-claude-md
-	stale:          bool,
-	count:          bool,
-	file:           string,
-	id:             string,
-	since:          string,
-	root:           string, // --root override; "" = walk up from cwd
-	rule:           string,
-	exemplar:       string,
-	topics:         [dynamic]string,
-	args:           [dynamic]string, // positionals after the subcommand
+	root, since, rule, write, verify: string,
+	topics, args: [dynamic]string,
 }
 
 USAGE :: `usage: odx <command> [args] [--json] [--root <dir>]
-  --json is supported on check, doctor, for, explain and ignores; check schema: 1.
-  Check exits: 0 no unbaselined errors (warnings fail with --strict), 1 violations, 2 tool/config error.
-  Inspect coverage independently: exit 0 does not establish complete analysis.
 
-  check [<path>...] [--topic t] [--fast] [--strict] [--since <ref>] [--ci] [--max-violations N]   run checks (odx.baseline softens, never hides)
-  check --exemplar <topic>     check rules/<topic>/example/ against that topic (the exemplars CI task)
-  baseline add | prune | regen   explicitly accept, prune, or replace baseline debt; checks never rewrite it
-  for <path> [--brief]         the rules that apply to a file or package (--brief: topic names only)
-  for --emit-md [<path>]       portable managed Markdown (--emit-claude-md is an alias)
-  guidance check|write <markdown-file> [<package-path>]   check freshness or regenerate the owned block; exits 0 current/written, 1 stale/missing, 2 error
-  explain [<topic>] [--rule R3]   no topic: list topics; with one: rules, rationale, do/don't
-  explain [<topic>] --checklist   the reader checks from topic.md, for an adversarial reviewer
-  ignores [--stale]            every suppression; stale audit exits 0 clean, 1 malformed/stale, 2 incomplete/error
-  doctor [--ci]                toolchain, flags, config errors, mise.toml drift
-  hook edit                    Claude Code PostToolBatch hook: reads the hook JSON on stdin, reports, exits 0
-  init [--hooks]               write odx.json5 and mise.toml (--hooks: .claude/settings.json, CLAUDE.md)
-  self-test                    run every tests/fixtures/* and diff its // want: markers
-  rule try '<check json5>' [<path>...] [--count]   run an inline check spec, print every match (nothing written)
-  rule try --file <rule.odx.md> [<path>...]        dry-run a drafted rule file the same way
-  rule add <topic> [--id R9]   scaffold <topic>/<id>.odx.md with the next free id
-  rule test <topic>/<id>       compile just that rule's fires/silent blocks
+  check [paths...] [--topic NAME] [--fast] [--strict] [--since REF]
+        [--max-violations N]     findings and evidence coverage
+  policy [path] [--topic NAME] [--rule ID] [--checklist]
+         [--write FILE | --verify FILE]   applicable policy and managed instructions
+  baseline add|prune|regen       explicitly maintain accepted findings
+  ignores [--stale]              list suppressions or audit their validity
+
+All commands support --json (schema 2). No model calls or implicit file writes.
+Check exits: 0 no failing findings, 1 findings, 2 tool/config error.
+Warnings fail with --strict. Inspect coverage even when exit is 0.
+Policy --verify exits 0 current, 1 stale/missing, 2 error.
 `
 
+// Set before parsing, so even malformed arguments have structured errors.
+machine_output: bool
+
 fail :: proc(f: string, args: ..any) -> ! {
-	fmt.eprint("odx: ")
-	fmt.eprintfln(f, ..args)
+	message := fmt.aprintf(f, ..args)
+	if machine_output {
+		r: Report
+		tool_error(&r, "%s", message)
+		finalize(&r, false)
+		print_report(&r, true)
+	} else {
+		fmt.eprintfln("odx: %s", message)
+	}
 	os.exit(EXIT_TOOL)
 }
 
-// ponytail: hand-rolled; core:flags has no subcommand concept
-parse_opts :: proc(args: []string) -> (o: Opts) {
+command_flags :: proc(command: string) -> []string {
+	switch command {
+	case "check": return slice.clone([]string{"--fast", "--strict", "--since", "--topic", "--max-violations"}, context.temp_allocator)
+	case "policy": return slice.clone([]string{"--topic", "--rule", "--checklist", "--write", "--verify"}, context.temp_allocator)
+	case "baseline": return nil
+	case "ignores": return slice.clone([]string{"--stale"}, context.temp_allocator)
+	}
+	fail("unknown command %q; use `odx help`", command)
+}
+
+parse_opts :: proc(command: string, args: []string) -> (o: Opts) {
+	allowed := command_flags(command)
+	positionals := false
 	for i := 0; i < len(args); i += 1 {
 		a := args[i]
-		if !strings.has_prefix(a, "-") {
-			append(&o.args, a)
-			continue
+		if a == "--" && !positionals {positionals = true; continue}
+		if positionals || !strings.has_prefix(a, "-") {append(&o.args, a); continue}
+		name, equals, value := strings.partition(a, "=")
+		if name != "--json" && name != "--root" && !slice.contains(allowed, name) {
+			fail("%s does not accept %s; use `odx help`", command, name)
 		}
-		name, has_eq, value := strings.partition(a, "=")
 		switch name {
-		case "--json":
-			o.json = true
-		case "--fast":
-			o.fast = true
-		case "--strict":
-			o.strict = true
-		case "--ci":
-			o.ci = true
-		case "--checklist":
-			o.checklist = true
-		case "--hooks":
-			o.hooks = true
-		case "--emit-claude-md", "--emit-md":
-			o.emit = true
-		case "--brief":
-			o.brief = true
-		case "--stale":
-			o.stale = true
-		case "--count":
-			o.count = true
-		case "--max-violations":
-			if has_eq == "" {
-				if i + 1 >= len(args) {fail("%s needs a value", a)}
-				i += 1
-				value = args[i]
-			}
-			n, ok := strconv.parse_int(value)
-			if !ok || n < 0 {fail("--max-violations needs a non-negative integer")}
-			o.max_violations = n
-		case "--root", "--rule", "--topic", "--exemplar", "--since", "--file", "--id":
-			if has_eq == "" {
-				if i + 1 >= len(args) {fail("%s needs a value", a)}
-				i += 1
-				value = args[i]
-			}
+		case "--json", "--fast", "--strict", "--checklist", "--stale":
+			if equals != "" {fail("%s does not take a value", name)}
 			switch name {
-			case "--root":
-				o.root = value
-			case "--rule":
-				o.rule = value
-			case "--topic":
-				append(&o.topics, value)
-			case "--exemplar":
-				o.exemplar = value
-			case "--since":
-				o.since = value
-			case "--file":
-				o.file = value
-			case "--id":
-				o.id = value
+			case "--json": o.json = true
+			case "--fast": o.fast = true
+			case "--strict": o.strict = true
+			case "--checklist": o.checklist = true
+			case "--stale": o.stale = true
 			}
 		case:
-			fail("unknown flag %s", a)
+			if equals == "" {
+				if i + 1 >= len(args) {fail("%s needs a value", name)}
+				i += 1
+				value = args[i]
+			}
+			if value == "" || strings.has_prefix(value, "--") {fail("%s needs a nonempty value", name)}
+			switch name {
+			case "--root": o.root = value
+			case "--since": o.since = value
+			case "--rule": o.rule = value
+			case "--write": o.write = value
+			case "--verify": o.verify = value
+			case "--topic": append(&o.topics, value)
+			case "--max-violations":
+				n, ok := strconv.parse_int(value)
+				if !ok || n < 0 {fail("--max-violations needs a non-negative integer")}
+				o.max_violations = n
+			}
 		}
 	}
 	return
 }
 
 main :: proc() {
-	if len(os.args) < 2 {
-		fmt.eprint(USAGE)
-		os.exit(EXIT_TOOL)
+	for a in os.args[1:] {
+		if a == "--" {break}
+		if a == "--json" || strings.has_prefix(a, "--json=") {machine_output = true}
 	}
-	o := parse_opts(os.args[2:])
-	if o.json {
-		switch os.args[1] {
-		case "check", "doctor", "for", "explain", "ignores":
-		case:
-			fail("--json is supported on check, doctor, for, explain and ignores")
-		}
-		if os.args[1] == "for" && (o.emit || o.brief) {
-			fail("--json cannot be combined with --emit-md or --brief")
-		}
+	if len(os.args) < 2 {fail("a command is required; use `odx help`")}
+	command := os.args[1]
+	if command == "help" || command == "--help" || command == "-h" {
+		if machine_output {print_json(struct {schema: int, usage: string}{2, USAGE})} else {fmt.print(USAGE)}
+		return
 	}
-	switch os.args[1] {
-	case "explain":
-		cmd_explain(o)
-	case "for":
-		cmd_for(o)
-	case "guidance":
-		cmd_guidance(o)
-	case "check":
-		cmd_check(o)
-	case "baseline":
-		cmd_baseline(o)
+	o := parse_opts(command, os.args[2:])
+	switch command {
+	case "check": cmd_check(o)
+	case "policy": cmd_policy(o)
+	case "baseline": cmd_baseline(o)
 	case "ignores":
+		if len(o.args) != 0 {fail("usage: odx ignores [--stale]")}
 		cmd_ignores(o)
-	case "doctor":
-		cmd_doctor(o)
-	case "self-test":
-		cmd_selftest(o)
-	case "rule":
-		cmd_rule(o)
-	case "hook":
-		cmd_hook(o)
-	case "init":
-		cmd_init(o)
-	case "help", "--help", "-h":
-		fmt.print(USAGE)
-	case:
-		fmt.eprintfln("odx: unknown command %q\n%s", os.args[1], USAGE)
-		os.exit(EXIT_TOOL)
 	}
 }

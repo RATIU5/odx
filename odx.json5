@@ -21,14 +21,5 @@
   odin: {
     flags: ["-vet", "-vet-tabs", "-vet-cast", "-strict-style", "-warnings-as-errors"],
     forbidden_flags: ["-no-bounds-check", "-disable-assert", "-no-type-assert", "-ignore-unknown-attributes"],
-    required_flags: ["-sanitize:address", "-define:ODIN_TEST_FAIL_ON_BAD_MEMORY=true"],
-    // considered and refused, so doctor stays quiet about them; delete an entry to reconsider
-    declined: {
-      "-vet-semicolon": "not evaluated; see odx doctor",
-      "-vet-style": "not evaluated; see odx doctor",
-      "-vet-unused-procedures": "not evaluated; see odx doctor",
-      "-vet-using-param": "not evaluated; see odx doctor",
-    },
-    version: "dev-2026-09",
   },
 }

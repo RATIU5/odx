@@ -5,30 +5,52 @@ import "core:math"
 import "core:slice"
 import "core:strings"
 
-validate_check :: proc(c: ^Check_Spec, spec: json.Object, at: string, errs: ^[dynamic]string) {
-	require_key(errs, at, spec, "kind")
-	check_enum(errs, at, spec, "kind", Check_Kind)
-	allowed := make([dynamic]string, context.temp_allocator)
-	append(&allowed, "kind", "roles", "except_roles")
+// Validation and policy exports share the same selector shape.
+check_fields :: proc(c: Check_Spec) -> []string {
+	fields := make([dynamic]string, context.temp_allocator)
+	append(&fields, "kind", "roles", "except_roles")
 	switch c.kind {
 	case .path_role, .vet_tag:
 	case .banned_import:
-		append(&allowed, "from")
+		append(&fields, "from")
+	case .require_attribute:
+		append(&fields, "attribute", "on")
+	case .pattern:
+		append(&fields, "match")
+		switch c.match {
+		case "call":
+			append(&fields, "name", "names")
+		case "import":
+			append(&fields, "name")
+		case "proc":
+			append(&fields, "exported", "requires_param")
+		case "decl":
+			append(&fields, "at", "mutable")
+		case "foreign", "if":
+		}
+	}
+	return fields[:]
+}
+
+validate_check :: proc(c: ^Check_Spec, spec: json.Object, at: string, errs: ^[dynamic]string) {
+	require_key(errs, at, spec, "kind")
+	check_enum(errs, at, spec, "kind", Check_Kind)
+	allowed := check_fields(c^)
+	switch c.kind {
+	case .path_role, .vet_tag:
+	case .banned_import:
 		if "from" in spec {check_string_value(spec, "from", at, errs, "dependencies.may_import")}
 	case .require_attribute:
-		append(&allowed, "attribute", "on")
 		require_key(errs, at, spec, "attribute")
 		check_string_value(spec, "attribute", at, errs)
 		if "on" in spec {check_string_value(spec, "on", at, errs, "exported_procs")}
 	case .pattern:
-		append(&allowed, "match")
 		if !slice.contains(
 			PATTERN_MATCHES,
 			c.match,
 		) {errf(errs, "%s: check.match must be one of %v", at, PATTERN_MATCHES)}
 		switch c.match {
 		case "call":
-			append(&allowed, "name", "names")
 			if "name" in spec {check_string_value(spec, "name", at, errs)}
 			if "names" in spec {check_string_array(spec, "names", at, errs, false)}
 			names := make([dynamic]string)
@@ -37,11 +59,9 @@ validate_check :: proc(c: ^Check_Spec, spec: json.Object, at: string, errs: ^[dy
 			c.names = names[:]
 			if len(c.names) == 0 {errf(errs, "%s: match: call needs name or names", at)}
 		case "import":
-			append(&allowed, "name")
 			require_key(errs, at, spec, "name")
 			check_string_value(spec, "name", at, errs)
 		case "proc":
-			append(&allowed, "exported", "requires_param")
 			if "exported" in spec {check_boolean_value(spec, "exported", at, errs)}
 			if value, present := spec["requires_param"]; present {
 				param, ok := value.(json.Object)
@@ -67,14 +87,13 @@ validate_check :: proc(c: ^Check_Spec, spec: json.Object, at: string, errs: ^[dy
 				}
 			}
 		case "decl":
-			append(&allowed, "at", "mutable")
 			require_key(errs, at, spec, "at")
 			check_string_value(spec, "at", at, errs, "package_scope")
 			if "mutable" in spec {check_boolean_value(spec, "mutable", at, errs)}
-		case "foreign":
+		case "foreign", "if":
 		}
 	}
-	check_keys(errs, at, "check.", spec, allowed[:])
+	check_keys(errs, at, "check.", spec, allowed)
 	role_keys := []string{"roles", "except_roles"}
 	for key in role_keys {
 		if key in spec {check_string_array(spec, key, at, errs, true)}

@@ -14,6 +14,8 @@ check_pattern :: proc(c: ^Ctx, p: ^Package, a: ^Active_Rule) {
 	switch spec.match {
 	case "call":
 	// run_family_b batches every call rule into one walk per file (check_calls)
+	case "if":
+		check_if_do(c, p, a)
 	case "import":
 		for f in p.files {
 			for d in package_declarations(f) {
@@ -156,4 +158,49 @@ type_name :: proc(e: ^ast.Expr) -> string {
 		return type_name(x.elem)
 	}
 	return ""
+}
+
+check_if_do :: proc(c: ^Ctx, p: ^Package, a: ^Active_Rule) {
+	Walk_If :: struct {
+		c:             ^Ctx,
+		a:             ^Active_Rule,
+		else_branches: map[^ast.If_Stmt]bool,
+	}
+	w := Walk_If{c, a, make(map[^ast.If_Stmt]bool, context.temp_allocator)}
+	visitor := ast.Visitor {
+		data = &w,
+		visit = proc(v: ^ast.Visitor, n: ^ast.Node) -> ^ast.Visitor {
+			if n == nil {return nil}
+			branch, ok := n.derived.(^ast.If_Stmt)
+			if !ok {return v}
+			w := cast(^Walk_If)v.data
+			if branch.else_stmt != nil {
+				if next, is_if := branch.else_stmt.derived.(^ast.If_Stmt); is_if {
+					w.else_branches[next] = true
+				}
+				return v
+			}
+			if w.else_branches[branch] || branch.body == nil {return v}
+			body, is_block := branch.body.derived.(^ast.Block_Stmt)
+			if !is_block || body.uses_do || len(body.stmts) != 1 {return v}
+			eligible := false
+			#partial switch statement in body.stmts[0].derived {
+			case ^ast.Return_Stmt, ^ast.Assign_Stmt:
+				eligible = true
+			case ^ast.Expr_Stmt:
+				_, eligible = ast.unparen_expr(statement.expr).derived.(^ast.Call_Expr)
+			}
+			if eligible {
+				report_at(
+					w.c,
+					w.a,
+					n,
+					"use `if CONDITION do STATEMENT` for a single return, call, or assignment",
+					"if",
+				)
+			}
+			return v
+		},
+	}
+	for f in p.files {ast.walk(&visitor, f)}
 }

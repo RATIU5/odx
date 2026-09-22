@@ -9,11 +9,9 @@ From this directory, with `odx` and the supported Odin compiler on PATH:
 
 ```sh
 odin check parser -no-entry-point
-odx check --ci --json
-odx rule test library/R1
-odx rule test library/R2
-odx guidance write AGENTS.md
-odx guidance check AGENTS.md
+odx check --json
+odx policy --write AGENTS.md
+odx policy --verify AGENTS.md
 ```
 
 Compilation and formatting remain project choices; configure compiler flags or

@@ -157,14 +157,14 @@ test_baseline :: proc(t: ^testing.T) {
 	d := document(&p)
 	expect(&p, d.format_version == 2 && len(d.entries) == 2, "version 2 stores both occurrences")
 	check(&p, "accepted debt visible", 0, 2, 0)
-	check(&p, "accepted debt strict CI", 0, 2, 0, {"--strict", "--ci"})
+	check(&p, "accepted debt strict CI", 0, 2, 0, {"--strict"})
 	original := read(&p, "odx.baseline")
 	run(&p, "regen deterministic", 0, {"baseline", "regen"})
 	expect(&p, read(&p, "odx.baseline") == original, "equivalent regen bytes")
 	d = document(&p); d.entries[0].reason = "tracked #7\nkeep\tthis reason"; save(&p, d)
 	reason := d.entries[0].reason
 	write(&p, "sample/b.odin", replace(SOURCE, "Run ::", "Other ::"))
-	check(&p, "same-package new import and call", 1, 2, 2, {"--ci"})
+	check(&p, "same-package new import and call", 1, 2, 2, {})
 	run(&p, "add new file debt", 0, {"baseline", "add"})
 	d = document(
 		&p,
@@ -172,7 +172,7 @@ test_baseline :: proc(t: ^testing.T) {
 	check(&p, "all accepted", 0, 4, 0)
 	write(&p, "sample/b.odin", "package sample\n")
 	check(&p, "ordinary stale check read only", 2, 2, 0)
-	check(&p, "CI stale check read only", 2, 2, 0, {"--ci"})
+	check(&p, "CI stale check read only", 2, 2, 0, {})
 	check(&p, "fast cannot judge stale debt", 0, 2, 0, {"--fast"})
 	check(&p, "topic cannot judge stale debt", 0, 2, 0, {"--topic", "local"})
 	check(&p, "path cannot judge stale debt", 0, 2, 0, {"sample"})
@@ -193,7 +193,7 @@ test_baseline :: proc(t: ^testing.T) {
 		if i == 2 {changed = strings.concatenate({"\n", SOURCE}); expected = 2}
 		if i == 3 {changed = replace(SOURCE, "old", "new"); expected = 2}
 		write(&p, "sample/a.odin", changed)
-		check(&p, name, 2, 0, expected, {"--ci"})
+		check(&p, name, 2, 0, expected, {})
 		run(&p, "prune does not accept changed debt", 0, {"baseline", "prune"})
 		expect(&p, len(document(&p).entries) == 0, "changed snapshot fully reopened")
 		write(&p, "sample/a.odin", SOURCE)

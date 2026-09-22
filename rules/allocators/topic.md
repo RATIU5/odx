@@ -23,13 +23,13 @@ allocator parameter on every allocating procedure, or prove ownership and lifeti
   Choose role/configuration scope or a reasoned file ignore for deliberate exceptions.
 - Declaring `allocator := context.allocator` remains valid. Tagged callers must
   supply that argument; untagged callers can use the default.
-- `odx doctor` checks configured sanitizer flags in mise.toml. Configuration
-  inspection and sanitized test execution do not prove memory safety for all inputs.
+- Run Odin tests with the sanitizer settings appropriate for the project.
+  Sanitized test execution does not prove memory safety for all inputs.
 
 ## Reader checks
 
-Conventions a reader enforces in review; `odx explain --checklist` lists them and
-`odx self-test` compiles the blocks below to check language validity. Compilation
+Conventions a reader enforces in review; `odx policy --checklist` lists them and
+Native repository tests compile the blocks below to check language validity. Compilation
 does not establish that a reader followed the convention. Nothing here fires.
 
 ### Review allocation ownership and choose explicit parameters or documented context/container allocation deliberately.

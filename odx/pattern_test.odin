@@ -2,6 +2,7 @@ package odx
 
 import "core:odin/ast"
 import "core:odin/parser"
+import "core:strings"
 import "core:testing"
 
 @(test)
@@ -125,6 +126,76 @@ outer :: proc() {
 			if i < len(tc.subjects) {testing.expect_value(t, v.subject, tc.subjects[i])}
 			testing.expect_value(t, v.file, "probe.odin")
 			testing.expect(t, v.line > 0 && v.col > 0)
+		}
+	}
+}
+
+@(test)
+test_pattern_if_do_syntax_boundary :: proc(t: ^testing.T) {
+	context.allocator = context.temp_allocator
+	defer free_all(context.temp_allocator)
+	Case :: struct {
+		body:     string,
+		findings: int,
+	}
+	cases := []Case {
+		{"if ready {return}", 1},
+		{"if ready {process()}", 1},
+		{"if ready {(process())}", 1},
+		{"if ready {process();}", 1},
+		{"when false {if ready {process()}}", 1},
+		{"if ready {value = 1}", 1},
+		{"if ready {a, b = get_pair()}", 1},
+		{"if ready {process(first(), second())}", 1},
+		{"if ready {\n// preserve comment\nreturn\n}", 1},
+		{"if ready {process(\n1,\n2,\n)}", 1},
+		{"if ready do return", 0},
+		{"if ready do process()", 0},
+		{"if ready do value = 1", 0},
+		{"if ready {process(); process()}", 0},
+		{"if ready {value := 1}", 0},
+		{"if ready {defer process()}", 0},
+		{"if ready {for ready {process()}}", 0},
+		{"if ready {}", 0},
+		{"if ready {return} else {return}", 0},
+		{"if ready {return} else if other {return}", 0},
+		{"if ready {process()} else if other {process()} else {process()}", 0},
+		{"if ready {if other {process()}}", 1},
+		{"inner := proc() {if ready {return}}", 1},
+		{"text := `if ready {process()}`", 0},
+		{"// if ready {process()}\n", 0},
+	}
+	for tc in cases {
+		f := ast.File {
+			fullpath = "/sample/probe.odin",
+			src      = strings.concatenate(
+				{"package sample\nrun :: proc() {\n", tc.body, "\n}\n"},
+			),
+		}
+		f.node.derived = &f
+		ps := parser.default_parser()
+		if !testing.expect(t, parser.parse_file(&ps, &f), tc.body) {continue}
+		p := Package {
+			files = {&f},
+		}
+		for severity in Severity {
+			r := Rule {
+				check = {kind = .pattern, match = "if"},
+				severity = severity,
+			}
+			a := Active_Rule{"local/IF", &r}
+			c := Ctx {
+				root = "/sample",
+				r    = new(Report),
+			}
+			check_pattern(&c, &p, &a)
+			testing.expect(t, len(c.r.violations) == tc.findings, tc.body)
+			for finding in c.r.violations {
+				testing.expect_value(t, finding.severity, severity)
+				testing.expect_value(t, finding.file, "probe.odin")
+				testing.expect(t, finding.line >= 3 && finding.col >= 1)
+				testing.expect(t, strings.contains(finding.message, "if CONDITION do STATEMENT"))
+			}
 		}
 	}
 }

@@ -4,13 +4,11 @@ import crypto_hash "core:crypto/hash"
 import "core:encoding/hex"
 import "core:encoding/json"
 import "core:fmt"
-import "core:os"
-import "core:path/filepath"
 import "core:slice"
 import "core:strings"
 
 // Bump when interpreter semantics change without changing serialized policy.
-GUIDANCE_REVISION :: 4
+GUIDANCE_REVISION :: 5
 
 Guidance_Package :: struct {
 	path: string,
@@ -28,32 +26,19 @@ guidance_check_json :: proc(spec: Check_Spec) -> string {
 	if err != nil {fail("guidance selector JSON: %v", err)}
 	values := value.(json.Object)
 	fields := make(json.Object, context.temp_allocator)
-	fields["kind"] = values["kind"]
-	if len(spec.roles) > 0 {fields["roles"] = values["roles"]}
-	if len(spec.except_roles) > 0 {fields["except_roles"] = values["except_roles"]}
-	switch spec.kind {
-	case .path_role, .vet_tag:
-	case .banned_import:
-		if spec.from != "" {fields["from"] = values["from"]}
-	case .require_attribute:
-		fields["attribute"] = values["attribute"]
-		if spec.on != "" {fields["on"] = values["on"]}
-	case .pattern:
-		fields["match"] = values["match"]
-		switch spec.match {
-		case "call":
-			if spec.name != "" {fields["name"] = values["name"]}
-			if len(spec.names) > 0 {fields["names"] = values["names"]}
-		case "import":
-			fields["name"] = values["name"]
-		case "proc":
-			if spec.exported {fields["exported"] = values["exported"]}
-			if spec.requires_param.type_suffix != "" {fields["requires_param"] = values["requires_param"]}
-		case "decl":
-			fields["at"] = values["at"]
-			if spec.mutable {fields["mutable"] = values["mutable"]}
-		case "foreign":
+	for key in check_fields(spec) {
+		field := values[key]
+		#partial switch value in field {
+		case json.String:
+			if value == "" {continue}
+		case json.Array:
+			if len(value) == 0 {continue}
+		case json.Boolean:
+			if !value {continue}
+		case json.Object:
+			if key == "requires_param" && spec.requires_param.type_suffix == "" {continue}
 		}
+		fields[key] = field
 	}
 	return guidance_json(fields)
 }
@@ -97,10 +82,9 @@ guidance_block :: proc(p: ^Project, rels: []string, scoped: bool) -> string {
 	for pkg in packages {fmt.sbprintfln(&b, "- Package `%s`: role `%s`", pkg.path if pkg.path != "" else ".", pkg.role if pkg.role != "" else "(unmapped)")}
 	strings.write_string(
 		&b,
-		"\nRun `odx check --json` for findings and coverage. Warnings fail with `--strict`; baselines soften findings and suppressions remove accepted findings. Exit 0 alone does not prove complete analysis. Guidance freshness checks policy synchronization, not source compliance. Baselines accept occurrences in unchanged source snapshots; checks never rewrite them. Use `odx baseline add`, `prune`, or `regen` for explicit maintenance.\n\nUse `odx guidance check <markdown-file> [package-path]` to check this section and `odx guidance write <markdown-file> [package-path]` to regenerate it. Repeat the same scope. Rebuild after changing embedded builtin rules; project overrides load directly.\n\nConfigured policy (effective defaults included; no compiler run is implied):\n\n",
+		"\nRun `odx check --json` for findings and coverage. Exit 0 alone does not establish complete analysis. Use `odx policy --verify <file>` to check freshness or `odx policy --write <file>` to regenerate; repeat the selected package path.\n",
 	)
-	fmt.sbprintfln(&b, "```json\n%s\n```", guidance_json(p.cfg))
-	strings.write_string(&b, claude_md(p, applicable_topics(p, rels, len(p.dirs) == 0)))
+	strings.write_string(&b, policy_topics_markdown(p, applicable_topics(p, rels, len(p.dirs) == 0)))
 	fmt.sbprintfln(&b, "\n%s", GUIDANCE_END)
 	block := strings.to_string(b)
 	region, err := guidance_region(block)
@@ -108,23 +92,4 @@ guidance_block :: proc(p: ^Project, rels: []string, scoped: bool) -> string {
 		fail("policy text cannot be rendered as managed Markdown: %s", err)
 	}
 	return block
-}
-
-cmd_guidance :: proc(o: Opts) {
-	if len(o.args) < 2 || len(o.args) > 3 || (o.args[0] != "check" && o.args[0] != "write") {
-		fail("usage: odx guidance check|write <markdown-file> [package-path]")
-	}
-	p := must_load(o, true)
-	rels := p.dirs
-	scoped := len(o.args) == 3
-	if scoped {
-		rels = select_packages(p.root, p.dirs, o.args[2:])
-		if len(rels) !=
-		   1 {fail("guidance scope requires exactly one included package (selected %d)", len(rels))}
-	}
-	path := o.args[1]
-	if !filepath.is_abs(path) {path = join({p.root, path})}
-	status, message := guidance_sync(path, guidance_block(&p, rels, scoped), o.args[0] == "write")
-	if status == 2 {fmt.eprintln(message)} else {fmt.println(message)}
-	os.exit(status)
 }

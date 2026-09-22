@@ -8,7 +8,7 @@ import "core:strings"
 import "core:testing"
 
 Probe :: struct {
-	t: ^testing.T,
+	t:               ^testing.T,
 	bin, root, base: string,
 	passed, failed:  int,
 }
@@ -69,12 +69,12 @@ run :: proc(p: ^Probe, name: string, code: int, args: []string) -> string {
 	return string(out)
 }
 trial :: proc(p: ^Probe, name, spec: string, count: int) {
-	out := run(p, name, 0, {"rule", "try", spec, "--count"})
-	expect(
-		p,
-		strings.trim_space(out) == fmt.tprintf("%d match%s", count, "" if count == 1 else "es"),
-		fmt.tprintf("%s: %d matches", name, count),
-	)
+	topic(p, "trial")
+	rule(p, "trial", "R1", spec)
+	out := run(p, name, 1 if count > 0 else 0, {"check", "--fast", "--json", "--topic", "trial"})
+	r: Report
+	expect(p, json.unmarshal_string(out, &r) == nil, fmt.tprintf("%s: valid report", name))
+	expect(p, count_rule(r, "trial/R1") == count, fmt.tprintf("%s: %d matches", name, count))
 }
 check :: proc(p: ^Probe, name: string, code: int) -> Report {
 	out := run(p, name, code, {"check", "--fast", "--json"})
@@ -129,7 +129,7 @@ test_contracts :: proc(t: ^testing.T) {
 	defer os.remove_all(base)
 	bin, _ := filepath.abs("build/odx")
 	p := Probe {
-		t = t,
+		t    = t,
 		bin  = bin,
 		base = base,
 	}
@@ -169,7 +169,11 @@ test_contracts :: proc(t: ^testing.T) {
 		`{kind:"require_attribute",attribute:"require_results",on:"all"}`,
 		`{kind:"pattern",match:"proc",kind:"pattern"}`,
 	}
-	for spec in invalid_specs {run(&p, spec, 2, {"rule", "try", spec, "--count"})}
+	topic(&p, "trial")
+	for spec in invalid_specs {
+		rule(&p, "trial", "R1", spec)
+		run(&p, spec, 2, {"check", "--json", "--topic", "trial"})
+	}
 	trial(&p, "call name sugar", `{kind:"pattern",match:"call",name:"fmt.println"}`, 1)
 	trial(
 		&p,
@@ -250,29 +254,17 @@ test_contracts :: proc(t: ^testing.T) {
 	topic(&p, "local")
 	spec := `{kind:"pattern",match:"decl",at:"package_scope",mutable:true,roles:["domain"]}`
 	rule(&p, "local", "R1", spec)
-	trial(&p, "inline parity", spec, 1)
-	file := fmt.tprintf("%s/.odx/topics/local/R1.odx.md", p.root)
-	text := run(&p, "file parity", 0, {"rule", "try", "--file", file, "--count"})
-	expect(&p, strings.trim_space(text) == "1 match", "file trial matches mutable rule")
-	inline_locations := run(&p, "inline locations", 0, {"rule", "try", spec})
-	file_locations := run(&p, "file locations", 0, {"rule", "try", "--file", file})
-	expect(
-		&p,
-		inline_locations == file_locations &&
-		strings.contains(inline_locations, "sample/sample.odin:5:1:"),
-		"inline and file trials agree on the violating location",
-	)
-	r := check(&p, "installed parity", 1)
+	r := check(&p, "installed mutable rule", 1)
 	expect(
 		&p,
 		count_rule(r, "local/R1") == 1 && r.violations[0].subject == "state",
 		"permanent mutable rule reports state only",
 	)
-	text = run(
+	text := run(
 		&p,
 		"custom role exclusion guidance",
 		0,
-		{"for", fmt.tprintf("%s/other", p.root), "--json"},
+		{"policy", fmt.tprintf("%s/other", p.root), "--json"},
 	)
 	expect(
 		&p,
@@ -280,10 +272,9 @@ test_contracts :: proc(t: ^testing.T) {
 		"stricter policy excludes the unassigned package",
 	)
 	guidance_commands := [][]string {
-		{"for", fmt.tprintf("%s/sample", p.root)},
-		{"for", fmt.tprintf("%s/sample", p.root), "--json"},
-		{"for", fmt.tprintf("%s/sample", p.root), "--emit-claude-md"},
-		{"for", "--emit-claude-md"},
+		{"policy", fmt.tprintf("%s/sample", p.root)},
+		{"policy", fmt.tprintf("%s/sample", p.root), "--json"},
+		{"policy"},
 	}
 	for args in guidance_commands {
 		text = run(&p, "guidance despite topic roles", 0, args)
@@ -295,28 +286,22 @@ test_contracts :: proc(t: ^testing.T) {
 	}
 	source(
 		&p,
-		"draft.md",
+		".odx/topics/local/R9.odx.md",
 		"---\nid:\"R9\",\nseverity:\"erorr\",\ncheck:{kind:\"pattern\",match:\"proc\"},\n---\nDraft.\n",
 	)
-	run(
-		&p,
-		"invalid file metadata",
-		2,
-		{"rule", "try", "--file", fmt.tprintf("%s/draft.md", p.root)},
-	)
+	run(&p, "invalid installed metadata", 2, {"check", "--fast", "--json"})
+	os.remove(fmt.tprintf("%s/.odx/topics/local/R9.odx.md", p.root))
 	source(
 		&p,
 		".odx/topics/local/R2.odx.md",
 		"---\nid:\"R2\",\nretired:true,\n---\nHistorical rule.\n",
 	)
-	run(
+	r = check(&p, "retired rule excluded", 1)
+	expect(
 		&p,
-		"retired file trial",
-		2,
-		{"rule", "try", "--file", fmt.tprintf("%s/.odx/topics/local/R2.odx.md", p.root)},
+		count_rule(r, "local/R2") == 0 && status(r, "local/R2") == "absent",
+		"retired rule does not execute",
 	)
-	run(&p, "retired test", 2, {"rule", "test", "local/R2"})
-	run(&p, "unknown test", 2, {"rule", "test", "local/R999"})
 	source(
 		&p,
 		"odx.json5",
@@ -328,13 +313,7 @@ test_contracts :: proc(t: ^testing.T) {
 		count_rule(r, "local/R1") == 0 && status(r, "local/R1") == "absent",
 		"disabled rule excluded from execution",
 	)
-	trial(&p, "explicit trial ignores adoption disabling", spec, 1)
-	text = run(
-		&p,
-		"disabled guidance",
-		0,
-		{"for", fmt.tprintf("%s/sample", p.root), "--emit-claude-md"},
-	)
+	text = run(&p, "disabled guidance", 0, {"policy", fmt.tprintf("%s/sample", p.root)})
 	expect(
 		&p,
 		!strings.contains(text, "Project policy marker R1"),
@@ -396,7 +375,7 @@ test_contracts :: proc(t: ^testing.T) {
 		&p,
 		"configuration gates guidance",
 		0,
-		{"for", fmt.tprintf("%s/sample", p.root), "--json"},
+		{"policy", fmt.tprintf("%s/sample", p.root), "--json"},
 	)
 	expect(
 		&p,
@@ -418,7 +397,7 @@ test_contracts :: proc(t: ^testing.T) {
 		&p,
 		"configuration active guidance",
 		0,
-		{"for", fmt.tprintf("%s/sample", p.root), "--json"},
+		{"policy", fmt.tprintf("%s/sample", p.root), "--json"},
 	)
 	expect(
 		&p,

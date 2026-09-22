@@ -9,7 +9,7 @@ import "core:testing"
 
 Probe :: struct {
 	bin, root, base: string,
-	t:              ^testing.T,
+	t:               ^testing.T,
 }
 Finding :: struct {
 	rule, file, message: string,
@@ -58,7 +58,7 @@ run :: proc(p: ^Probe, name: string, code: int, args: []string) -> string {
 }
 check :: proc(p: ^Probe, name: string, expected: []string, scope := "") -> Report {
 	args := make([dynamic]string)
-	append(&args, "check", "--ci", "--strict", "--json")
+	append(&args, "check", "--strict", "--json")
 	if scope != "" {append(&args, scope)}
 	output := run(p, name, 1 if len(expected) > 0 else 0, args[:])
 	r: Report
@@ -82,8 +82,8 @@ copy_example :: proc(p: ^Probe, name: string) {
 	   state.exit_code != 0 {panic(fmt.tprintf("copy example: %s %s %v", out, errors, err))}
 }
 guidance :: proc(p: ^Probe, ids: []string) {
-	run(p, "write project guidance", 0, {"guidance", "write", "AGENTS.md"})
-	run(p, "project guidance fresh", 0, {"guidance", "check", "AGENTS.md"})
+	run(p, "write project guidance", 0, {"policy", "--write", "AGENTS.md"})
+	run(p, "project guidance fresh", 0, {"policy", "--verify", "AGENTS.md"})
 	text := read(p, "AGENTS.md")
 	for id in ids {expect(p, strings.contains(text, fmt.tprintf("**%s**", id)), fmt.tprintf("guidance includes %s", id))}
 	expect(
@@ -168,7 +168,6 @@ test_independent_policy_projects :: proc(t: ^testing.T) {
 		},
 		true,
 	)
-	for id in ([]string{"library/R1", "library/R2"}) {run(&p, fmt.tprintf("local examples %s", id), 0, {"rule", "test", id})}
 	config := read(&p, "odx.json5")
 	disabled_config, _ := strings.replace_all(
 		config,
@@ -178,12 +177,7 @@ test_independent_policy_projects :: proc(t: ^testing.T) {
 	write(&p, "odx.json5", disabled_config)
 	write(&p, "parser/main.odin", read(&p, "cases/mutable.odin.txt"))
 	check(&p, "disabled local rule is inactive in normal checks", {})
-	run(
-		&p,
-		"explicitly selected disabled local rule remains testable",
-		0,
-		{"rule", "test", "library/R1"},
-	)
+
 	write(&p, "odx.json5", config)
 	write(&p, "parser/main.odin", read(&p, "cases/misleading_text.odin.txt"))
 	write(
@@ -211,10 +205,10 @@ test_independent_policy_projects :: proc(t: ^testing.T) {
 		strings.concatenate({original, "\nReview this project's ownership boundary.\n"}),
 	)
 	before := read(&p, "AGENTS.md")
-	run(&p, "local rule mutation stales guidance", 1, {"guidance", "check", "AGENTS.md"})
+	run(&p, "local rule mutation stales guidance", 1, {"policy", "--verify", "AGENTS.md"})
 	expect(&p, read(&p, "AGENTS.md") == before, "freshness check does not mutate guidance")
-	run(&p, "regenerate changed local guidance", 0, {"guidance", "write", "AGENTS.md"})
-	run(&p, "changed local guidance fresh", 0, {"guidance", "check", "AGENTS.md"})
+	run(&p, "regenerate changed local guidance", 0, {"policy", "--write", "AGENTS.md"})
+	run(&p, "changed local guidance fresh", 0, {"policy", "--verify", "AGENTS.md"})
 	write(&p, path, original)
 
 	copy_example(&p, "strict")
@@ -249,8 +243,8 @@ test_independent_policy_projects :: proc(t: ^testing.T) {
 	}
 	if err = os.remove(fmt.tprintf("%s/domain/case.odin", p.root));
 	   err != nil {panic(fmt.tprintf("%v", err))}
-	run(&p, "app scoped guidance", 0, {"guidance", "write", "APP.md", "app"})
-	run(&p, "app scoped guidance fresh", 0, {"guidance", "check", "APP.md", "app"})
+	run(&p, "app scoped guidance", 0, {"policy", "--write", "APP.md", "app"})
+	run(&p, "app scoped guidance fresh", 0, {"policy", "--verify", "APP.md", "app"})
 	app := read(&p, "APP.md")
 	expect(&p, strings.count(app, "\n- **") == 0, "app guidance has no domain mechanical rules")
 	for id in ([]string{"dependencies/R2", "dependencies/R3", "dependencies/R4", "errors/R3", "allocators/R1"}) {
@@ -260,17 +254,15 @@ test_independent_policy_projects :: proc(t: ^testing.T) {
 			fmt.tprintf("app guidance omits domain contract %s", id),
 		)
 	}
-	for id in ([]string{"dependencies/R2", "dependencies/R3", "dependencies/R4", "errors/R3", "allocators/R1"}) {
-		run(&p, fmt.tprintf("strict local examples %s", id), 0, {"rule", "test", id})
-	}
+
 
 	p.root = fmt.tprintf("%s/audit", p.base)
 	write(&p, "sample/main.odin", "#+feature using-stmt\n#+vet !tabs\npackage sample\n")
 	audit_config(&p, "audit_file_tags:false,")
 	check(&p, "audit opt out", {})
-	run(&p, "audit off guidance", 0, {"guidance", "write", "AGENTS.md"})
+	run(&p, "audit off guidance", 0, {"policy", "--write", "AGENTS.md"})
 	audit_config(&p, "")
-	run(&p, "audit setting change stales guidance", 1, {"guidance", "check", "AGENTS.md"})
+	run(&p, "audit setting change stales guidance", 1, {"policy", "--verify", "AGENTS.md"})
 	check(&p, "audit defaults retained", {"odx/feature-optout", "odx/vet-disable"})
 	for value in ([]string{"null", "0", `"false"`}) {
 		audit_config(&p, fmt.tprintf("audit_file_tags:%s,", value))

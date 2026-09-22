@@ -1,5 +1,5 @@
 [tools]
-odin = "dev-2026-09" # the only version odx is tested against; odx doctor reports drift
+odin = "dev-2026-09" # assessed toolchain; other revisions require verification
 
 [env]
 # macOS: the prebuilt odin's -sanitize:address links only against LLVM's clang, not Apple's
@@ -43,52 +43,25 @@ depends = ["build"]
 run = '''
 set -e
 export ODX_ODIN="$(command -v odin)"
-odin test odx $ODIN_VET -sanitize:address -define:ODIN_TEST_FAIL_ON_BAD_MEMORY=true -out:$OUT/odx_test
+odin test odx $ODIN_VET -define:ODIN_TEST_THREADS=1 -sanitize:address -define:ODIN_TEST_FAIL_ON_BAD_MEMORY=true -out:$OUT/odx_test
 for suite in tests/integration/*/; do
   odin test "$suite" $ODIN_VET -define:ODIN_TEST_THREADS=1 -out:$OUT/integration_test
 done
-$ODX guidance check CLAUDE.md
-$ODX guidance check AGENTS.md --root examples/policies/minimal
-$ODX guidance check AGENTS.md --root examples/policies/strict
-'''
-
-[tasks.exemplars]
-description = "Every rules/<topic>/example/<pkg> compiles and passes its own topic checks"
-depends = ["build"]
-run = '''
-set -e
-for pkg in rules/*/example/*/; do
-  odin check "$pkg" $ODIN_VET -no-entry-point && echo "ok $pkg"
-done
-for t in rules/*/; do $ODX check --exemplar "$(basename "$t")"; done
+$ODX policy --verify CLAUDE.md
+$ODX policy --verify AGENTS.md --root examples/policies/minimal
+$ODX policy --verify AGENTS.md --root examples/policies/strict
 '''
 
 [tasks.self]
 description = "odx checks its own sources with its own rules"
 depends = ["build"]
-run = "$ODX doctor --ci && $ODX check"
-
-[tasks.audit]
-description = "Redundancy audit: every construct odx retired because the compiler owns it must still be rejected with no flags; rerun on each Odin release"
-run = '''
-for f in tests/compiler/*.odin; do
-  if odin check "$f" -file -no-entry-point >/dev/null 2>&1; then
-    echo "FAIL $f: the compiler now accepts this; odx needs a rule for it again"; exit 1
-  fi
-  echo "ok $f (compiler rejects it)"
-done
-'''
+run = "$ODX check"
 
 [tasks.ci]
 description = "Build, native tests, examples and repository checks"
-depends = ["test", "fixtures", "exemplars", "audit", "self"]
+depends = ["test", "self"]
 
 [tasks.validation]
 description = "Measure minimal and strict policies on pinned external Odin source; run separately from CI"
 depends = ["build"]
 run = 'ODX_ODIN="$(command -v odin)" odin test tests/validation -define:ODIN_TEST_THREADS=1 -out:$OUT/odx_validation -vet -strict-style'
-
-[tasks.fixtures]
-description = "Every tests/fixtures/<name>/ is checked and diffed against its // want: markers, plus every rule and topic.md block"
-depends = ["build"]
-run = "$ODX self-test"

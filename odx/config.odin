@@ -40,15 +40,11 @@ Layer :: struct {
 Odin_Cfg :: struct {
 	flags:                []string,
 	forbidden_flags:      []string,
-	required_flags:       []string, // must appear in the mise.toml test task
 	collections:          map[string]string,
 	custom_attributes:    []string,
 	allowed_vet_disables: []string,
 	audit_file_tags:      bool,
 	explicit_allocators:  Explicit_Allocators,
-	declined:             map[string]string, // flag -> why this project considered and refused it
-	tagged_files_min:     int, // floor for `#+vet explicit-allocators` coverage; doctor errors below it
-	version:              string,
 	path:                 string,
 }
 
@@ -72,15 +68,11 @@ CONFIG_KEYS := []string {
 ODIN_KEYS := []string {
 	"flags",
 	"forbidden_flags",
-	"required_flags",
 	"collections",
 	"custom_attributes",
 	"allowed_vet_disables",
 	"audit_file_tags",
 	"explicit_allocators",
-	"declined",
-	"tagged_files_min",
-	"version",
 	"path",
 }
 LAYER_KEYS := []string{"may_import", "deny"}
@@ -146,9 +138,11 @@ load_config :: proc(root: string, errs: ^[dynamic]string) -> (cfg: Config) {
 		if strings.trim_space(role) ==
 		   "" {errf(errs, "%s: configured role names must not be empty; an empty selector role denotes unmapped packages", path)}
 	}
-	for flag, reason in cfg.odin.declined {
-		if len(reason) <
-		   10 {errf(errs, "%s: odin.declined %s needs a reason of 10+ characters", path, flag)}
+	for flag in cfg.odin.flags {
+		name, _, _ := strings.partition(flag, ":")
+		for forbidden in cfg.odin.forbidden_flags {
+			if forbidden == flag || forbidden == name {errf(errs, "%s: odin.flags contains forbidden flag %s", path, flag)}
+		}
 	}
 	dependencies_obj, _ := tree["dependencies"].(json.Object)
 	for role in sorted_keys(cfg.dependencies) {

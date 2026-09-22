@@ -8,8 +8,8 @@ import "core:strings"
 import "core:testing"
 
 Check :: struct {
-	package_dir, rule, evidence, boundary, status, reason: string,
-	findings:                                              int,
+	package_dir, rule, status, reason: string,
+	findings:                          int,
 }
 
 Report :: struct {
@@ -29,8 +29,8 @@ Report :: struct {
 }
 
 Probe :: struct {
-	bin, root:      string,
-	t: ^testing.T,
+	bin, root: string,
+	t:         ^testing.T,
 }
 
 write :: proc(path, text: string) {
@@ -125,7 +125,7 @@ test_evidence :: proc(t: ^testing.T) {
 	if terr != nil {panic(fmt.tprintf("%v", terr))}
 	defer os.remove_all(root)
 	p := Probe {
-		t = t,
+		t    = t,
 		bin  = bin,
 		root = root,
 	}
@@ -183,17 +183,6 @@ test_evidence :: proc(t: ^testing.T) {
 		!r.coverage.complete && len(r.violations) > 0,
 		"missing package: diagnostic and incomplete coverage",
 	)
-	_, trial_errors := run_cli(
-		&p,
-		"rule trial malformed source",
-		1,
-		{"rule", "try", `{kind:"pattern",match:"decl",at:"package_scope",mutable:true}`},
-	)
-	expect(
-		&p,
-		strings.contains(trial_errors, "failed"),
-		"rule trial malformed source: failure disclosed",
-	)
 	write(
 		config_path,
 		`{
@@ -218,13 +207,6 @@ test_evidence :: proc(t: ^testing.T) {
 		&p,
 		!r.coverage.complete && has_status(r, "failed") && len(r.violations) > 0,
 		"compiler source error: failed evidence and diagnostics",
-	)
-	hook_output, _ := run_cli(&p, "hook compiler error", 0, {"hook", "edit"})
-	expect(
-		&p,
-		!strings.contains(hook_output, "source rules were not executed") &&
-		strings.contains(hook_output, "odin/error"),
-		"hook compiler error: diagnostics retained while source rules run",
 	)
 	write(source, "package lib\nanswer :: 42\n")
 
@@ -263,22 +245,6 @@ Probe.
 			&p,
 			!r.coverage.complete && has_status(r, "failed") && len(r.tool_errors) > 0,
 			"missing doc output: unavailable evidence",
-		)
-		_, doc_errors := run_cli(
-			&p,
-			"rule trial absent doc export",
-			2,
-			{
-				"rule",
-				"try",
-				`{kind:"require_attribute",attribute:"require_results",on:"exported_procs"}`,
-			},
-			fake,
-		)
-		expect(
-			&p,
-			strings.contains(doc_errors, "failed"),
-			"rule trial absent doc export: failure disclosed",
 		)
 		write(fake, "#!/bin/sh\nif [ \"$1\" = doc ]; then exit 7; fi\nexit 0\n")
 		r = run(&p, "doc process failure", 2, compiler = fake)
@@ -330,12 +296,7 @@ exit 1
 	}
 
 	p.root = "tests/fixtures/contract"
-	r = run(
-		&p,
-		"scoped dependency graph",
-		1,
-		{"--ci", "--topic", "dependencies", "dependencies_r2_via"},
-	)
+	r = run(&p, "scoped dependency graph", 1, {"--topic", "dependencies", "dependencies_r2_via"})
 	expect(
 		&p,
 		r.coverage.complete && !has_status(r, "unsupported") && len(r.violations) > 0,
@@ -371,17 +332,33 @@ exit 1
 		err := json.unmarshal_string(out, &failure)
 		expect(
 			&p,
-			err == nil && len(failure.tool_errors) > 0 && !failure.coverage.complete && errors == "",
+			err == nil &&
+			len(failure.tool_errors) > 0 &&
+			!failure.coverage.complete &&
+			errors == "",
 			"missing or invalid config is a structured tool failure",
 		)
 	}
-	write(config_path, config)
-	for args in ([][]string{{"rule", "try", "{}", "--json"}, {"guidance", "check", "AGENTS.md", "--json"}, {"for", "--emit-md", "--json"}}) {
-		out, errors := run_cli(&p, "unsupported JSON combination", 2, args)
-		expect(&p, out == "" && strings.contains(errors, "--json"), "unsupported JSON is rejected instead of emitting text")
+	checklist_config, _ := strings.replace_all(config, "roles: {}", `roles: {pure: ["lib"]}`)
+	write(config_path, checklist_config)
+	checklist, _ := run_cli(
+		&p,
+		"structured checklist",
+		0,
+		{"policy", "--topic", "errors", "--checklist", "--json"},
+	)
+	advice: struct {
+		advice: []struct {
+			topic, advice: string,
+		},
 	}
-	checklist, _ := run_cli(&p, "structured checklist", 0, {"explain", "errors", "--checklist", "--json"})
-	advice: []struct {topic, advice: string}
 	advice_err := json.unmarshal_string(checklist, &advice)
-	expect(&p, advice_err == nil && len(advice) == 1 && advice[0].topic == "errors" && advice[0].advice != "", "checklist is machine-readable")
+	expect(
+		&p,
+		advice_err == nil &&
+		len(advice.advice) == 1 &&
+		advice.advice[0].topic == "errors" &&
+		advice.advice[0].advice != "",
+		"checklist is machine-readable",
+	)
 }

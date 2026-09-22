@@ -19,7 +19,7 @@ Report :: struct {
 	},
 	violations:  []struct {
 		rule, severity:      string,
-		baselined, blocking: bool,
+		baselined: bool,
 	},
 	tool_errors: []string,
 	summary:     struct {
@@ -69,8 +69,8 @@ report :: proc(p: ^Probe, name: string, code: int, args: []string, compiler := "
 	r: Report
 	expect(
 		p,
-		json.unmarshal_string(out, &r) == nil && r.schema == 1,
-		fmt.tprintf("%s schema 1 JSON report", name),
+		json.unmarshal_string(out, &r) == nil && r.schema == 2,
+		fmt.tprintf("%s schema 2 JSON report", name),
 	)
 	return r
 }
@@ -120,9 +120,8 @@ No package-scope mutable declarations.
 	expect(
 		&p,
 		len(r.violations) == 1 &&
-		r.violations[0].severity == "warning" &&
-		r.violations[0].blocking,
-		"strict preserves warning severity and compatibility blocking field",
+		r.violations[0].severity == "warning",
+		"strict preserves warning severity",
 	)
 	run(&p, "freeze old warning", 0, {"baseline", "regen"})
 	r = report(&p, "baselined warning strict", 0, {"check", "--json", "--strict"})

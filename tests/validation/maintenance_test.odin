@@ -9,10 +9,10 @@ maintenance :: proc(p: ^Probe, policy, source: string, original: Report) {
 	config := read(config_path)
 	changed, _ := strings.replace_all(config, "exclude:[", "exclude:[\"pilot_generated/**\",")
 	write(config_path, changed)
-	_, stale_code, _ := run(p, "guidance-policy-drift", {"guidance", "check", "AGENTS.md"})
+	_, stale_code, _ := run(p, "guidance-policy-drift", {"policy", "--verify", "AGENTS.md"})
 	expect(p, stale_code == 1, "effective configuration change stales guidance")
 	write(config_path, config)
-	_, fresh_code, _ := run(p, "guidance-policy-restored", {"guidance", "check", "AGENTS.md"})
+	_, fresh_code, _ := run(p, "guidance-policy-restored", {"policy", "--verify", "AGENTS.md"})
 	expect(p, fresh_code == 0, "restored policy matches original guidance")
 	if !original.coverage.complete {return}
 	_, regen_code, _ := run(p, "baseline-accept", {"baseline", "regen"})

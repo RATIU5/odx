@@ -60,7 +60,7 @@ test_guidance_matches_rule_scope_despite_topic_roles :: proc(t: ^testing.T) {
 	testing.expect_value(t, len(guided[0].rules), 1)
 	testing.expect_value(t, guided[0].rules[0].id, "R1")
 	testing.expect_value(t, guided[0].rules[0].scope, "roles domain")
-	md := claude_md(&p, guided)
+	md := policy_topics_markdown(&p, guided)
 	testing.expect(t, strings.contains(md, "**custom/R1**"))
 	testing.expect(t, !strings.contains(md, "custom/R2"))
 	testing.expect(t, !strings.contains(md, "Applies to roles edge"))
@@ -97,7 +97,7 @@ test_unmapped_guidance_respects_disabled_and_kind_configuration :: proc(t: ^test
 	testing.expect_value(t, len(guided), 1)
 	testing.expect_value(t, len(guided[0].rules), 1)
 	testing.expect_value(t, guided[0].rules[0].id, "R1")
-	testing.expect(t, strings.contains(claude_md(&p, guided), "(unmapped)"))
+	testing.expect(t, strings.contains(policy_topics_markdown(&p, guided), "(unmapped)"))
 	p.cfg.odin.explicit_allocators = .all
 	guided = applicable_topics(&p, p.dirs)
 	testing.expect_value(t, len(guided[0].rules), 2)

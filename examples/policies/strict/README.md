@@ -11,14 +11,9 @@ From the odx repository root, using a freshly built binary and the supported
 `dev-2026-09` Odin compiler:
 
 ```sh
-build/odx check --root examples/policies/strict --ci --json
-build/odx rule test dependencies/R2 --root examples/policies/strict
-build/odx rule test dependencies/R3 --root examples/policies/strict
-build/odx rule test dependencies/R4 --root examples/policies/strict
-build/odx rule test errors/R3 --root examples/policies/strict
-build/odx rule test allocators/R1 --root examples/policies/strict
-build/odx guidance write AGENTS.md --root examples/policies/strict
-build/odx guidance check AGENTS.md --root examples/policies/strict
+build/odx check --root examples/policies/strict --json
+build/odx policy --write AGENTS.md --root examples/policies/strict
+build/odx policy --verify AGENTS.md --root examples/policies/strict
 odin check examples/policies/strict/domain -no-entry-point
 odin check examples/policies/strict/adapters -no-entry-point
 odin check examples/policies/strict/app
