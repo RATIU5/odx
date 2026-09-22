@@ -1,52 +1,58 @@
 # odx
 
-The [adoption contract](docs/milestones/7-adoption-and-compatibility.md) documents
-snapshot-bound baselines, explicit maintenance, suppression audits, and migration.
+odx checks project-selected Odin policies and generates matching instructions for
+people and coding agents. Projects own their rules, role names and exceptions.
+Checks can fail CI; the optional edit hook reports findings and exits 0. odx never
+calls an AI model.
 
-Copyable [minimal](examples/policies/minimal/README.md) and
-[strict](examples/policies/strict/README.md) projects demonstrate independent
-policies. The minimal library uses two source rules without roles; the strict
-application selects five constraints using its own role names. See the
-[milestone 6 decision record](docs/milestones/6-independent-policies.md).
+**Experimental source build:** the assessed scope is macOS arm64 with Odin
+`dev-2026-09-nightly:a2fb372`. Linux CI is configured but its current result is
+unverified here; Windows and other compiler revisions are unverified. See the
+[release assessment](docs/milestones/8-release-assessment.md) for evidence,
+validation status and limitations. No agent-productivity benefit is claimed.
 
-The [existing-policy semantics contract](docs/milestones/5-existing-policy-semantics.md)
-records allocator, declaration, and error-classification boundaries and compiler proofs.
+With [mise](https://mise.jdx.dev/) installed, build from this checkout and try a
+copyable policy:
 
-The [rule contract](docs/milestones/3-rule-contracts.md) defines accepted selector
-fields, role scope, overrides, and trial behavior.
+```sh
+mise install
+mise run build
+./build/odx check --ci --json --root examples/policies/minimal
+./build/odx for --emit-md --root examples/policies/minimal
+```
 
-See the [architecture and incremental contract](docs/milestones/2-architecture-and-incremental.md)
-for milestone 2 decisions, graph boundaries, and validation.
+The [minimal library](examples/policies/minimal/README.md) chooses two source
+rules without roles. The [strict application](examples/policies/strict/README.md)
+chooses five constraints using its own role names. Copy either directory,
+including `.odx`, and customize its rules and configuration. `mise run release`
+creates an optimized local binary; no packaged cross-platform release is implied.
 
-The [analysis and coverage contract](docs/milestones/1-analysis-and-coverage.md)
-defines what each check establishes. Dependency checks load the project source
-graph even when findings are scoped to selected files or packages. Rule selection
-agrees across checking and generated guidance. Managed guidance supports freshness
-checks, and repair hints describe the desired correction.
+Source patterns establish bounded syntax facts; compiler evidence covers the
+selected build configuration. Neither establishes runtime purity, allocation
+freedom, correct lifetimes or all-path cleanup. Error classification can be a
+project-selected heuristic. Reviewer advice remains explicitly unenforced.
+Formatting stays with the project's formatter.
 
-odx is a secondary vet pass for Odin: it checks that every guarantee the compiler offers is
-switched on, and enforces the few conventions a project has explicitly agreed on, with a
-reason for every rule and an escape hatch for every reason. Agents and CI call it the same
-way; it never calls a model and never blocks anything.
+The declaration selector's `mutable: true` follows the AST's variable-declaration
+flag, including `@(rodata)` declarations. It does not establish writable storage
+or harmful shared state. Review this boundary before adopting a no-globals policy.
 
-It does not make code good. What it cannot do:
-
-- verify an allocator matches its intended lifetime; only that the `#+vet` tag is present.
-- see allocator flow at all; the implicit context exists so callers can intercept it.
-- judge taste. Naming, formatting and brace style are never built in.
-- make an agent write better Odin by sitting in its loop. That was measured (below) and
-  the numbers went the wrong way, so the loop is gone.
+The contracts cover [analysis and coverage](docs/milestones/1-analysis-and-coverage.md),
+[architecture](docs/milestones/2-architecture-and-incremental.md),
+[rule authoring](docs/milestones/3-rule-contracts.md),
+[policy semantics](docs/milestones/5-existing-policy-semantics.md),
+[independent policies](docs/milestones/6-independent-policies.md), and
+[adoption and baselines](docs/milestones/7-adoption-and-compatibility.md).
 
 ## Guarantees
 
-The compiler cannot check which flags you passed it, and `#+vet explicit-allocators` is a
-per-file tag with no global switch. `odx doctor` lists every guarantee the installed compiler
-offers, whether `odin.flags` in `odx.json5` turns it on, which files opt out via `#+vet !x` or
-`#+feature`, and how many pure/service files carry the allocator tag. It warns when the
-compiler gained a flag the project has not adopted, so the set ratchets as Odin grows. A flag
-considered and refused goes in `odin.declined: { "-vet-style": "why" }`, so _considered_ and
-_not yet seen_ stay distinct. `odin.tagged_files_min` is a floor on allocator-tag coverage:
-doctor errors below it and asks you to raise it as coverage grows. `odx doctor --json` returns
+`odx doctor` audits configured compiler flags, recognized flags advertised by the
+installed compiler, file opt-outs and allocator-tag coverage. These are bounded
+configuration checks, not a list of every language or runtime guarantee. A project
+can adopt a flag or record its reason for declining it in `odin.declined`, for
+example `{ "-vet-style": "why this project declines the flag" }`.
+`odin.tagged_files_min` sets a project-selected minimum for allocator-tag coverage.
+`doctor --json` returns
 `{schema, errors, warnings, guarantees: {flags: [{flag, on, declined}], tagged, needed}}`.
 
 `odx check` enforces the per-file half: a missing allocator tag is `allocators/R1`, a
@@ -69,8 +75,9 @@ Four rules, all mechanical, all counting:
 | `dependencies/R3` | no mutable package-level variables in pure/service packages                                                           | AST                                  |
 | `errors/R3`       | exported non-test procedures whose named final result matches project error classification carry `@(require_results)` | compiler entity table (`odin doc`) |
 
-Roles are opt-in: `odx.json5` assigns `pure`, `service` or `edge` per package directory and
-says who may import whom. Unrestricted rules also apply to packages without a role;
+Roles are opt-in: `odx.json5` assigns project-chosen role names per package
+directory and says who may import whom. The built-in examples use `pure`,
+`service` and `edge`; those names are not required. Unrestricted rules also apply to packages without a role;
 `check.roles: [""]` explicitly selects those packages. `errors/R3` classifies a
 canonical named final-result type by a suffix in `errors.types` (default
 `["Error"]`), or, with `errors.structural: true` (the compatibility default), an
@@ -130,7 +137,7 @@ discouraged alternative in `instead_of`; hints are guidance, not automatic edits
 ## Commands
 
 ```
-odx check [<path>...] [--json] [--since <ref>] [--fast] [--ci]   exit 1 on violations
+odx check [<path>...] [--json] [--since <ref>] [--fast] [--ci]   findings and coverage
 odx doctor [--ci] [--json]        guarantees, toolchain, config, mise.toml drift
 odx for <path> [--brief]          the rules that apply to a file or package
 odx for --emit-md [<path>]       portable managed Markdown (--emit-claude-md alias)
@@ -215,18 +222,23 @@ will not guess which human text to replace. Keep reserved marker text out of pol
 managed `CLAUDE.md` section. The hook checks relevant edits and reports without
 blocking; ordinary checks and hooks never regenerate guidance.
 
-The loop that blocked a session until `odx check` was clean was piloted on ten tasks under
-three conditions before being removed:
+An earlier ten-task pilot compared no odx, policy text in the prompt, and a
+Stop-hook condition:
 
-| condition               | compiled | tests pass | turns |
-| ----------------------- | -------- | ---------- | ----- |
-| bare                    | 10/10    | 9/10       | 71    |
-| `odx for` in the prompt | 8/10     | 7/10       | 66    |
-| edit + stop hooks       | 8/10     | 7/10       | 104   |
+| Condition | Compiled | Tests passed | Policy findings | Turns |
+| --- | --- | --- | --- | --- |
+| No odx | 10/10 | 9/10 | 18 | 71 |
+| Policy text in prompt | 8/10 | 7/10 | 4 | 66 |
+| Stop hook | 8/10 | 7/10 | 0 | 104 |
 
-The independent columns regressed under both odx conditions and the hook cost 46% more
-turns. A rerun of the two failing tasks passed everywhere, so the failures were noise, but
-there is no evidence in favour either. The raw rows are in the git history of this file.
+Selective reruns of two failing tasks passed in all conditions. This small,
+nonrandomized pilot is inconclusive: fewer policy findings do not establish better
+correctness or productivity, and reruns do not explain the original failures.
+The retained harness used a fixed condition order without a pinned model; its
+Stop-hook scoring was coupled to session completion. See the
+[historical evidence review](docs/milestones/8-alternatives-research.md) for raw-row
+provenance and limitations. Current odx offers optional guidance and advisory
+feedback; no AI-productivity effect is claimed.
 
 ## Adopting, ignoring, layout
 
@@ -271,11 +283,11 @@ The ordinary `ignores --json` listing retains its `{ignores, bad}` shape.
   one ever compiles again.
 
 ```
-mise run ci   # build, unit tests, self-test, exemplars, audit, doctor --ci, odx on itself
+mise run ci   # build, unit tests, fixtures, policy contracts, guidance and adoption checks
 ```
 
-## Future Tests:
+Run the serial real-source evaluation separately from CI:
 
-Against this codebase, this tool should:
-
-- Detect code like `if boolean { return ... }` then error/warn and prefer `if boolean do return ...`
+```sh
+mise run validation   # repeat the public, pinned real-source policy pilots
+```

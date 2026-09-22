@@ -27,7 +27,10 @@ check_pattern :: proc(c: ^Ctx, p: ^Package, a: ^Active_Rule) {
 			}
 		}
 	case "foreign":
-		in_role := strings.concatenate({" in a ", p.role, " package"}, context.temp_allocator)
+		in_role := ""
+		if p.role != "" {
+			in_role = strings.concatenate({" in a ", p.role, " package"}, context.temp_allocator)
+		}
 		for f in p.files {
 			for d in package_declarations(f) {
 				#partial switch fd in d.derived {

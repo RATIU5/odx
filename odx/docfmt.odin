@@ -138,7 +138,11 @@ check_entities :: proc(c: ^Ctx, p: ^Package, h: ^doc.Header, rules: []^Active_Ru
 	types := doc.from_array(h, h.types)
 	for pkg, pi in pkgs {
 		if pi == 0 || doc.from_string(h, pkg.fullpath) != p.dir {continue}
+		seen := make(map[doc.Entity_Index]bool, context.temp_allocator)
 		for se in doc.from_array(h, pkg.entries) {
+			// Procedure aliases can export the same declaration through several scope entries.
+			if se.entity in seen {continue}
+			seen[se.entity] = true
 			e := ents[se.entity]
 			if e.kind != .Procedure {continue}
 			attrs := make(map[string]bool, context.temp_allocator)

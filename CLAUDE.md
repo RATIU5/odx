@@ -1,7 +1,7 @@
 <!-- odx:begin v1 -->
 ## odx
 
-Policy fingerprint (generation 3): `3d463d5a5e0c4a0a4f59652e4519e9fa6246917029cf695321cc2b30733ae662`
+Policy fingerprint (generation 3): `433a0a495fc3cccfae7aab269d0cb6899fcd07f2051785f87adbd2d4cba107dc`
 
 Scope: all discovered project packages. Rules below are the union applicable to this selection; each rule retains its own scope.
 - Package `docs/milestones`: role `(unmapped)`
@@ -15,6 +15,7 @@ Scope: all discovered project packages. Rules below are the union applicable to 
 - Package `docs/milestones/7-adoption-probe`: role `(unmapped)`
 - Package `docs/milestones/7-baseline-probe`: role `(unmapped)`
 - Package `docs/milestones/7-cleanup-probe`: role `(unmapped)`
+- Package `docs/milestones/8-probe`: role `(unmapped)`
 - Package `odx`: role `edge`
 
 Run `odx check --json` for findings and coverage. Warnings fail with `--strict`; baselines soften findings and suppressions remove accepted findings. Exit 0 alone does not prove complete analysis. Guidance freshness checks policy synchronization, not source compliance. Baselines accept occurrences in unchanged source snapshots; checks never rewrite them. Use `odx baseline add`, `prune`, or `regen` for explicit maintenance.

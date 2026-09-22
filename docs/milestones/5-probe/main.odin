@@ -191,6 +191,7 @@ main :: proc() {`,
 		   2 {expect(&p, strings.contains(string(errors), "requires that its results must be handled"), "specific result acknowledgement diagnostic")}
 		if state.exit_code != want {fmt.printfln("%s\n%s", out, errors)}
 	}
+	procedure_aliases(&p)
 	fmt.printfln("%d assertions passed; %d failed", p.passed, p.failed)
 	if p.failed > 0 {os.exit(1)}
 }

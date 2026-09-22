@@ -29,6 +29,8 @@
 !docs/milestones/7-adoption-probe/*.odin
 !docs/milestones/7-cleanup-probe/
 !docs/milestones/7-cleanup-probe/*.odin
+!docs/milestones/8-probe/
+!docs/milestones/8-probe/*.odin
 !examples/
 !examples/policies/
 !examples/policies/**

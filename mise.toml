@@ -81,6 +81,11 @@ ODX_ODIN="$(command -v odin)" odin run docs/milestones/7-adoption-probe -out:$OU
 ODX_ODIN="$(command -v odin)" odin run docs/milestones/7-cleanup-probe -out:$OUT/odx_cleanup -vet -strict-style
 '''
 
+[tasks.validation]
+description = "Measure minimal and strict policies on pinned external Odin source; run separately from CI"
+depends = ["build"]
+run = 'ODX_ODIN="$(command -v odin)" odin run docs/milestones/8-probe -out:$OUT/odx_validation -vet -strict-style'
+
 [tasks.policies]
 description = "Verify independent minimal and strict project policies"
 depends = ["build"]
