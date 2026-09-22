@@ -70,7 +70,14 @@ done
 
 [tasks.ci]
 description = "Everything CI runs, in order"
-depends = ["build", "test", "fixtures", "exemplars", "audit", "self", "evidence", "architecture", "contracts"]
+depends = ["build", "test", "fixtures", "exemplars", "audit", "self", "evidence", "architecture", "contracts", "guidance"]
+
+[tasks.guidance]
+description = "Exercise guidance freshness and verify this repository's managed instructions"
+depends = ["build"]
+run = '''
+ODX_ODIN="$(command -v odin)" odin run docs/milestones/4-probe -out:$OUT/odx_guidance -vet -strict-style && $ODX guidance check CLAUDE.md
+'''
 
 [tasks.contracts]
 description = "Exercise selector contracts, applicability, and policy authoring through the CLI"

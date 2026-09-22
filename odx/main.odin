@@ -32,14 +32,16 @@ Opts :: struct {
 }
 
 USAGE :: `usage: odx <command> [args] [--json] [--root <dir>]
-  --json is the machine contract on check, doctor, for, explain, ignores and hook (schema: 1).
-  Exit codes: 0 clean, 1 violations, 2 tool/config error.
+  --json is supported on check, doctor, for, explain and ignores; check schema: 1.
+  Check exits: 0 no unbaselined errors (warnings fail with --strict), 1 violations, 2 tool/config error.
+  Inspect coverage independently: exit 0 does not establish complete analysis.
 
   check [<path>...] [--topic t] [--fast] [--strict] [--since <ref>] [--ci] [--max-violations N]   run checks (odx.baseline softens, never hides)
   check --exemplar <topic>     check rules/<topic>/example/ against that topic (the exemplars CI task)
   baseline add | regen         freeze current violations into odx.baseline (shrinks on its own; never grows from check)
   for <path> [--brief]         the rules that apply to a file or package (--brief: topic names only)
-  for --emit-claude-md [<path>]   the same as a Markdown section for CLAUDE.md (no path: every topic)
+  for --emit-md [<path>]       portable managed Markdown (--emit-claude-md is an alias)
+  guidance check|write <markdown-file> [<package-path>]   check freshness or regenerate the owned block; exits 0 current/written, 1 stale/missing, 2 error
   explain [<topic>] [--rule R3]   no topic: list topics; with one: rules, rationale, do/don't
   explain [<topic>] --checklist   the reader checks from topic.md, for an adversarial reviewer
   ignores [--stale]            every odx:ignore suppression; --stale: suppressing nothing
@@ -81,7 +83,7 @@ parse_opts :: proc(args: []string) -> (o: Opts) {
 			o.checklist = true
 		case "--hooks":
 			o.hooks = true
-		case "--emit-claude-md":
+		case "--emit-claude-md", "--emit-md":
 			o.emit = true
 		case "--brief":
 			o.brief = true
@@ -138,6 +140,8 @@ main :: proc() {
 		cmd_explain(o)
 	case "for":
 		cmd_for(o)
+	case "guidance":
+		cmd_guidance(o)
 	case "check":
 		cmd_check(o)
 	case "baseline":

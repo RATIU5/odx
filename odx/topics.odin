@@ -36,6 +36,7 @@ Rule :: struct {
 	statement:       string,
 	why:             string,
 	instead_of:      string,
+	fix_hint:        string,
 	evidence:        string,
 	cost:            string,
 	severity:        Severity,
@@ -113,6 +114,7 @@ RULE_KEYS := []string {
 	"why",
 	"role",
 	"instead_of",
+	"fix_hint",
 	"evidence",
 	"cost",
 	"severity",
@@ -301,6 +303,12 @@ default_rule_fields :: proc(r: ^Rule, obj: json.Object) {
 
 validate_rule :: proc(r: ^Rule, obj: json.Object, at: string, errs: ^[dynamic]string) {
 	if !strings.has_prefix(r.id, "R") {errf(errs, "%s: rule id must start with R", at)}
+	if value, present := obj["fix_hint"]; present {
+		hint, valid := value.(json.String)
+		if !valid || strings.trim_space(string(hint)) == "" {
+			errf(errs, "%s: fix_hint must be a nonempty string", at)
+		}
+	}
 	for key in ([]string{"ignorable", "baselineable", "retired"}) {
 		if value, present := obj[key]; present {
 			if _, valid := value.(json.Boolean);
@@ -318,6 +326,10 @@ validate_rule :: proc(r: ^Rule, obj: json.Object, at: string, errs: ^[dynamic]st
 	check_enum(errs, at, obj, "severity", Severity)
 	spec, _ := obj["check"].(json.Object)
 	validate_check(&r.check, spec, at, errs)
+}
+
+rule_fix_hint :: proc(r: ^Rule) -> string {
+	return r.fix_hint if r.fix_hint != "" else r.statement
 }
 
 find_topic :: proc(rb: ^Rulebook, name: string) -> ^Topic {

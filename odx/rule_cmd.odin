@@ -91,6 +91,7 @@ id: "@ID@",
 statement: "",
 why: "",
 instead_of: "",
+fix_hint: "", // describe the corrective action; optional for existing rules (defaults to statement)
 evidence: "", // name the compiler version and the command that reproduces the failure; prose is not evidence
 cost: "",
 severity: "error",

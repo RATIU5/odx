@@ -23,12 +23,15 @@ Violation :: struct {
 	why:           string,
 	subject:       string, // stable semantic key; "" = not baselineable
 	baselined:     bool, // listed in odx.baseline: printed, never fails the build
-	blocking:      bool, // always true since the advisory tier went; kept for schema 1
+	blocking:      bool, // reserved schema-1 compatibility value; not the exit-status decision
 	fires:         string, // the rule's compiled violating and correct forms, "" for notes
 	silent:        string,
 	// the agent contract: what to write instead, and the exact suppression line, so a
 	// consumer can act on one finding without a second call; "" for notes
 	fix_hint:      string,
+	instead_of:    string,
+	evidence:      string,
+	boundary:      string,
 	ignore_syntax: string,
 }
 
@@ -76,7 +79,9 @@ sort_violations :: proc(vs: []Violation) {
 		if a.file != b.file {return a.file < b.file}
 		if a.line != b.line {return a.line < b.line}
 		if a.col != b.col {return a.col < b.col}
-		return a.rule < b.rule
+		if a.rule != b.rule {return a.rule < b.rule}
+		if a.subject != b.subject {return a.subject < b.subject}
+		return a.message < b.message
 	})
 }
 
@@ -146,6 +151,9 @@ report_text :: proc(r: ^Report) -> string {
 			hint,
 			BASELINED_TAG if v.baselined else "",
 		)
+		if v.fix_hint != "" {fmt.sbprintfln(&b, "  repair: %s", v.fix_hint)}
+		if v.why != "" {fmt.sbprintfln(&b, "  why: %s", v.why)}
+		if v.boundary != "" {fmt.sbprintfln(&b, "  evidence: %s; %s", v.evidence, v.boundary)}
 	}
 	if r.summary.omitted >
 	   0 {fmt.sbprintfln(&b, "... %d more violations omitted (--max-violations)", r.summary.omitted)}
@@ -172,6 +180,8 @@ hook_text :: proc(r: ^Report) -> string {
 		if v.statement == "" || v.rule in seen || v.baselined {continue}
 		seen[v.rule] = true
 		fmt.sbprintfln(&b, "  rule: %s\n  why: %s", v.statement, v.why)
+		if v.fix_hint != "" {fmt.sbprintfln(&b, "  repair: %s", v.fix_hint)}
+		if v.boundary != "" {fmt.sbprintfln(&b, "  evidence: %s; %s", v.evidence, v.boundary)}
 		if v.fires != "" {fmt.sbprintfln(&b, "  violates, like this:\n%s", indent(v.fires))}
 		if v.silent != "" {fmt.sbprintfln(&b, "  passes, like this:\n%s", indent(v.silent))}
 		if v.ignorable {

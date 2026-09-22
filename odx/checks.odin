@@ -77,6 +77,7 @@ report :: proc(
 	msg: string,
 	subject := "",
 ) {
+	evidence, boundary := rule_evidence(a.rule.check)
 	append(
 		&c.r.violations,
 		Violation {
@@ -95,7 +96,10 @@ report :: proc(
 			blocking = true,
 			fires = a.rule.fires,
 			silent = a.rule.silent,
-			fix_hint = a.rule.instead_of,
+			fix_hint = rule_fix_hint(a.rule),
+			instead_of = a.rule.instead_of,
+			evidence = evidence,
+			boundary = boundary,
 			ignore_syntax = ignore_syntax_of(file, a.id) if a.rule.ignorable else "",
 		},
 	)
