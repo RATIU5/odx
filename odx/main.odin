@@ -135,6 +135,16 @@ main :: proc() {
 		os.exit(EXIT_TOOL)
 	}
 	o := parse_opts(os.args[2:])
+	if o.json {
+		switch os.args[1] {
+		case "check", "doctor", "for", "explain", "ignores":
+		case:
+			fail("--json is supported on check, doctor, for, explain and ignores")
+		}
+		if os.args[1] == "for" && (o.emit || o.brief) {
+			fail("--json cannot be combined with --emit-md or --brief")
+		}
+	}
 	switch os.args[1] {
 	case "explain":
 		cmd_explain(o)

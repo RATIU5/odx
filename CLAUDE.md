@@ -1,21 +1,9 @@
 <!-- odx:begin v1 -->
 ## odx
 
-Policy fingerprint (generation 3): `433a0a495fc3cccfae7aab269d0cb6899fcd07f2051785f87adbd2d4cba107dc`
+Policy fingerprint (generation 4): `77ee6411fcfc9bcf939e4ec860c715fac48e02c61920657146853e878d211e63`
 
 Scope: all discovered project packages. Rules below are the union applicable to this selection; each rule retains its own scope.
-- Package `docs/milestones`: role `(unmapped)`
-- Package `docs/milestones/1-probe`: role `(unmapped)`
-- Package `docs/milestones/2-probe`: role `(unmapped)`
-- Package `docs/milestones/3-probe`: role `(unmapped)`
-- Package `docs/milestones/4-probe`: role `(unmapped)`
-- Package `docs/milestones/5-allocator-probe`: role `(unmapped)`
-- Package `docs/milestones/5-probe`: role `(unmapped)`
-- Package `docs/milestones/6-probe`: role `(unmapped)`
-- Package `docs/milestones/7-adoption-probe`: role `(unmapped)`
-- Package `docs/milestones/7-baseline-probe`: role `(unmapped)`
-- Package `docs/milestones/7-cleanup-probe`: role `(unmapped)`
-- Package `docs/milestones/8-probe`: role `(unmapped)`
 - Package `odx`: role `edge`
 
 Run `odx check --json` for findings and coverage. Warnings fail with `--strict`; baselines soften findings and suppressions remove accepted findings. Exit 0 alone does not prove complete analysis. Guidance freshness checks policy synchronization, not source compliance. Baselines accept occurrences in unchanged source snapshots; checks never rewrite them. Use `odx baseline add`, `prune`, or `regen` for explicit maintenance.
@@ -36,7 +24,7 @@ Configured policy (effective defaults included; no compiler run is implied):
   Correction: Remove or restructure the reported import chain so direct imports satisfy may_import and no included dependency reaches a denied import under this role's policy.
   Check evidence: source_import_graph; recursive ordinary source imports with direct test allow exceptions; dependency *_test.odin edges omitted; unconfigured core/base/vendor collections are opaque leaves; required missing/excluded/unknown/outside project evidence is unavailable; no foreign or runtime effect guarantee
   Severity: error; suppressible: true; baselineable: true
-  Effective selector: `{"kind":"banned_import","attribute":"","on":"","from":"dependencies.may_import","names":[],"roles":[],"except_roles":[],"match":"","name":"","exported":false,"requires_param":{"index":0,"type_suffix":""},"at":"","mutable":false}`
+  Effective selector: `{"from":"dependencies.may_import","kind":"banned_import"}`
 
 ### errors: Project-selected result acknowledgement and contextual error review
 - **errors/R3** Exported non-test procedures whose named final result matches the configured error classification carry @(require_results).
@@ -46,7 +34,7 @@ Configured policy (effective defaults included; no compiler run is implied):
   Correction: Add @(require_results) to the reported procedure declaration; callers must acknowledge its results, including by explicit discard.
   Check evidence: compiler_entities; compiler-selected exported procedure declarations, excluding @(test); canonical named final-result suffixes and optional structural classification from errors configuration; attribute presence only, no error-intent or caller-handling proof
   Severity: error; suppressible: true; baselineable: true
-  Effective selector: `{"kind":"require_attribute","attribute":"require_results","on":"exported_procs","from":"","names":[],"roles":[],"except_roles":[],"match":"","name":"","exported":false,"requires_param":{"index":0,"type_suffix":""},"at":"","mutable":false}`
+  Effective selector: `{"attribute":"require_results","kind":"require_attribute","on":"exported_procs"}`
 
 Reviewer advice scope: roles pure, service, edge; this does not restrict the mechanical rules above.
 

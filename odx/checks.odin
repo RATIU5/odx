@@ -180,7 +180,8 @@ check_vet_disables :: proc(c: ^Ctx, f: ^ast.File) {
 	has_reason :: proc(f: ^ast.File, line: int) -> bool {
 		for g in f.comments {
 			for ct in g.list {
-				if ct.pos.line == line && strings.has_prefix(ct.text, "// reason:") {return true}
+				if ct.pos.line == line && strings.has_prefix(ct.text, "// reason:") &&
+				   strings.trim_space(strings.trim_prefix(ct.text, "// reason:")) != "" {return true}
 			}
 		}
 		return false

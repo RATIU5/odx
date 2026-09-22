@@ -114,10 +114,23 @@ reader_checks :: proc(t: Topic) -> string {
 cmd_checklist :: proc(o: Opts) {
 	p := must_load(o, false)
 	for name in o.args {if find_topic(&p.rb, name) == nil {fail("unknown topic %q", name)}}
+	Checklist :: struct {
+		topic:  string,
+		roles:  []string,
+		advice: string,
+	}
+	checklists := make([dynamic]Checklist)
 	for t in p.rb.topics {
 		if len(o.args) > 0 && !slice.contains(o.args[:], t.name) {continue}
-		if rc := reader_checks(t); rc != "" {fmt.printfln("## %s\n\n%s\n", t.name, rc)}
+		if rc := reader_checks(t); rc != "" {
+			if o.json {
+				append(&checklists, Checklist{t.name, t.applies_to.roles, rc})
+			} else {
+				fmt.printfln("## %s\n\n%s\n", t.name, rc)
+			}
+		}
 	}
+	if o.json {print_json(checklists[:])}
 }
 
 cmd_for :: proc(o: Opts) {
@@ -328,7 +341,7 @@ claude_md :: proc(p: ^Project, topics: []Topic) -> string {
 				r.ignorable,
 				r.baselineable,
 			)
-			fmt.sbprintfln(&b, "  Effective selector: `%s`", guidance_json(r.check))
+			fmt.sbprintfln(&b, "  Effective selector: `%s`", guidance_check_json(r.check))
 		}
 		if rc := reader_checks(t); rc != "" {
 			if len(t.applies_to.roles) > 0 {

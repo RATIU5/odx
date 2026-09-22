@@ -51,10 +51,16 @@ validate_project :: proc(p: ^Project) {
 
 must_load :: proc(o: Opts, need_config: bool) -> Project {
 	p := load_project(o.root)
-	if need_config &&
-	   p.root ==
-		   "" {fail("no %s found here or in any parent (use --root or `odx init`)", CONFIG_FILE)}
+	if need_config && p.root == "" {
+		errf(&p.errs, "no %s found here or in any parent (use --root or `odx init`)", CONFIG_FILE)
+	}
 	if len(p.errs) > 0 {
+		if o.json {
+			r := Report {tool_errors = p.errs}
+			code := finalize(&r, false)
+			print_report(&r, true)
+			os.exit(code)
+		}
 		for e in p.errs {fmt.eprintln("odx:", e)}
 		os.exit(EXIT_TOOL)
 	}

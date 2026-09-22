@@ -7,9 +7,8 @@ calls an AI model.
 
 **Experimental source build:** the assessed scope is macOS arm64 with Odin
 `dev-2026-09-nightly:a2fb372`. Linux CI is configured but its current result is
-unverified here; Windows and other compiler revisions are unverified. See the
-[release assessment](docs/milestones/8-release-assessment.md) for evidence,
-validation status and limitations. No agent-productivity benefit is claimed.
+unverified here; Windows and other compiler revisions are unverified.
+No agent-productivity benefit or independent-user adoption is established.
 
 With [mise](https://mise.jdx.dev/) installed, build from this checkout and try a
 copyable policy:
@@ -36,13 +35,6 @@ Formatting stays with the project's formatter.
 The declaration selector's `mutable: true` follows the AST's variable-declaration
 flag, including `@(rodata)` declarations. It does not establish writable storage
 or harmful shared state. Review this boundary before adopting a no-globals policy.
-
-The contracts cover [analysis and coverage](docs/milestones/1-analysis-and-coverage.md),
-[architecture](docs/milestones/2-architecture-and-incremental.md),
-[rule authoring](docs/milestones/3-rule-contracts.md),
-[policy semantics](docs/milestones/5-existing-policy-semantics.md),
-[independent policies](docs/milestones/6-independent-policies.md), and
-[adoption and baselines](docs/milestones/7-adoption-and-compatibility.md).
 
 ## Guarantees
 
@@ -101,6 +93,8 @@ Mutable declaration checks include package `when` branches (even inactive ones),
 foreign-block variables, and thread-local declarations. They stop before procedure
 bodies and report grouped variables once. This restriction does not prove purity.
 
+`explain --checklist --json` returns reader advice as `{topic, roles, advice}` records.
+
 Each rule is one file, `rules/<topic>/<id>.odx.md`: JSON5 frontmatter (`key: "value",` per
 line) with `statement`, `why`, `instead_of`, `evidence`, `cost`, `severity` and `check`, then
 three fenced blocks. ` ```odin prelude ` is a sibling file of shared types, ` ```odin fires `
@@ -152,6 +146,10 @@ odx self-test                     fixtures and every rule block
 odx rule try | add | test         draft, scaffold, test a rule
 ```
 
+`--json` is supported on `check`, `doctor`, `for`, `explain`, and `ignores`;
+unsupported commands reject it. Project-loading failures in JSON mode return
+structured tool errors. Invalid command syntax can still report errors on stderr.
+
 Check exit codes are contract: `0` no unbaselined errors (warnings also fail with
 `--strict`), `1` failing findings, `2` tool or config error. Coverage must be inspected
 separately: partial scans can exit 0. `hook edit` always exits 0.
@@ -159,9 +157,7 @@ separately: partial scans can exit 0. `hook edit` always exits 0.
 `check`, `message`, `class`, `subject` (a semantic label), `baselined`, `ignorable`,
 `statement`, `why`, `fires`, `silent`, `fix_hint` (the desired repair) and
 `ignore_syntax` (the exact suppression comment), plus `blocking`, always true, kept for the
-schema, not an exit-status decision. Milestone 4 corrects the formerly inverted
-`fix_hint` value without changing its string type or schema number; consumers that
-used it as discouraged behavior must use the additive `instead_of` field.
+schema, not an exit-status decision. `fix_hint` describes a repair; `instead_of` describes discouraged behavior.
 Additive `evidence` and `boundary` describe the check's evidence source and limits.
 Compiler/internal notes leave policy repair metadata empty.
 `summary` carries `errors`, `warnings`, `ignored`, `files`, `baselined` and
@@ -174,7 +170,7 @@ and do not execute tests. `coverage.complete` describes completed evidence withi
 those boundaries, not absence of violations or whole-project compliance.
 `--fast` and empty `--since` selections report incomplete coverage. Missing or
 unsupported required evidence exits 2. Failed analysis cannot shrink or regenerate
-a baseline. See the linked contract for exact limits and statuses.
+a baseline.
 
 For architecture checks, `may_import` matches a direct ordinary import's target
 role or its path (an exact string, or a prefix ending in `*`). `deny` also follows
@@ -222,23 +218,10 @@ will not guess which human text to replace. Keep reserved marker text out of pol
 managed `CLAUDE.md` section. The hook checks relevant edits and reports without
 blocking; ordinary checks and hooks never regenerate guidance.
 
-An earlier ten-task pilot compared no odx, policy text in the prompt, and a
-Stop-hook condition:
-
-| Condition | Compiled | Tests passed | Policy findings | Turns |
-| --- | --- | --- | --- | --- |
-| No odx | 10/10 | 9/10 | 18 | 71 |
-| Policy text in prompt | 8/10 | 7/10 | 4 | 66 |
-| Stop hook | 8/10 | 7/10 | 0 | 104 |
-
-Selective reruns of two failing tasks passed in all conditions. This small,
-nonrandomized pilot is inconclusive: fewer policy findings do not establish better
-correctness or productivity, and reruns do not explain the original failures.
-The retained harness used a fixed condition order without a pinned model; its
-Stop-hook scoring was coupled to session completion. See the
-[historical evidence review](docs/milestones/8-alternatives-research.md) for raw-row
-provenance and limitations. Current odx offers optional guidance and advisory
-feedback; no AI-productivity effect is claimed.
+Public validation overlays the example policies on pinned Odin demo and queue
+source. It tests findings, repairs, baseline maintenance and guidance freshness;
+it does not measure independent adoption or agent productivity. An earlier small
+agent pilot did not establish improved correctness or productivity.
 
 ## Adopting, ignoring, layout
 
@@ -279,11 +262,14 @@ The ordinary `ignores --json` listing retains its `{ignores, bad}` shape.
 - `odx/` the tool. `rules/<topic>/` built-in topics, embedded into the binary.
 - `tests/fixtures/<name>/` small projects with `// want: topic/R2` markers, diffed both ways
   by `odx self-test`; `tests/fixtures/contract/` is one package per rule, fires and silent.
+- `odx/*_test.odin` native unit tests. `tests/integration/*/*_test.odin` native CLI and whole-project tests.
+- `tests/validation/*_test.odin` serial public-source evaluation, kept outside CI timing noise.
 - `tests/compiler/` constructs the compiler now rejects on its own; `mise run audit` fails if
   one ever compiles again.
 
 ```
-mise run ci   # build, unit tests, fixtures, policy contracts, guidance and adoption checks
+mise run test # native Odin unit and integration tests, including whole example projects
+mise run ci   # tests, fixtures, exemplars, compiler audit and repository self-check
 ```
 
 Run the serial real-source evaluation separately from CI:

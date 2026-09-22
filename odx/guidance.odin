@@ -10,7 +10,7 @@ import "core:slice"
 import "core:strings"
 
 // Bump when interpreter semantics change without changing serialized policy.
-GUIDANCE_REVISION :: 3
+GUIDANCE_REVISION :: 4
 
 Guidance_Package :: struct {
 	path: string,
@@ -21,6 +21,41 @@ guidance_json :: proc(value: any) -> string {
 	data, err := json.marshal(value, {sort_maps_by_key = true, use_enum_names = true})
 	if err != nil {fail("guidance JSON: %v", err)}
 	return string(data)
+}
+
+guidance_check_json :: proc(spec: Check_Spec) -> string {
+	value, err := json.parse_string(guidance_json(spec), parse_integers = true)
+	if err != nil {fail("guidance selector JSON: %v", err)}
+	values := value.(json.Object)
+	fields := make(json.Object, context.temp_allocator)
+	fields["kind"] = values["kind"]
+	if len(spec.roles) > 0 {fields["roles"] = values["roles"]}
+	if len(spec.except_roles) > 0 {fields["except_roles"] = values["except_roles"]}
+	switch spec.kind {
+	case .path_role, .vet_tag:
+	case .banned_import:
+		if spec.from != "" {fields["from"] = values["from"]}
+	case .require_attribute:
+		fields["attribute"] = values["attribute"]
+		if spec.on != "" {fields["on"] = values["on"]}
+	case .pattern:
+		fields["match"] = values["match"]
+		switch spec.match {
+		case "call":
+			if spec.name != "" {fields["name"] = values["name"]}
+			if len(spec.names) > 0 {fields["names"] = values["names"]}
+		case "import":
+			fields["name"] = values["name"]
+		case "proc":
+			if spec.exported {fields["exported"] = values["exported"]}
+			if spec.requires_param.type_suffix != "" {fields["requires_param"] = values["requires_param"]}
+		case "decl":
+			fields["at"] = values["at"]
+			if spec.mutable {fields["mutable"] = values["mutable"]}
+		case "foreign":
+		}
+	}
+	return guidance_json(fields)
 }
 
 guidance_block :: proc(p: ^Project, rels: []string, scoped: bool) -> string {

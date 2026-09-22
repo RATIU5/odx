@@ -1,7 +1,7 @@
 <!-- odx:begin v1 -->
 ## odx
 
-Policy fingerprint (generation 3): `0d0a6da9d3b14b72811cd6e673691d74a6c02ee038ddf673b362c92cfe61a7be`
+Policy fingerprint (generation 4): `4a1caecd711cfd4904417e7f39d24d5d8844d4531d7d4326442b226236dd709d`
 
 Scope: all discovered project packages. Rules below are the union applicable to this selection; each rule retains its own scope.
 - Package `adapters`: role `adapters`
@@ -26,7 +26,7 @@ Configured policy (effective defaults included; no compiler run is implied):
   Correction: Add #+vet explicit-allocators before package and satisfy affected compiler checks.
   Check evidence: native_tokens; file tag presence only; no allocator behavior or lifetime proof
   Severity: error; suppressible: true; baselineable: true
-  Effective selector: `{"kind":"vet_tag","attribute":"","on":"","from":"","names":[],"roles":["domain"],"except_roles":[],"match":"","name":"","exported":false,"requires_param":{"index":0,"type_suffix":""},"at":"","mutable":false}`
+  Effective selector: `{"kind":"vet_tag","roles":["domain"]}`
 
 Reviewer advice scope: roles domain; this does not restrict the mechanical rules above.
 
@@ -46,7 +46,7 @@ advice nor the directive establishes allocation freedom.
   Correction: Remove the denied import chain and pass the required capability from app code.
   Check evidence: source_import_graph; recursive ordinary source imports with direct test allow exceptions; dependency *_test.odin edges omitted; unconfigured core/base/vendor collections are opaque leaves; required missing/excluded/unknown/outside project evidence is unavailable; no foreign or runtime effect guarantee
   Severity: error; suppressible: true; baselineable: true
-  Effective selector: `{"kind":"banned_import","attribute":"","on":"","from":"dependencies.may_import","names":[],"roles":["domain"],"except_roles":[],"match":"","name":"","exported":false,"requires_param":{"index":0,"type_suffix":""},"at":"","mutable":false}`
+  Effective selector: `{"from":"dependencies.may_import","kind":"banned_import","roles":["domain"]}`
 - **dependencies/R3** Domain source has no mutable package-scope value declarations, including conditional branches and foreign blocks.
   Scope: roles domain
   Why: Callers should supply mutable domain state explicitly.
@@ -54,7 +54,7 @@ advice nor the directive establishes allocation freedom.
   Correction: Move the state into a caller-owned struct and pass it as a parameter.
   Check evidence: native_ast; package-scope decl declarations through all when branches and foreign blocks; one finding per matching declaration; procedure bodies excluded; syntax only, no resolved identity or runtime effect proof
   Severity: error; suppressible: true; baselineable: true
-  Effective selector: `{"kind":"pattern","attribute":"","on":"","from":"","names":[],"roles":["domain"],"except_roles":[],"match":"decl","name":"","exported":false,"requires_param":{"index":0,"type_suffix":""},"at":"package_scope","mutable":true}`
+  Effective selector: `{"at":"package_scope","kind":"pattern","match":"decl","mutable":true,"roles":["domain"]}`
 - **dependencies/R4** Domain source contains no direct foreign imports or foreign blocks.
   Scope: roles domain
   Why: Place this application's direct foreign bindings in adapters.
@@ -62,7 +62,7 @@ advice nor the directive establishes allocation freedom.
   Correction: Move the foreign declaration to an adapter and supply a capability to domain code.
   Check evidence: native_ast; package-scope foreign declarations through all when branches and foreign blocks; one finding per matching declaration; procedure bodies excluded; syntax only, no resolved identity or runtime effect proof
   Severity: error; suppressible: true; baselineable: true
-  Effective selector: `{"kind":"pattern","attribute":"","on":"","from":"","names":[],"roles":["domain"],"except_roles":[],"match":"foreign","name":"","exported":false,"requires_param":{"index":0,"type_suffix":""},"at":"","mutable":false}`
+  Effective selector: `{"kind":"pattern","match":"foreign","roles":["domain"]}`
 
 ### errors: Domain result acknowledgement for two chosen failure-name suffixes
 - **errors/R3** Exported non-test domain procedures whose canonical named final result ends in Domain_Failure or Storage_Failure carry @(require_results).
@@ -72,7 +72,7 @@ advice nor the directive establishes allocation freedom.
   Correction: Add @(require_results) to the selected procedure declaration.
   Check evidence: compiler_entities; compiler-selected exported procedure declarations, excluding @(test); canonical named final-result suffixes and optional structural classification from errors configuration; attribute presence only, no error-intent or caller-handling proof
   Severity: error; suppressible: true; baselineable: true
-  Effective selector: `{"kind":"require_attribute","attribute":"require_results","on":"exported_procs","from":"","names":[],"roles":["domain"],"except_roles":[],"match":"","name":"","exported":false,"requires_param":{"index":0,"type_suffix":""},"at":"","mutable":false}`
+  Effective selector: `{"attribute":"require_results","kind":"require_attribute","on":"exported_procs","roles":["domain"]}`
 
 Reviewer advice scope: roles domain; this does not restrict the mechanical rules above.
 

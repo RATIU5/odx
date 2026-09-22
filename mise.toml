@@ -38,8 +38,19 @@ depends = ["build"]
 run = "${ODX}"
 
 [tasks.test]
-description = "odx's own unit tests"
-run = "mkdir -p $OUT && odin test odx $ODIN_VET -sanitize:address -define:ODIN_TEST_FAIL_ON_BAD_MEMORY=true -out:$OUT/odx_test"
+description = "Native Odin unit and whole-project integration tests"
+depends = ["build"]
+run = '''
+set -e
+export ODX_ODIN="$(command -v odin)"
+odin test odx $ODIN_VET -sanitize:address -define:ODIN_TEST_FAIL_ON_BAD_MEMORY=true -out:$OUT/odx_test
+for suite in tests/integration/*/; do
+  odin test "$suite" $ODIN_VET -define:ODIN_TEST_THREADS=1 -out:$OUT/integration_test
+done
+$ODX guidance check CLAUDE.md
+$ODX guidance check AGENTS.md --root examples/policies/minimal
+$ODX guidance check AGENTS.md --root examples/policies/strict
+'''
 
 [tasks.exemplars]
 description = "Every rules/<topic>/example/<pkg> compiles and passes its own topic checks"
@@ -69,61 +80,13 @@ done
 '''
 
 [tasks.ci]
-description = "Everything CI runs, in order"
-depends = ["build", "test", "fixtures", "exemplars", "audit", "self", "evidence", "architecture", "contracts", "guidance", "semantics", "policies", "adoption"]
-
-[tasks.adoption]
-description = "Verify baseline identity, gradual adoption, suppression audits, and init cleanup"
-depends = ["build"]
-run = '''
-ODX_ODIN="$(command -v odin)" odin run docs/milestones/7-baseline-probe -out:$OUT/odx_baselines -vet -strict-style
-ODX_ODIN="$(command -v odin)" odin run docs/milestones/7-adoption-probe -out:$OUT/odx_adoption -vet -strict-style
-ODX_ODIN="$(command -v odin)" odin run docs/milestones/7-cleanup-probe -out:$OUT/odx_cleanup -vet -strict-style
-'''
+description = "Build, native tests, examples and repository checks"
+depends = ["test", "fixtures", "exemplars", "audit", "self"]
 
 [tasks.validation]
 description = "Measure minimal and strict policies on pinned external Odin source; run separately from CI"
 depends = ["build"]
-run = 'ODX_ODIN="$(command -v odin)" odin run docs/milestones/8-probe -out:$OUT/odx_validation -vet -strict-style'
-
-[tasks.policies]
-description = "Verify independent minimal and strict project policies"
-depends = ["build"]
-run = '''
-ODX_ODIN="$(command -v odin)" odin run docs/milestones/6-probe -out:$OUT/odx_policies -vet -strict-style
-$ODX guidance check AGENTS.md --root examples/policies/minimal
-$ODX guidance check AGENTS.md --root examples/policies/strict
-'''
-
-[tasks.semantics]
-description = "Verify existing policy semantics and compiler counterexamples"
-depends = ["build"]
-run = '''
-ODX_ODIN="$(command -v odin)" odin run docs/milestones/5-probe -out:$OUT/odx_semantics -vet -strict-style
-ODX_ODIN="$(command -v odin)" odin run docs/milestones/5-allocator-probe -out:$OUT/odx_allocator_semantics -vet -strict-style
-'''
-
-[tasks.guidance]
-description = "Exercise guidance freshness and verify this repository's managed instructions"
-depends = ["build"]
-run = '''
-ODX_ODIN="$(command -v odin)" odin run docs/milestones/4-probe -out:$OUT/odx_guidance -vet -strict-style && $ODX guidance check CLAUDE.md
-'''
-
-[tasks.contracts]
-description = "Exercise selector contracts, applicability, and policy authoring through the CLI"
-depends = ["build"]
-run = 'ODX_ODIN="$(command -v odin)" odin run docs/milestones/3-probe -out:$OUT/odx_contracts -vet -strict-style'
-
-[tasks.architecture]
-description = "Exercise complete architecture evidence and incremental scan coverage"
-depends = ["build"]
-run = 'ODX_ODIN="$(command -v odin)" odin run docs/milestones/2-probe -out:$OUT/odx_architecture -vet -strict-style'
-
-[tasks.evidence]
-description = "Exercise analysis coverage and unavailable compiler evidence through the CLI"
-depends = ["build"]
-run = 'ODX_ODIN="$(command -v odin)" odin run docs/milestones/1-probe -out:$OUT/odx_evidence -vet -strict-style'
+run = 'ODX_ODIN="$(command -v odin)" odin test tests/validation -define:ODIN_TEST_THREADS=1 -out:$OUT/odx_validation -vet -strict-style'
 
 [tasks.fixtures]
 description = "Every tests/fixtures/<name>/ is checked and diffed against its // want: markers, plus every rule and topic.md block"

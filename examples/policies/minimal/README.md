@@ -32,7 +32,7 @@ regenerate instructions.
 The `cases` directory contains complete alternative source files as `.odin.txt`
 so they do not enter the passing project scan. To try one, copy this entire
 example to a temporary directory and replace `parser/main.odin` there with the
-case. The repository's milestone acceptance test performs these substitutions.
+case. The repository's policy integration test performs these substitutions.
 
 | Case | Expected policy findings | Boundary demonstrated |
 | --- | --- | --- |

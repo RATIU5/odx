@@ -4,6 +4,47 @@ import "core:strings"
 import "core:testing"
 
 @(test)
+test_rendered_selectors_are_valid_policy_with_preserved_semantics :: proc(t: ^testing.T) {
+	context.allocator = context.temp_allocator
+	defer free_all(context.temp_allocator)
+	sources := []string {
+		`{kind:"path_role",roles:[""],except_roles:["edge"]}`,
+		`{kind:"vet_tag"}`,
+		`{kind:"banned_import"}`,
+		`{kind:"banned_import",from:"dependencies.may_import"}`,
+		`{kind:"require_attribute",attribute:"require_results"}`,
+		`{kind:"require_attribute",attribute:"require_results",on:"exported_procs"}`,
+		`{kind:"pattern",match:"call",name:"os.exit",names:["panic","os.exit"]}`,
+		`{kind:"pattern",match:"import",name:"core:sys/*"}`,
+		`{kind:"pattern",match:"proc",exported:false}`,
+		`{kind:"pattern",match:"proc",exported:true,requires_param:{index:2,type_suffix:"Ctx"}}`,
+		`{kind:"pattern",match:"proc",requires_param:{index:9007199254740993,type_suffix:"Ctx"}}`,
+		`{kind:"pattern",match:"proc",requires_param:{type_suffix:"Ctx"}}`,
+		`{kind:"pattern",match:"decl",at:"package_scope",mutable:false}`,
+		`{kind:"pattern",match:"decl",at:"package_scope",mutable:true}`,
+		`{kind:"pattern",match:"foreign",roles:["domain"],except_roles:["edge"]}`,
+	}
+	for source in sources {
+		original: Check_Spec
+		errs: [dynamic]string
+		obj, ok := unmarshal_json5(source, &original, "original", CHECK_KEYS, &errs)
+		if ok {validate_check(&original, obj, "original", &errs)}
+		if !testing.expect(t, ok && len(errs) == 0, source) {continue}
+		p := Project{}
+		topics := []Topic{{name = "custom", rules = {{id = "R1", check = original}}}}
+		markdown := claude_md(&p, topics)
+		_, marker, rest := strings.partition(markdown, "Effective selector: `")
+		if !testing.expect(t, marker != "", markdown) {continue}
+		rendered, _, _ := strings.partition(rest, "`\n")
+		decoded: Check_Spec
+		obj, ok = unmarshal_json5(rendered, &decoded, "rendered", CHECK_KEYS, &errs)
+		if ok {validate_check(&decoded, obj, "rendered", &errs)}
+		testing.expect(t, ok && len(errs) == 0, strings.join(errs[:], "; "))
+		testing.expect_value(t, guidance_json(decoded), guidance_json(original))
+	}
+}
+
+@(test)
 test_selector_contract_rejects_ignored_and_invalid_fields :: proc(t: ^testing.T) {
 	context.allocator = context.temp_allocator
 	defer free_all(context.temp_allocator)

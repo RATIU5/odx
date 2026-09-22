@@ -1,7 +1,7 @@
 <!-- odx:begin v1 -->
 ## odx
 
-Policy fingerprint (generation 3): `349de3bd96130251a9c3b4bfd13a4ce98351301f3d64bf0f9a5a5c53b237adad`
+Policy fingerprint (generation 4): `da0fa29d648ad060be946cdc139a36b27599f83238c26f07365c5427bdf12842`
 
 Scope: all discovered project packages. Rules below are the union applicable to this selection; each rule retains its own scope.
 - Package `parser`: role `(unmapped)`
@@ -24,7 +24,7 @@ Configured policy (effective defaults included; no compiler run is implied):
   Correction: Move the variable into a caller-owned struct or procedure-local value.
   Check evidence: native_ast; package-scope decl declarations through all when branches and foreign blocks; one finding per matching declaration; procedure bodies excluded; syntax only, no resolved identity or runtime effect proof
   Severity: error; suppressible: true; baselineable: true
-  Effective selector: `{"kind":"pattern","attribute":"","on":"","from":"","names":[],"roles":[],"except_roles":[],"match":"decl","name":"","exported":false,"requires_param":{"index":0,"type_suffix":""},"at":"package_scope","mutable":true}`
+  Effective selector: `{"at":"package_scope","kind":"pattern","match":"decl","mutable":true}`
 - **library/R2** Declare no direct foreign imports or foreign blocks, including inactive when branches.
   Scope: all roles, including unmapped packages
   Why: The parsing library keeps its own source independent of foreign bindings.
@@ -32,6 +32,6 @@ Configured policy (effective defaults included; no compiler run is implied):
   Correction: Move the foreign declaration outside this library and supply any needed capability through its API.
   Check evidence: native_ast; package-scope foreign declarations through all when branches and foreign blocks; one finding per matching declaration; procedure bodies excluded; syntax only, no resolved identity or runtime effect proof
   Severity: error; suppressible: true; baselineable: true
-  Effective selector: `{"kind":"pattern","attribute":"","on":"","from":"","names":[],"roles":[],"except_roles":[],"match":"foreign","name":"","exported":false,"requires_param":{"index":0,"type_suffix":""},"at":"","mutable":false}`
+  Effective selector: `{"kind":"pattern","match":"foreign"}`
 
 <!-- odx:end -->
