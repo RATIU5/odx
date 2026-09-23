@@ -1,0 +1,6 @@
+{
+  version: 1,
+  roles: { pure: ["task"] },
+  dependencies: { pure: { may_import: ["core:*"], deny: ["core:os", "core:os/*", "core:net", "core:net/*"] } },
+  odin: { explicit_allocators: "all" },
+}

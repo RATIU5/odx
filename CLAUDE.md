@@ -1,7 +1,7 @@
 <!-- odx:begin v1 -->
 ## odx
 
-Policy fingerprint (generation 5): `407097776316765c36d16171ad498bc819a73a494cbc73888719acf22786fd7e`
+Policy fingerprint (generation 5): `2104855ea624b2d05f5a32140445944e976a89de3cc4c33b819408c03e0055e3`
 
 Scope: all discovered project packages. Rules below are the union applicable to this selection; each rule retains its own scope.
 - Package `odx`: role `edge`

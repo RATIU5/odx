@@ -6,7 +6,11 @@
 !examples/
 !examples/policies/
 !examples/policies/**
-ROADMAP.md
+!ROADMAP.md
+!RESEARCH.md
+!HARNESS.md
+!eval/
+!eval/**
 !ols.json
 !mise.toml
 !odx/

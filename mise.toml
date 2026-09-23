@@ -44,6 +44,7 @@ run = '''
 set -e
 export ODX_ODIN="$(command -v odin)"
 odin test odx $ODIN_VET -define:ODIN_TEST_THREADS=1 -sanitize:address -define:ODIN_TEST_FAIL_ON_BAD_MEMORY=true -out:$OUT/odx_test
+odin test eval/runner $ODIN_VET -define:ODIN_TEST_THREADS=1 -out:$OUT/eval_test
 for suite in tests/integration/*/; do
   odin test "$suite" $ODIN_VET -define:ODIN_TEST_THREADS=1 -out:$OUT/integration_test
 done
@@ -51,6 +52,13 @@ $ODX policy --verify CLAUDE.md
 $ODX policy --verify AGENTS.md --root examples/policies/minimal
 $ODX policy --verify AGENTS.md --root examples/policies/strict
 '''
+
+[tasks.eval]
+description = "Build the eval runner (see eval/PREREG.md); run as build/eval --help"
+depends = ["build"]
+sources = ["eval/runner/*.odin"]
+outputs = ["{{ env.OUT }}/eval"]
+run = "odin build eval/runner -out:$OUT/eval $ODIN_VET"
 
 [tasks.self]
 description = "odx checks its own sources with its own rules"
