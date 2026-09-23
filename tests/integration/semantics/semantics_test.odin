@@ -7,47 +7,10 @@ import "core:path/filepath"
 import "core:strings"
 import "core:testing"
 
-Probe :: struct {
-	bin, root:      string,
-	t: ^testing.T,
-}
+import "../../probe"
 
-Report :: struct {
-	coverage:   struct {
-		complete: bool,
-	},
-	violations: []struct {
-		rule, message: string,
-	},
-}
-
-write :: proc(path, contents: string) {
-	err := os.make_directory_all(filepath.dir(path))
-	if err != nil && err != os.General_Error.Exist {panic(fmt.tprintf("%v", err))}
-	if err = os.write_entire_file(path, contents); err != nil {panic(fmt.tprintf("%v", err))}
-}
-source :: proc(p: ^Probe, path, contents: string) {
-	write(fmt.tprintf("%s/%s", p.root, path), contents)
-}
-expect :: proc(p: ^Probe, ok: bool, name: string) {
-	testing.expect(p.t, ok, name)
-}
-run :: proc(p: ^Probe, name: string, code: int, args: []string) -> string {
-	cmd := make([dynamic]string)
-	append(&cmd, p.bin)
-	append(&cmd, ..args)
-	append(&cmd, "--root", p.root)
-	state, out, errors, err := os.process_exec({command = cmd[:]}, context.allocator)
-	expect(
-		p,
-		err == nil && state.exit_code == code,
-		fmt.tprintf("%s: exit %d (got %d)", name, code, state.exit_code),
-	)
-	if err != nil || state.exit_code != code {fmt.printfln("%s\n%s", out, errors)}
-	return string(out)
-}
-configure :: proc(p: ^Probe, errors: string) {
-	source(
+configure :: proc(p: ^probe.Probe, errors: string) {
+	probe.source(
 		p,
 		"odx.json5",
 		strings.concatenate(
@@ -55,24 +18,24 @@ configure :: proc(p: ^Probe, errors: string) {
 		),
 	)
 }
-check :: proc(p: ^Probe, name: string, expected: []string) {
-	output := run(
+check :: proc(p: ^probe.Probe, name: string, expected: []string) {
+	output := probe.run(
 		p,
 		name,
 		1 if len(expected) > 0 else 0,
 		{"check", "--json", "--topic", "errors"},
 	)
-	report: Report
-	expect(p, json.unmarshal_string(output, &report) == nil, "report decodes")
-	expect(p, report.coverage.complete, "compiler evidence complete")
-	expect(p, len(report.violations) == len(expected), fmt.tprintf("%s finding count", name))
+	report: probe.Report
+	probe.expect(p, json.unmarshal_string(output, &report) == nil, "report decodes")
+	probe.expect(p, report.coverage.complete, "compiler evidence complete")
+	probe.expect(p, len(report.violations) == len(expected), fmt.tprintf("%s finding count", name))
 	for symbol in expected {
 		found := false
 		for v in report.violations {
 			if v.rule == "errors/R3" &&
 			   strings.has_prefix(v.message, fmt.tprintf("%s returns ", symbol)) {found = true}
 		}
-		expect(p, found, fmt.tprintf("%s %s", name, symbol))
+		probe.expect(p, found, fmt.tprintf("%s %s", name, symbol))
 	}
 }
 MATRIX :: `package sample
@@ -114,18 +77,18 @@ test_semantics :: proc(t: ^testing.T) {
 	if err != nil {panic(fmt.tprintf("%v", err))}
 	defer os.remove_all(base)
 	bin, _ := filepath.abs("build/odx")
-	p := Probe {
+	p := probe.Probe {
 		t = t,
 		bin  = bin,
 		root = base,
 	}
-	source(&p, "sample/main.odin", MATRIX)
-	source(
+	probe.source(&p, "sample/main.odin", MATRIX)
+	probe.source(
 		&p,
 		"sample/private.odin",
 		"#+private\npackage sample\nfile_hidden :: proc() -> Error {return .Bad}\n",
 	)
-	source(
+	probe.source(
 		&p,
 		"sample/example_test.odin",
 		`package sample
@@ -150,20 +113,20 @@ error_test :: proc(_: ^testing.T) -> Error {return .Bad}
 	check(&p, "distinct name retained", {"distinct_result"})
 	configure(&p, `{structural:false,types:[]}`)
 	check(&p, "no classification", {})
-	run(&p, "write guidance", 0, {"policy", "--write", "AGENTS.md"})
+	probe.run(&p, "write guidance", 0, {"policy", "--write", "AGENTS.md"})
 	configure(&p, `{structural:true,types:[]}`)
-	run(&p, "structural change stales guidance", 1, {"policy", "--verify", "AGENTS.md"})
-	run(&p, "regenerate guidance", 0, {"policy", "--write", "AGENTS.md"})
-	run(&p, "fresh guidance", 0, {"policy", "--verify", "AGENTS.md"})
+	probe.run(&p, "structural change stales guidance", 1, {"policy", "--verify", "AGENTS.md"})
+	probe.run(&p, "regenerate guidance", 0, {"policy", "--write", "AGENTS.md"})
+	probe.run(&p, "fresh guidance", 0, {"policy", "--verify", "AGENTS.md"})
 	for invalid in ([]string{`{structural:"false"}`, `{structural:0}`, `{structural:null}`, `{types:[""]}`, `{types:["  "]}`}) {
 		configure(&p, invalid)
-		run(&p, "invalid classification rejected", 2, {"check", "--fast"})
+		probe.run(&p, "invalid classification rejected", 2, {"check", "--fast"})
 	}
 	odin := os.get_env("ODX_ODIN", context.allocator)
 	if odin == "" {odin = "odin"}
 	for body, i in ([]string{"f()", "defer f()", "_ = f()", "_, _ = g()", "x, _ := g(); _ = x", "e := f(); _ = e"}) {
 		path := fmt.tprintf("%s/compiler-%d.odin", base, i)
-		write(
+		probe.write(
 			path,
 			strings.concatenate(
 				{
@@ -184,13 +147,13 @@ main :: proc() {`,
 			context.allocator,
 		)
 		want := 1 if i < 2 else 0
-		expect(
+		probe.expect(
 			&p,
 			exec_err == nil && state.exit_code == want,
 			fmt.tprintf("compiler acknowledgement: %s", body),
 		)
 		if i <
-		   2 {expect(&p, strings.contains(string(errors), "requires that its results must be handled"), "specific result acknowledgement diagnostic")}
+		   2 {probe.expect(&p, strings.contains(string(errors), "requires that its results must be handled"), "specific result acknowledgement diagnostic")}
 		if state.exit_code != want {fmt.printfln("%s\n%s", out, errors)}
 	}
 	procedure_aliases(&p)

@@ -122,8 +122,8 @@ run_family_a :: proc(c: ^Ctx) {
 					1,
 					1,
 					strings.join(e.msgs, " ", context.temp_allocator),
+					.warning if code == 0 else .error,
 				)
-				if code == 0 {c.r.violations[len(c.r.violations) - 1].severity = .warning}
 				continue
 			}
 			if dir, _ := rel_of(c.root, filepath.dir(e.pos.file)); dir != p.rel {
@@ -136,8 +136,16 @@ run_family_a :: proc(c: ^Ctx) {
 				strings.join(e.msgs, " ", context.temp_allocator),
 			)
 			// odin sometimes reports column 0 (ols clamps too)
-			note(c.r, rule, "odin", file, max(e.pos.line, 1), max(e.pos.column, 1), msg)
-			if e.type != "error" {c.r.violations[len(c.r.violations) - 1].severity = .warning}
+			note(
+				c.r,
+				rule,
+				"odin",
+				file,
+				max(e.pos.line, 1),
+				max(e.pos.column, 1),
+				msg,
+				.error if e.type == "error" else .warning,
+			)
 		}
 		if foreign_errors > 0 {
 			note(
@@ -159,7 +167,7 @@ run_family_a :: proc(c: ^Ctx) {
 				has_error ||=
 					v.check == "odin" &&
 					v.severity == .error &&
-					(dir_of(v.file) == p.rel || v.file == p.rel || (p.rel == "" && v.file == "."))
+					violation_in_package(v, p.rel)
 			}
 			if !has_error {tool_error(c.r, "odin check %s failed without an error diagnostic (exit %d)", p.rel, code)}
 		}

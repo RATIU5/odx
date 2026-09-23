@@ -45,7 +45,7 @@ cmd_ignores :: proc(o: Opts) {
 		}
 	}
 	if len(c.r.tool_errors) > 0 {
-		code := finalize(c.r, false)
+		code := finalize(c.r, c.rb, false)
 		print_report(c.r, o.json)
 		os.exit(code)
 	}
@@ -77,7 +77,7 @@ must_load :: proc(o: Opts, need_config: bool) -> Project {
 			r := Report {
 				tool_errors = p.errs,
 			}
-			code := finalize(&r, false)
+			code := finalize(&r, nil, false)
 			print_report(&r, true)
 			os.exit(code)
 		}

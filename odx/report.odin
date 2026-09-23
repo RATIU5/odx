@@ -18,19 +18,8 @@ Violation :: struct {
 	check:         string,
 	message:       string,
 	ignorable:     bool,
-	class:         string `json:"-"`, // stable greppable name from the rule's frontmatter; "" for odin/odx findings
-	statement:     string `json:"-"`, // the rule's statement and why, so a block message is self-sufficient
-	why:           string `json:"-"`,
 	subject:       string, // rule-provided semantic label; baseline identity also binds source and position
 	baselined:     bool, // listed in odx.baseline: printed, never fails the build
-	fires:         string `json:"-"`, // the rule's compiled violating and correct forms, "" for notes
-	silent:        string `json:"-"`,
-	// the agent contract: what to write instead, and the exact suppression line, so a
-	// consumer can act on one finding without a second call; "" for notes
-	fix_hint:      string `json:"-"`,
-	instead_of:    string `json:"-"`,
-	evidence:      string `json:"-"`,
-	boundary:      string `json:"-"`,
 	ignore_syntax: string,
 }
 
@@ -59,8 +48,20 @@ Report :: struct {
 	},
 }
 
+// violation_in_package: does this violation belong to the package rooted at `rel`?
+// Violations name a file, the package directory itself, or "." for the root package.
+violation_in_package :: proc(v: Violation, rel: string) -> bool {
+	return dir_of(v.file) == rel || v.file == rel || (rel == "" && v.file == ".")
+}
+
 // note records an odin/* or odx/* finding: never ignorable, no rule class.
-note :: proc(r: ^Report, rule, check, file: string, line, col: int, message: string) {
+note :: proc(
+	r: ^Report,
+	rule, check, file: string,
+	line, col: int,
+	message: string,
+	severity := Severity.error,
+) {
 	append(
 		&r.violations,
 		Violation {
@@ -70,6 +71,7 @@ note :: proc(r: ^Report, rule, check, file: string, line, col: int, message: str
 			rule = rule,
 			check = check,
 			message = message,
+			severity = severity,
 		},
 	)
 }
@@ -89,7 +91,7 @@ sort_violations :: proc(vs: []Violation) {
 	})
 }
 
-finalize :: proc(r: ^Report, strict: bool, max_violations := 0) -> int {
+finalize :: proc(r: ^Report, rb: ^Rulebook, strict: bool, max_violations := 0) -> int {
 	r.schema = 2
 	r.rules = make(map[string]Rule_Metadata)
 	for entry in r.coverage.checks {
@@ -98,23 +100,33 @@ finalize :: proc(r: ^Report, strict: bool, max_violations := 0) -> int {
 			boundary = entry.boundary,
 		}
 	}
+	// One lookup per distinct rule: the rulebook owns this metadata, violations only name the rule.
+	compiler := r.rules["odin/check"]
+	seen := make(map[string]bool, context.temp_allocator)
 	for v in r.violations {
+		if seen[v.rule] {continue}
+		seen[v.rule] = true
 		metadata := r.rules[v.rule]
-		if v.check == "odin" {
-			compiler := r.rules["odin/check"]
-			if metadata.evidence == "" {metadata.evidence = compiler.evidence}
-			if metadata.boundary == "" {metadata.boundary = compiler.boundary}
+		rule := find_rule(rb, v.rule)
+		if rule == nil {
+			// odin/* and odx/* notes have no rule; compiler findings borrow its coverage.
+			if v.check != "" {metadata.check = v.check}
+			if v.check == "odin" {
+				if metadata.evidence == "" {metadata.evidence = compiler.evidence}
+				if metadata.boundary == "" {metadata.boundary = compiler.boundary}
+			}
+			r.rules[v.rule] = metadata
+			continue
 		}
-		if v.check != "" && (metadata.check == "" || v.statement != "") {metadata.check = v.check}
-		if v.class != "" {metadata.class = v.class}
-		if v.statement != "" {metadata.statement = v.statement}
-		if v.why != "" {metadata.why = v.why}
-		if v.fix_hint != "" {metadata.fix_hint = v.fix_hint}
-		if v.instead_of != "" {metadata.instead_of = v.instead_of}
-		if v.fires != "" {metadata.fires = v.fires}
-		if v.silent != "" {metadata.silent = v.silent}
-		if v.evidence != "" {metadata.evidence = v.evidence}
-		if v.boundary != "" {metadata.boundary = v.boundary}
+		metadata.check = fmt.aprint(rule.check.kind)
+		metadata.class = rule.class
+		metadata.statement = rule.statement
+		metadata.why = rule.why
+		metadata.fix_hint = rule_fix_hint(rule)
+		metadata.instead_of = rule.instead_of
+		metadata.fires = rule.fires
+		metadata.silent = rule.silent
+		metadata.evidence, metadata.boundary = rule_evidence(rule.check)
 		r.rules[v.rule] = metadata
 	}
 	sort_violations(r.violations[:])
@@ -182,11 +194,14 @@ report_text :: proc(r: ^Report) -> string {
 			hint,
 			BASELINED_TAG if v.baselined else "",
 		)
+		if topic == "odin" || topic == "odx" {continue} // notes carry no rule metadata
 		if v.rule in seen {continue}
 		seen[v.rule] = true
-		if v.fix_hint != "" {fmt.sbprintfln(&b, "  repair: %s", v.fix_hint)}
-		if v.why != "" {fmt.sbprintfln(&b, "  why: %s", v.why)}
-		if v.boundary != "" {fmt.sbprintfln(&b, "  evidence: %s; %s", v.evidence, v.boundary)}
+		metadata := r.rules[v.rule]
+		if metadata.fix_hint != "" {fmt.sbprintfln(&b, "  repair: %s", metadata.fix_hint)}
+		if metadata.why != "" {fmt.sbprintfln(&b, "  why: %s", metadata.why)}
+		if metadata.boundary !=
+		   "" {fmt.sbprintfln(&b, "  evidence: %s; %s", metadata.evidence, metadata.boundary)}
 	}
 	if r.summary.omitted >
 	   0 {fmt.sbprintfln(&b, "... %d more violations omitted (--max-violations)", r.summary.omitted)}

@@ -76,40 +76,8 @@ init_coverage :: proc(c: ^Ctx, o: Analysis_Options) {
 }
 
 rule_evidence :: proc(spec: Check_Spec) -> (source, boundary: string) {
-	switch spec.kind {
-	case .path_role:
-		return "configuration", "selected package directories and configured role globs"
-	case .vet_tag:
-		return "native_tokens", "file tag presence only; no allocator behavior or lifetime proof"
-	case .banned_import:
-		return "source_import_graph",
-			"recursive ordinary source imports with direct test allow exceptions; dependency *_test.odin edges omitted; unconfigured core/base/vendor collections are opaque leaves; required missing/excluded/unknown/outside project evidence is unavailable; no foreign or runtime effect guarantee"
-	case .require_attribute:
-		return "compiler_entities",
-			"compiler-selected exported procedure declarations, excluding @(test); canonical named final-result suffixes and optional structural classification from errors configuration; attribute presence only, no error-intent or caller-handling proof"
-	case .pattern:
-		if spec.match == "call" {
-			return "native_ast",
-				"recursive syntactic calls in all branches; file import aliases normalized without lexical name resolution; indirect calls not resolved"
-		}
-		if spec.match == "if" {
-			return "native_ast", "braced if then-body without else containing exactly one return, call statement, or assignment; includes nested and inactive bodies; excludes declarations, defer and nested control statements; counts syntax, not runtime effects"
-		}
-		if spec.match == "proc" {
-			return "native_ast",
-				"package-scope procedure literals through all when branches and foreign blocks; procedure bodies excluded; exported excludes only declarations with their own @(private) attribute, not inherited privacy; parameter types matched by written suffix, not resolved identity"
-		}
-		return "native_ast", fmt.tprintf(
-			"package-scope %s declarations through all when branches and foreign blocks; one finding per matching declaration; procedure bodies excluded; syntax only, no resolved identity or runtime effect proof",
-			spec.match,
-		)
-	}
-	return
-}
-
-coverage_applies :: proc(c: ^Ctx, p: ^Package, spec: Check_Spec) -> bool {
-	spec := spec
-	return check_applies(c.cfg, &spec, p.role)
+	shape, _ := check_shape(spec)
+	return shape.evidence, shape.boundary
 }
 
 add_coverage :: proc(
@@ -128,7 +96,7 @@ add_coverage :: proc(
 	}
 	for v in c.r.violations {
 		if (v.rule == rule || (rule == "odin/check" && v.check == "odin")) &&
-		   (dir_of(v.file) == p.rel || v.file == p.rel || (p.rel == "" && v.file == ".")) {
+		   violation_in_package(v, p.rel) {
 			entry.findings += 1
 		}
 	}
@@ -186,7 +154,7 @@ collect_coverage :: proc(c: ^Ctx, o: Analysis_Options) {
 			evidence, boundary := rule_evidence(spec)
 			result := native
 			switch {
-			case !coverage_applies(c, &p, spec):
+			case !check_applies(c.cfg, spec, p.role):
 				result = {.not_applicable, "excluded by rule roles or check configuration"}
 			case is_family_c(spec.kind):
 				result = p.doc_result

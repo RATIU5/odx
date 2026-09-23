@@ -5,31 +5,135 @@ import "core:math"
 import "core:slice"
 import "core:strings"
 
+// One row per (kind, match) combination: the legal selector keys beyond the common three, plus
+// the evidence source and boundary prose reported for it. check_fields, rule_evidence,
+// PATTERN_MATCHES and CHECK_KEYS all derive from this table; validate_check keeps only the
+// per-kind predicates.
+Check_Shape :: struct {
+	kind:     Check_Kind,
+	match:    string, // "" for non-pattern kinds
+	fields:   []string, // selector keys after kind/roles/except_roles, in serialization order
+	evidence: string,
+	boundary: string,
+}
+
+// Pattern rows are listed in the order PATTERN_MATCHES reports them in validation errors.
+CHECK_SHAPES := [?]Check_Shape {
+	{
+		kind = .path_role,
+		evidence = "configuration",
+		boundary = "selected package directories and configured role globs",
+	},
+	{
+		kind = .banned_import,
+		fields = {"from"},
+		evidence = "source_import_graph",
+		boundary = "recursive ordinary source imports with direct test allow exceptions; dependency *_test.odin edges omitted; unconfigured core/base/vendor collections are opaque leaves; required missing/excluded/unknown/outside project evidence is unavailable; no foreign or runtime effect guarantee",
+	},
+	{
+		kind = .vet_tag,
+		evidence = "native_tokens",
+		boundary = "file tag presence only; no allocator behavior or lifetime proof",
+	},
+	{
+		kind = .require_attribute,
+		fields = {"attribute", "on"},
+		evidence = "compiler_entities",
+		boundary = "compiler-selected exported procedure declarations, excluding @(test); canonical named final-result suffixes and optional structural classification from errors configuration; attribute presence only, no error-intent or caller-handling proof",
+	},
+	// names: syntactic `pkg.name` or bare `name`; aliases are best effort
+	{
+		kind = .pattern,
+		match = "call",
+		fields = {"match", "name", "names"},
+		evidence = "native_ast",
+		boundary = "recursive syntactic calls in all branches; file import aliases normalized without lexical name resolution; indirect calls not resolved",
+	},
+	// name: an import glob (`core:fmt`, `core:sys/*`)
+	{
+		kind = .pattern,
+		match = "import",
+		fields = {"match", "name"},
+		evidence = "native_ast",
+		boundary = "package-scope import declarations through all when branches and foreign blocks; one finding per matching declaration; procedure bodies excluded; syntax only, no resolved identity or runtime effect proof",
+	},
+	// exported / requires_param: package-level procedures
+	{
+		kind = .pattern,
+		match = "proc",
+		fields = {"match", "exported", "requires_param"},
+		evidence = "native_ast",
+		boundary = "package-scope procedure literals through all when branches and foreign blocks; procedure bodies excluded; exported excludes only declarations with their own @(private) attribute, not inherited privacy; parameter types matched by written suffix, not resolved identity",
+	},
+	// at: package_scope, mutable: package-level value declarations
+	{
+		kind = .pattern,
+		match = "decl",
+		fields = {"match", "at", "mutable"},
+		evidence = "native_ast",
+		boundary = "package-scope decl declarations through all when branches and foreign blocks; one finding per matching declaration; procedure bodies excluded; syntax only, no resolved identity or runtime effect proof",
+	},
+	// foreign import and foreign block declarations
+	{
+		kind = .pattern,
+		match = "foreign",
+		fields = {"match"},
+		evidence = "native_ast",
+		boundary = "package-scope foreign declarations through all when branches and foreign blocks; one finding per matching declaration; procedure bodies excluded; syntax only, no resolved identity or runtime effect proof",
+	},
+	// braced then-body with one return, call, or assignment and no else
+	{
+		kind = .pattern,
+		match = "if",
+		fields = {"match"},
+		evidence = "native_ast",
+		boundary = "braced if then-body without else containing exactly one return, call statement, or assignment; includes nested and inactive bodies; excludes declarations, defer and nested control statements; counts syntax, not runtime effects",
+	},
+}
+
+check_shape :: proc(c: Check_Spec) -> (shape: Check_Shape, ok: bool) {
+	match := c.match if c.kind == .pattern else ""
+	for row in CHECK_SHAPES {
+		if row.kind == c.kind && row.match == match {return row, true}
+	}
+	return {}, false
+}
+
 // Validation and policy exports share the same selector shape.
 check_fields :: proc(c: Check_Spec) -> []string {
 	fields := make([dynamic]string, context.temp_allocator)
 	append(&fields, "kind", "roles", "except_roles")
-	switch c.kind {
-	case .path_role, .vet_tag:
-	case .banned_import:
-		append(&fields, "from")
-	case .require_attribute:
-		append(&fields, "attribute", "on")
-	case .pattern:
+	if shape, ok := check_shape(c); ok {
+		append(&fields, ..shape.fields)
+	} else if c.kind == .pattern {
+		// An unrecognized match still allows the key that names it; validate_check reports it.
 		append(&fields, "match")
-		switch c.match {
-		case "call":
-			append(&fields, "name", "names")
-		case "import":
-			append(&fields, "name")
-		case "proc":
-			append(&fields, "exported", "requires_param")
-		case "decl":
-			append(&fields, "at", "mutable")
-		case "foreign", "if":
-		}
 	}
 	return fields[:]
+}
+
+@(private = "file")
+pattern_buf: [len(CHECK_SHAPES)]string
+@(private = "file")
+key_buf: [3 + len(CHECK_SHAPES) * 3]string
+
+@(init)
+derive_check_tables :: proc "contextless" () {
+	nm, nk := 0, 3
+	key_buf[0], key_buf[1], key_buf[2] = "kind", "roles", "except_roles"
+	for row in CHECK_SHAPES {
+		if row.kind == .pattern {
+			pattern_buf[nm] = row.match
+			nm += 1
+		}
+		field_loop: for f in row.fields {
+			for k in key_buf[:nk] {if k == f {continue field_loop}}
+			key_buf[nk] = f
+			nk += 1
+		}
+	}
+	PATTERN_MATCHES = pattern_buf[:nm]
+	CHECK_KEYS = key_buf[:nk]
 }
 
 validate_check :: proc(c: ^Check_Spec, spec: json.Object, at: string, errs: ^[dynamic]string) {

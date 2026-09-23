@@ -7,50 +7,20 @@ import "core:path/filepath"
 import "core:strings"
 import "core:testing"
 
-Probe :: struct {
-	bin, odin, root: string,
-	t: ^testing.T,
-}
+import "../../probe"
 
-Report :: struct {
-	rules: map[string]struct {boundary, fix_hint: string},
-	coverage:   struct {
-		complete: bool,
-	},
-	violations: []struct {
-		rule, message: string,
-	},
-}
-
-write :: proc(path, contents: string) {
-	err := os.make_directory_all(filepath.dir(path))
-	if err != nil && err != os.General_Error.Exist {panic(fmt.tprintf("%v", err))}
-	if err = os.write_entire_file(path, contents); err != nil {panic(fmt.tprintf("%v", err))}
-}
-
-expect :: proc(p: ^Probe, ok: bool, name: string) {
-	testing.expect(p.t, ok, name)
-}
-
-run :: proc(p: ^Probe, name: string, code: int, cmd: []string) -> string {
-	state, out, errors, err := os.process_exec({command = cmd}, context.allocator)
-	expect(p, err == nil && state.exit_code == code, name)
-	if err != nil || state.exit_code != code {fmt.printfln("%s\n%s", out, errors)}
-	return strings.concatenate({string(out), string(errors)})
-}
-
-compiler_case :: proc(p: ^Probe, name, body: string, tagged, accepted: bool) {
+compiler_case :: proc(p: ^probe.Probe, name, body: string, tagged, accepted: bool) {
 	path := fmt.tprintf("%s/compiler/%s.odin", p.root, name)
 	tag := "#+vet explicit-allocators\n" if tagged else ""
-	write(path, strings.concatenate({tag, "package probe\n", body, "\n"}))
-	out := run(
+	probe.write(path, strings.concatenate({tag, "package probe\n", body, "\n"}))
+	out := probe.exec(
 		p,
 		name,
 		0 if accepted else 1,
 		{p.odin, "check", path, "-file", "-no-entry-point", "-vet"},
 	)
 	if !accepted {
-		expect(
+		probe.expect(
 			p,
 			strings.contains(out, "must be explicitly provided"),
 			fmt.tprintf("%s fails for missing allocator", name),
@@ -58,33 +28,33 @@ compiler_case :: proc(p: ^Probe, name, body: string, tagged, accepted: bool) {
 	}
 }
 
-policy_case :: proc(p: ^Probe, name, body: string, findings: int) {
-	write(fmt.tprintf("%s/pure/main.odin", p.root), body)
-	out := run(p, name, 1 if findings > 0 else 0, {p.bin, "check", "--root", p.root, "--json"})
-	r: Report
-	expect(p, json.unmarshal_string(out, &r) == nil, fmt.tprintf("%s JSON", name))
-	expect(p, r.coverage.complete, fmt.tprintf("%s complete evidence", name))
+policy_case :: proc(p: ^probe.Probe, name, body: string, findings: int) {
+	probe.write(fmt.tprintf("%s/pure/main.odin", p.root), body)
+	out := probe.exec(p, name, 1 if findings > 0 else 0, {p.bin, "check", "--root", p.root, "--json"})
+	r: probe.Report
+	probe.expect(p, json.unmarshal_string(out, &r) == nil, fmt.tprintf("%s JSON", name))
+	probe.expect(p, r.coverage.complete, fmt.tprintf("%s complete evidence", name))
 	count := 0
 	for v in r.violations {
 		if v.rule != "allocators/R1" {continue}
 		count += 1
-		expect(
+		probe.expect(
 			p,
 			strings.contains(v.message, "before the package declaration"),
 			fmt.tprintf("%s directive position", name),
 		)
-		expect(
+		probe.expect(
 			p,
 			strings.contains(r.rules[v.rule].boundary, "no allocator behavior or lifetime proof"),
 			fmt.tprintf("%s limited guarantee", name),
 		)
-		expect(
+		probe.expect(
 			p,
 			strings.contains(r.rules[v.rule].fix_hint, "allocator arguments required by the compiler"),
 			fmt.tprintf("%s compiler repair guidance", name),
 		)
 	}
-	expect(p, count == findings, fmt.tprintf("%s allocator findings", name))
+	probe.expect(p, count == findings, fmt.tprintf("%s allocator findings", name))
 }
 
 @(test)
@@ -98,7 +68,7 @@ test_allocators :: proc(t: ^testing.T) {
 	if override := os.get_env("ODX_BIN", context.allocator); override != "" {bin = override}
 	odin := os.get_env("ODX_ODIN", context.allocator)
 	if odin == "" {odin = "odin"}
-	p := Probe {
+	p := probe.Probe {
 		t = t,
 		bin  = bin,
 		odin = odin,
@@ -169,7 +139,7 @@ test_allocators :: proc(t: ^testing.T) {
 		true,
 	)
 
-	write(
+	probe.write(
 		fmt.tprintf("%s/odx.json5", root),
 		`{version:1,roles:{pure:["pure"]},exclude:["compiler/**"],odin:{flags:[]}}`,
 	)
@@ -203,7 +173,7 @@ test_allocators :: proc(t: ^testing.T) {
 		"// #+vet explicit-allocators\npackage pure\nf :: proc() {}\n",
 		1,
 	)
-	write(
+	probe.write(
 		fmt.tprintf("%s/odx.json5", root),
 		`{version:1,roles:{pure:["pure"]},exclude:["compiler/**"],odin:{flags:[],explicit_allocators:"off"}}`,
 	)

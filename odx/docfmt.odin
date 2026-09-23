@@ -19,7 +19,7 @@ run_family_c :: proc(c: ^Ctx) {
 	for &a in c.rules {
 		if !is_family_c(a.rule.check.kind) {continue}
 		for p in c.pkgs {
-			if check_applies(c.cfg, &a.rule.check, p.role) {append(&rules, &a); break}
+			if check_applies(c.cfg, a.rule.check, p.role) {append(&rules, &a); break}
 		}
 	}
 	if len(rules) == 0 {return}
@@ -37,7 +37,7 @@ run_family_c :: proc(c: ^Ctx) {
 
 	for &p, i in c.pkgs {
 		applicable := make([dynamic]^Active_Rule, context.temp_allocator)
-		for a in rules {if check_applies(c.cfg, &a.rule.check, p.role) {append(&applicable, a)}}
+		for a in rules {if check_applies(c.cfg, a.rule.check, p.role) {append(&applicable, a)}}
 		if len(applicable) == 0 {continue}
 		h, status := doc_package(c, &p, tmp, i, flags)
 		switch status {
@@ -157,7 +157,7 @@ check_entities :: proc(c: ^Ctx, p: ^Package, h: ^doc.Header, rules: []^Active_Ru
 				c.cfg.errors.structural,
 			)
 			for a in rules {
-				if !check_applies(c.cfg, &a.rule.check, p.role) {continue}
+				if !check_applies(c.cfg, a.rule.check, p.role) {continue}
 				if a.rule.check.attribute in attrs || !is_err {continue}
 				fname := doc.from_string(h, files[e.pos.file].name)
 				file, _ := rel_of(c.root, join({p.dir, filepath.base(fname)}))

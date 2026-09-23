@@ -23,7 +23,19 @@ Ctx :: struct {
 	native_ran:       bool,
 }
 
-make_ctx :: proc(p: ^Project, paths: []string, only_topics: []string = nil) -> Ctx {
+// What the caller asked to report on. `.paths` honors the path list (an empty match is a
+// caller error); `.nothing` means there is nothing to check at all, which is not an error.
+Selection :: enum {
+	paths,
+	nothing,
+}
+
+make_ctx :: proc(
+	p: ^Project,
+	paths: []string,
+	only_topics: []string = nil,
+	selection: Selection = .paths,
+) -> Ctx {
 	c := Ctx {
 		root  = p.root,
 		cfg   = &p.cfg,
@@ -34,6 +46,7 @@ make_ctx :: proc(p: ^Project, paths: []string, only_topics: []string = nil) -> C
 		paths = paths,
 	}
 	rels := p.dirs
+	if selection == .nothing {rels = nil}
 	if len(paths) > 0 {
 		rels = select_packages(p.root, rels, paths, &c.r.tool_errors)
 		if len(c.r.tool_errors) > 0 {return c}
@@ -47,7 +60,7 @@ make_ctx :: proc(p: ^Project, paths: []string, only_topics: []string = nil) -> C
 		if a.rule.check.kind != .banned_import {continue}
 		for rel in rels {
 			role, _ := role_of(&p.cfg, rel)
-			if check_applies(&p.cfg, &a.rule.check, role) {needs_graph = true; break}
+			if check_applies(&p.cfg, a.rule.check, role) {needs_graph = true; break}
 		}
 		if needs_graph {break}
 	}
@@ -95,7 +108,6 @@ report :: proc(
 	msg: string,
 	subject := "",
 ) {
-	evidence, boundary := rule_evidence(a.rule.check)
 	append(
 		&c.r.violations,
 		Violation {
@@ -107,17 +119,7 @@ report :: proc(
 			check = fmt.aprint(a.rule.check.kind),
 			message = msg,
 			ignorable = a.rule.ignorable,
-			class = a.rule.class,
-			statement = a.rule.statement,
-			why = a.rule.why,
 			subject = subject,
-
-			fires = a.rule.fires,
-			silent = a.rule.silent,
-			fix_hint = rule_fix_hint(a.rule),
-			instead_of = a.rule.instead_of,
-			evidence = evidence,
-			boundary = boundary,
 			ignore_syntax = ignore_syntax_of(file, a.id) if a.rule.ignorable else "",
 		},
 	)
@@ -148,12 +150,12 @@ run_family_b :: proc(c: ^Ctx) {
 		for &a in c.rules {
 			if a.rule.check.kind == .pattern &&
 			   a.rule.check.match == "call" &&
-			   check_applies(c.cfg, &a.rule.check, p.role) {append(&calls, &a)}
+			   check_applies(c.cfg, a.rule.check, p.role) {append(&calls, &a)}
 		}
 		if len(calls) > 0 {check_calls(c, &p, calls[:])}
 		for &a in c.rules {
 			spec := &a.rule.check
-			if !check_applies(c.cfg, spec, p.role) {continue}
+			if !check_applies(c.cfg, spec^, p.role) {continue}
 			switch spec.kind {
 			case .path_role:
 				if p.role_count == 0 {
@@ -199,8 +201,10 @@ check_vet_disables :: proc(c: ^Ctx, f: ^ast.File) {
 	has_reason :: proc(f: ^ast.File, line: int) -> bool {
 		for g in f.comments {
 			for ct in g.list {
-				if ct.pos.line == line && strings.has_prefix(ct.text, "// reason:") &&
-				   strings.trim_space(strings.trim_prefix(ct.text, "// reason:")) != "" {return true}
+				if ct.pos.line == line &&
+				   strings.has_prefix(ct.text, "// reason:") &&
+				   strings.trim_space(strings.trim_prefix(ct.text, "// reason:")) !=
+					   "" {return true}
 			}
 		}
 		return false

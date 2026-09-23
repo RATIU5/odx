@@ -6,6 +6,7 @@ import "core:encoding/json"
 import "core:fmt"
 import "core:os"
 import "core:path/filepath"
+import "core:reflect"
 import "core:slice"
 import "core:strings"
 
@@ -73,53 +74,47 @@ read_baseline :: proc(root: string) -> (out: []Baseline_Entry, exists: bool, err
 	   2 {return nil, true, "unsupported odx.baseline format_version; version 2 is required"}
 	values, is_array := obj["entries"].(json.Array)
 	if !is_array {return nil, true, "invalid odx.baseline entries: expected an array"}
+	keys := reflect.struct_field_names(Baseline_Entry)
 	for entry_value, i in values {
 		fields, valid := entry_value.(json.Object)
 		if !valid ||
 		   len(fields) !=
-			   7 {return nil, true, fmt.tprintf("invalid odx.baseline entry %d: expected seven identity/reason fields", i + 1)}
-		for key in fields {
-			if key != "rule" &&
-			   key != "file" &&
-			   key != "subject" &&
-			   key != "fingerprint" &&
-			   key != "line" &&
-			   key != "col" &&
-			   key != "reason" {
-				return nil, true, fmt.tprintf("invalid odx.baseline entry field %q", key)
-			}
+			   len(keys) {return nil, true, fmt.tprintf("invalid odx.baseline entry %d: expected seven identity/reason fields", i + 1)}
+		unknown := make([dynamic]string, context.temp_allocator)
+		check_keys(&unknown, "invalid odx.baseline entry", "field ", fields, keys)
+		if len(unknown) > 0 {return nil, true, unknown[0]}
+		// unmarshal silently zeroes a mistyped field, so establish JSON types here.
+		for key in keys {
+			if key == "line" || key == "col" {
+				if _, number := fields[key].(f64);
+				   !number {return nil, true, "invalid odx.baseline position: expected integers"}
+			} else if _, is_string := fields[key].(string);
+			   !is_string {return nil, true, fmt.tprintf("invalid odx.baseline %s: expected string", key)}
 		}
-		for key in ([]string{"rule", "file", "subject", "fingerprint", "reason"}) {
-			if _, valid_string := fields[key].(string);
-			   !valid_string {return nil, true, fmt.tprintf("invalid odx.baseline %s: expected string", key)}
-		}
-		e := document.entries[i]
-		line, line_number := fields["line"].(f64)
-		col, col_number := fields["col"].(f64)
-		if !line_number ||
-		   !col_number ||
-		   line != f64(e.line) ||
-		   col != f64(e.col) {return nil, true, "invalid odx.baseline position: expected integers"}
-		cleaned, _ := filepath.clean(e.file)
-		if e.rule == "" ||
-		   e.subject == "" ||
-		   !strings.has_suffix(e.file, ".odin") ||
-		   filepath.is_abs(e.file) ||
-		   cleaned != e.file ||
-		   strings.has_prefix(e.file, "../") ||
-		   strings.contains(e.file, "\\") ||
-		   e.line <= 0 ||
-		   e.col <= 0 ||
-		   len(e.fingerprint) != 64 {
-			return nil, true, fmt.tprintf("invalid odx.baseline identity at entry %d", i + 1)
-		}
-		for ch in e.fingerprint {
-			if !(ch >= '0' && ch <= '9' ||
-				   ch >= 'a' &&
-					   ch <= 'f') {return nil, true, "invalid odx.baseline SHA256 fingerprint"}
+		if message := validate_entry(document.entries[i], i); message != "" {
+			return nil, true, message
 		}
 	}
 	return document.entries, true, ""
+}
+
+validate_entry :: proc(e: Baseline_Entry, i: int) -> string {
+	cleaned, _ := filepath.clean(e.file)
+	if e.rule == "" ||
+	   e.subject == "" ||
+	   !strings.has_suffix(e.file, ".odin") ||
+	   filepath.is_abs(e.file) ||
+	   cleaned != e.file ||
+	   strings.has_prefix(e.file, "../") ||
+	   strings.contains(e.file, "\\") ||
+	   e.line <= 0 ||
+	   e.col <= 0 ||
+	   len(e.fingerprint) != 64 {
+		return fmt.tprintf("invalid odx.baseline identity at entry %d", i + 1)
+	}
+	if strings.trim_left(e.fingerprint, "0123456789abcdef") !=
+	   "" {return "invalid odx.baseline SHA256 fingerprint"}
+	return ""
 }
 
 write_baseline :: proc(root: string, es: []Baseline_Entry) -> string {

@@ -117,6 +117,6 @@ test_selector_contract_preserves_defaults_and_public_matchers :: proc(t: ^testin
 		   c.exported == false &&
 		   !strings.contains(source, "999") {testing.expect_value(t, c.requires_param.index, 0)}
 		if c.match == "foreign" &&
-		   len(c.except_roles) > 0 {testing.expect(t, !role_applies(&c, ""))}
+		   len(c.except_roles) > 0 {testing.expect(t, !role_applies(c, ""))}
 	}
 }

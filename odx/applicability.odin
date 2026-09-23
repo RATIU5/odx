@@ -4,7 +4,7 @@ import "core:fmt"
 import "core:slice"
 import "core:strings"
 
-check_applies :: proc(cfg: ^Config, spec: ^Check_Spec, role: string) -> bool {
+check_applies :: proc(cfg: ^Config, spec: Check_Spec, role: string) -> bool {
 	if !role_applies(spec, role) {return false}
 	#partial switch spec.kind {
 	case .vet_tag:
@@ -81,7 +81,7 @@ applicable_topics :: proc(p: ^Project, rels: []string, catalog := false) -> []To
 			applies := catalog
 			for rel in rels {
 				role, _ := role_of(&p.cfg, rel)
-				applies ||= check_applies(&p.cfg, &r.check, role)
+				applies ||= check_applies(&p.cfg, r.check, role)
 			}
 			if applies {append(&rules, describe_rule(&p.cfg, t.name, r))}
 		}

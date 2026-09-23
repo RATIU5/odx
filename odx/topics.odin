@@ -66,14 +66,8 @@ Check_Kind :: enum {
 }
 
 // ponytail: strings, because `import` and `proc` are keywords and cannot name enum variants.
-PATTERN_MATCHES := []string {
-	"call", // names: syntactic `pkg.name` or bare `name`; aliases are best effort
-	"import", // name: an import glob (`core:fmt`, `core:sys/*`)
-	"proc", // exported / requires_param: package-level procedures
-	"decl", // at: package_scope, mutable: package-level value declarations
-	"foreign", // foreign import and foreign block declarations
-	"if", // braced then-body with one return, call, or assignment and no else
-}
+// Derived from the pattern rows of CHECK_SHAPES, in table order.
+PATTERN_MATCHES: []string
 
 Param_Req :: struct {
 	index:       int,
@@ -124,21 +118,8 @@ RULE_KEYS := []string {
 	"retired",
 	"check",
 }
-CHECK_KEYS := []string {
-	"kind",
-	"attribute",
-	"on",
-	"from",
-	"names",
-	"roles",
-	"except_roles",
-	"match",
-	"name",
-	"exported",
-	"requires_param",
-	"at",
-	"mutable",
-}
+// The union of every row of CHECK_SHAPES; gates unknown-key detection before kind is known.
+CHECK_KEYS: []string
 
 Rulebook :: struct {
 	topics: [dynamic]Topic, // sorted by name
@@ -332,6 +313,7 @@ rule_fix_hint :: proc(r: ^Rule) -> string {
 }
 
 find_topic :: proc(rb: ^Rulebook, name: string) -> ^Topic {
+	if rb == nil {return nil}
 	for &t in rb.topics {
 		if t.name == name {return &t}
 	}
@@ -366,7 +348,7 @@ active_rules :: proc(p: ^Project, only_topics: []string) -> []Active_Rule {
 	return out[:]
 }
 
-role_applies :: proc(spec: ^Check_Spec, role: string) -> bool {
+role_applies :: proc(spec: Check_Spec, role: string) -> bool {
 	if len(spec.roles) > 0 && !slice.contains(spec.roles, role) {return false}
 	if len(spec.except_roles) > 0 && slice.contains(spec.except_roles, role) {return false}
 	return true

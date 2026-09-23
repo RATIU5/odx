@@ -6,6 +6,8 @@ import "core:os"
 import "core:path/filepath"
 import "core:testing"
 
+import "../../probe"
+
 @(test)
 test_cli_errors_are_structured_and_removed_commands_stay_removed :: proc(t: ^testing.T) {
 	context.allocator = context.temp_allocator
@@ -59,10 +61,7 @@ test_cli_errors_are_structured_and_removed_commands_stay_removed :: proc(t: ^tes
 		state, out, errors, run_err := os.process_exec({command = cmd[:]}, context.allocator)
 		name := fmt.tprintf("%v: %s %s", args, out, errors)
 		testing.expect(t, run_err == nil && state.exit_code == 2, name)
-		response: struct {
-			schema:      int,
-			tool_errors: []string,
-		}
+		response: probe.Report
 		parse_err := json.unmarshal(out, &response)
 		testing.expect(
 			t,
@@ -80,10 +79,7 @@ test_cli_errors_are_structured_and_removed_commands_stay_removed :: proc(t: ^tes
 			{command = {bin, "check", "--root", root, "--json"}},
 			context.allocator,
 		)
-		response: struct {
-			schema:      int,
-			tool_errors: []string,
-		}
+		response: probe.Report
 		parse_err := json.unmarshal(out, &response)
 		testing.expect(t, run_err == nil && state.exit_code == 2 && len(errors) == 0)
 		testing.expect(
@@ -114,10 +110,7 @@ test_cli_errors_are_structured_and_removed_commands_stay_removed :: proc(t: ^tes
 			"ignore inventory must fail when source cannot be parsed",
 		)
 		if machine {
-			response: struct {
-				schema:      int,
-				tool_errors: []string,
-			}
+			response: probe.Report
 			parse_err := json.unmarshal(out, &response)
 			testing.expect(
 				t,

@@ -19,9 +19,10 @@ analyze :: proc(o: Analysis_Options) -> (r: ^Report, code: int) {
 	}
 	if len(p.errs) > 0 {
 		r.tool_errors = p.errs
-		return r, finalize(r, o.strict, o.max_violations)
+		return r, finalize(r, &p.rb, o.strict, o.max_violations)
 	}
 	paths := o.paths
+	selection := Selection.paths
 	selection_reason := ""
 	if o.since != "" {
 		changed, ok := changed_check_inputs(p.root, o.since)
@@ -31,32 +32,24 @@ analyze :: proc(o: Analysis_Options) -> (r: ^Report, code: int) {
 				"--since could not read changes; check the git worktree and reference %q",
 				o.since,
 			)
-			return r, finalize(r, o.strict, o.max_violations)
-		}
-		if len(changed) == 0 {
-			c := Ctx {
-				root             = p.root,
-				cfg              = &p.cfg,
-				rb               = &p.rb,
-				r                = r,
-				selection_reason = "no changed project source or policy inputs; no packages checked",
-			}
-			init_coverage(&c, o)
-			apply_baseline(&c, false)
-			refresh_coverage(r)
-			return r, finalize(r, o.strict, o.max_violations)
+			return r, finalize(r, &p.rb, o.strict, o.max_violations)
 		}
 		paths = nil
-		selection_reason = "changed source or policy inputs trigger full current-project reporting, including unchanged dependents"
+		if len(changed) == 0 {
+			selection = .nothing
+			selection_reason = "no changed project source or policy inputs; no packages checked"
+		} else {
+			selection_reason = "changed source or policy inputs trigger full current-project reporting, including unchanged dependents"
+		}
 	}
-	c := make_ctx(&p, paths, o.topics)
+	c := make_ctx(&p, paths, o.topics, selection)
 	if selection_reason != "" {c.selection_reason = selection_reason}
 	code = run_checks(&c, o)
 	return c.r, code
 }
 
 run_checks :: proc(c: ^Ctx, o: Analysis_Options, use_baseline := true) -> int {
-	if len(c.r.tool_errors) > 0 {return finalize(c.r, o.strict, o.max_violations)}
+	if len(c.r.tool_errors) > 0 {return finalize(c.r, c.rb, o.strict, o.max_violations)}
 	full := !o.fast && len(o.topics) == 0 && len(o.paths) == 0 && o.since == ""
 	init_coverage(c, o)
 	run_family_b(c)
@@ -74,7 +67,7 @@ run_checks :: proc(c: ^Ctx, o: Analysis_Options, use_baseline := true) -> int {
 	if full && source_complete {report_stale_config(c)}
 	if use_baseline {apply_baseline(c, full && c.r.coverage.complete)}
 	refresh_coverage(c.r)
-	return finalize(c.r, o.strict, o.max_violations)
+	return finalize(c.r, c.rb, o.strict, o.max_violations)
 }
 
 project_ignores :: proc(c: ^Ctx) -> []Ignore {

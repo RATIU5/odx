@@ -39,7 +39,7 @@ fail :: proc(f: string, args: ..any) -> ! {
 	if machine_output {
 		r: Report
 		tool_error(&r, "%s", message)
-		finalize(&r, false)
+		finalize(&r, nil, false)
 		print_report(&r, true)
 	} else {
 		fmt.eprintfln("odx: %s", message)
