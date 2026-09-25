@@ -9,7 +9,7 @@ The frame every later part plugs into: the CLI, reading odx.json, the finding mo
 ## Done when
 
 - `odx check` finds `odx.json` in the current directory, validates it, and exits 0 with an empty report.
-- A missing, unreadable or invalid odx.json exits 2. When it's missing, odx also prints a minimal example.
+- A missing, unreadable or invalid odx.json exits 2. When it's missing, odx also prints a minimal example. Every key is optional, so the example is `{}`.
 - Findings print one per line, sorted and deduplicated; `--json` prints the same report as JSON. Unit tests cover this with synthetic findings, since no rule emits any yet.
 - Exit codes are 0, 1 or 2, and 2 wins over 1: a run that finds problems and also couldn't check something exits 2 and still prints its findings.
 - `mise run test` runs the golden cases listed below.
@@ -40,7 +40,7 @@ These are the user-facing contract that every later part inherits, so they are s
 
 - Packages are directories relative to the root, using `/`. Paths are unambiguous even when two packages share a name, which Part 2 has to report.
 - `exclude` holds directory prefixes, not globs.
-- Every key is optional; `compiler_flags` defaults to SCOPE's list when it's absent.
+- Every key is optional. `compiler_flags` defaults to SCOPE's list when it's absent; `[]` means no flags.
 - Part 1 checks only that the file is JSON, that every key is known and appears once, and that the value types are right. Whether the paths exist and each package has exactly one role is Part 2's job; the format of `error_types` is Part 7's.
 
 ### Report
@@ -50,7 +50,8 @@ These are the user-facing contract that every later part inherits, so they are s
 - stderr carries everything else: the reasons for an exit 2, each as `odx: <what happened>`, then a summary line: `findings: N  ignores: M`. Ignores stay 0 until Part 4.
 - Messages state facts only, with no fixes or hints. This applies to exit-2 reasons too.
 - The summary line prints whenever `check` ran in text mode, including when odx.json couldn't be read. Usage errors print usage only.
-- odx.json must be a single JSON object. A missing file is `not found`; unparseable input is `not valid JSON`, with no position; a repeated key is `repeated key`, with no name.
+- odx.json must be a single JSON object, with nothing after it. A missing file is `not found; minimal odx.json: {}`. Unparseable input or trailing text is `not valid JSON`, with no position. A top-level value that isn't an object is `not a JSON object`. A repeated top-level key is `repeated key "<key>"`.
+- An unknown key exits 2 rather than being skipped with a notice. SCOPE has no warnings, and skipping a mistyped key such as `exlcude` would leave the config only partly applied, so the run couldn't claim to be fully checked.
 - `--json` writes one object to stdout and nothing to stderr, with the same sort and the same exit code:
   `{"findings": [{"file", "line", "rule", "message"}], "errors": ["..."], "ignores": 0}`. A finding with no line has `"line": 0`.
 
@@ -88,7 +89,9 @@ Reserved now, since they appear in the output and in `odx:ignore`:
   - `p01-config-missing`: exit 2, with the example printed.
   - `p01-config-invalid-json`: truncated JSON, exit 2.
   - `p01-config-unknown-key`: exit 2.
-  - `p01-config-duplicate-key`: `"pure"` twice, exit 2.
+  - `p01-config-duplicate-key`: `"pure"` twice, exit 2, naming the key.
+  - `p01-config-not-object`: `[]`, exit 2.
+  - `p01-config-trailing-text`: `{} {}`, exit 2.
   - `p01-config-wrong-type`: `"pure": "a"`, exit 2.
   - `p01-clean`: a valid config and no packages, exit 0.
   - `p01-clean-json`: the same with `--json`, exit 0.
@@ -97,10 +100,12 @@ Reserved now, since they appear in the output and in `odx:ignore`:
 ## Facts for this part (verified 2026-09-24, dev-2026-09, scratch program)
 
 - `json.unmarshal_string(s, &cfg, .JSON)` silently ignores unknown keys. Catching typos means reading into `json.Value` and checking the keys.
-- Even with `.JSON`, a trailing comma is accepted, and for a repeated key the last value wins. `json.parse_string(s, .JSON)` instead returns `.Duplicate_Object_Key` (`core/encoding/json/parser.odin:305`), so parsing into `json.Value` catches both unknown and repeated keys.
+- Even with `.JSON`, a trailing comma is accepted, and for a repeated key the last value wins. `json.parse_string(s, .JSON)` instead returns `.Duplicate_Object_Key` (`core/encoding/json/parser.odin:305`).
 - A type mismatch returns `Unsupported_Type_Error` with the line and column. Truncated input returns `Invalid_Data`, with no position.
 - `json.marshal` writes struct fields in declaration order, with no spaces. Empty and nil slices both marshal as `[]`.
-- `json.parse_string` gives no position or key name for its errors: truncated or empty input is `.Unexpected_Token`, and `.Duplicate_Object_Key` doesn't say which key. It also accepts trailing garbage (`{"a":1} x`) and a top-level array (`[]`), so odx has to reject a non-object itself.
+- `json.parse_string` gives no position or key name for its errors: truncated or empty input is `.Unexpected_Token`, and `.Duplicate_Object_Key` doesn't say which key. It also accepts trailing garbage (`{"a":1} x`) and a top-level array (`[]`), so odx has to reject a non-object itself. odx parses the top-level object itself with the exported parser procs (`make_parser_from_string`, `parse_object_key`, `parse_colon`, `parse_value`, `parse_comma`, `expect_token`), which gives it the key names and lets it check for `.EOF` at the end. Syntax is checked for the whole file before any key, so a file with a typo and a syntax error reports `not valid JSON`.
+- A zero-value `strings.Builder` or `[dynamic]` takes `context.allocator` at its first write, not when it's declared. So `run` doesn't own an arena; `main` and the tests set `context.allocator` and free it. With the arena inside `run`, a caller's zero-value builder dangled once `run` returned (seen as a segfault).
+- `make([]string, 0) == nil` is true, so an explicit empty list can't be told from a missing key after decoding. Defaults are applied while decoding, not later.
 
 ## Out of scope
 

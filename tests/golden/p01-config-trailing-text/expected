@@ -2,5 +2,5 @@ $ odx check
 exit 2
 stdout:
 stderr:
-odx: odx.json: not found; minimal odx.json: {}
+odx: odx.json: not valid JSON
 findings: 0  ignores: 0

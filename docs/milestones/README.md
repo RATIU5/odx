@@ -54,7 +54,7 @@ Implement the part until `mise run test` passes this part's golden cases and eve
 
 | # | Part | Done when | Guide | Golden | Code |
 |---|------|-----------|-------|--------|------|
-| 1 | Core: CLI, odx.json, findings, output | Sorted one-line output, `--json`, exit codes 0/1/2, and a missing odx.json exits 2 with an example | done | review | todo |
+| 1 | Core: CLI, odx.json, findings, output | Sorted one-line output, `--json`, exit codes 0/1/2, and a missing odx.json exits 2 with an example | done | done | done |
 | 2 | Package discovery | Every repo package is parsed and has a role or is external; duplicate names are findings | todo | todo | todo |
 | 3 | Compiler pass | `odin check` runs on every package with SCOPE's flags; core, vendor and external findings are dropped and the rest deduped | todo | todo | todo |
 | 4 | Ignores | `// odx:ignore` works per statement and per file, unused ignores are findings, and the summary counts ignores | todo | todo | todo |
