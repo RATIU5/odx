@@ -1,0 +1,6 @@
+$ odx frob
+exit 2
+stdout:
+stderr:
+odx: unknown command "frob"
+usage: odx check [--json]

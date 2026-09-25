@@ -1,6 +1,6 @@
 # Part 1: Core
 
-Status: decisions approved 2026-09-24; golden cases next.
+Status: tracked in the Parts table in README.md.
 
 ## Goal
 
@@ -49,6 +49,8 @@ These are the user-facing contract that every later part inherits, so they are s
 - Sorting is by path (bytewise), then line as a number (so 9 comes before 10), then rule, then message. Identical findings print once.
 - stderr carries everything else: the reasons for an exit 2, each as `odx: <what happened>`, then a summary line: `findings: N  ignores: M`. Ignores stay 0 until Part 4.
 - Messages state facts only, with no fixes or hints. This applies to exit-2 reasons too.
+- The summary line prints whenever `check` ran in text mode, including when odx.json couldn't be read. Usage errors print usage only.
+- odx.json must be a single JSON object. A missing file is `not found`; unparseable input is `not valid JSON`, with no position; a repeated key is `repeated key`, with no name.
 - `--json` writes one object to stdout and nothing to stderr, with the same sort and the same exit code:
   `{"findings": [{"file", "line", "rule", "message"}], "errors": ["..."], "ignores": 0}`. A finding with no line has `"line": 0`.
 
@@ -72,12 +74,15 @@ Reserved now, since they appear in the output and in `odx:ignore`:
 - `expected` format:
 
   ```
+  $ odx check
   exit 2
   stdout:
   stderr:
   odx: odx.json: unknown key "exlcude"
   findings: 0  ignores: 0
   ```
+
+  The first line is the command, run from the case directory. The runner compares the whole file, and trailing newlines count.
 
 - Part 1 cases:
   - `p01-config-missing`: exit 2, with the example printed.
@@ -94,7 +99,8 @@ Reserved now, since they appear in the output and in `odx:ignore`:
 - `json.unmarshal_string(s, &cfg, .JSON)` silently ignores unknown keys. Catching typos means reading into `json.Value` and checking the keys.
 - Even with `.JSON`, a trailing comma is accepted, and for a repeated key the last value wins. `json.parse_string(s, .JSON)` instead returns `.Duplicate_Object_Key` (`core/encoding/json/parser.odin:305`), so parsing into `json.Value` catches both unknown and repeated keys.
 - A type mismatch returns `Unsupported_Type_Error` with the line and column. Truncated input returns `Invalid_Data`, with no position.
-- `json.marshal` writes struct fields in declaration order, with no spaces.
+- `json.marshal` writes struct fields in declaration order, with no spaces. Empty and nil slices both marshal as `[]`.
+- `json.parse_string` gives no position or key name for its errors: truncated or empty input is `.Unexpected_Token`, and `.Duplicate_Object_Key` doesn't say which key. It also accepts trailing garbage (`{"a":1} x`) and a top-level array (`[]`), so odx has to reject a non-object itself.
 
 ## Out of scope
 

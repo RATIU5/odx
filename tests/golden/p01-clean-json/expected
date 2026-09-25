@@ -1,0 +1,5 @@
+$ odx check --json
+exit 0
+stdout:
+{"findings":[],"errors":[],"ignores":0}
+stderr:

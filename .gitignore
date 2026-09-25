@@ -12,3 +12,5 @@
 !odx/**
 !.claude/
 !.claude/settings.json
+!tests/
+!tests/**

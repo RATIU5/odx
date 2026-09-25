@@ -1,0 +1,6 @@
+$ odx check
+exit 2
+stdout:
+stderr:
+odx: odx.json: not valid JSON
+findings: 0  ignores: 0

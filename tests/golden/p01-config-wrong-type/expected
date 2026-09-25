@@ -1,0 +1,6 @@
+$ odx check
+exit 2
+stdout:
+stderr:
+odx: odx.json: "pure" is a string, not an array of strings
+findings: 0  ignores: 0
