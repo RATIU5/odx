@@ -31,7 +31,7 @@ Rules:
 - Import boundaries: followed through your packages' whole dependency graph, so pure can't reach edge through service. Collections resolve the way the compiler resolves them.
 - Every package has a role or is listed as external, and package names are unique. The compiler scopes vet and style by package name, so duplicates would blur which code is checked.
 
-odx.json holds only: packages per role, external packages, error types, and optionally the compiler flags. Without it, odx exits 2 and prints a minimal example.
+odx.json holds only: packages per role, external packages, error types, excluded directories, and optionally the compiler flags. An excluded directory is not part of the repository: odx never discovers, checks or reads anything under it, such as test fixtures that break the rules on purpose. Without odx.json, odx exits 2 and prints a minimal example.
 
 Ignoring rules: `// odx:ignore <rules|all> <reason>` on the line where a statement starts covers that statement; at the top of a file it covers the file. Use it to experiment or to do something advanced the rules normally forbid. A reason is required, an ignore that no longer ignores anything is a finding, and the summary counts ignores so experiments don't hide.
 

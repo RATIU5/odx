@@ -28,7 +28,7 @@ The order odx gets built in. `docs/SCOPE.md` says what odx is; this file says wh
 
 Parts 1–4 come before the rules because every rule needs findings, packages and ignores. Parts 5–8 go from least to most heuristic.
 
-## Facts (Odin dev-2026-09, verified 2026-09-24; re-verify before use)
+## Facts (Odin dev-2026-09, verified 2026-09-24; re-verify before use if odin version changed)
 
 - `odin check <dir> -no-entry-point -json-errors` gives structured errors on stderr, with absolute paths. The default `-max-error-count` is 36, so raise it. Checking is staged: a syntax or style error hides the type and vet errors behind it.
 - `odin check` includes `_test.odin` files. It compiles only files whose build tags match the host target.
