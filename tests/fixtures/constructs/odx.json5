@@ -1,7 +1,0 @@
-{
-  version: 1,
-  roles: { pure: ["lib"], edge: ["sys"] },
-  dependencies: { pure: { may_import: ["pure", "core:*"] }, edge: { may_import: ["pure", "edge", "core:*"] } },
-  disabled: { "allocators/R1": "fixture: the explicit-allocators tag is covered by tests/fixtures/vet" },
-  odin: { flags: [] },
-}

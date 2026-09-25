@@ -1,9 +1,0 @@
-{
-  version: 1,
-  roles: { pure: ["core"], edge: ["platform"] },
-  dependencies: {
-    pure: { may_import: ["pure", "core:*"] },
-    edge: { may_import: ["pure", "edge", "core:*", "vendor:*"] },
-  },
-  odin: { flags: ["-vet", "-warnings-as-errors"] },
-}

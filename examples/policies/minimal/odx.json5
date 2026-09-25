@@ -1,6 +1,0 @@
-{
-  version: 1,
-  exclude: [".odx/**", "cases/**", "build/**"],
-  disabled: { "errors/R3": "This library chooses only two local source restrictions." },
-  odin: { explicit_allocators: "off", audit_file_tags: false },
-}

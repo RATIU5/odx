@@ -1,6 +1,0 @@
-#+vet explicit-allocators
-package domain
-
-import "../adapters"
-
-adapter_id :: proc() -> int { return adapters.process_id() }

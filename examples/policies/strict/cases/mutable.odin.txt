@@ -1,4 +1,0 @@
-#+vet explicit-allocators
-package domain
-
-hidden_count: int

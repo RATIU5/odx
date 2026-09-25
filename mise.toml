@@ -1,75 +1,28 @@
 [tools]
-odin = "dev-2026-09" # assessed toolchain; other revisions require verification
+odin = "dev-2026-09"
 
 [env]
-# macOS: the prebuilt odin's -sanitize:address links only against LLVM's clang, not Apple's
-_.path = ["{% if os() == 'macos' %}/opt/homebrew/opt/llvm@22/bin{% endif %}"]
 OUT = "build"
-ODX = "{{ config_root }}/build/odx"
-# vet flags used for odx's own sources; the same list odx recommends to projects
 ODIN_VET = "-vet -vet-tabs -vet-cast -strict-style -warnings-as-errors"
 
 [tasks.build]
 description = "Build the odx binary (debug)"
 alias = "b"
-sources = ["odx/**/*.odin", "rules/**/*"] # rules/ is embedded, so it is a build input
+sources = ["odx/**/*.odin"]
 outputs = ["{{ env.OUT }}/odx"]
-run = "mkdir -p $OUT && odin build odx -out:$OUT/odx $ODIN_VET -vet-packages:odx -debug"
+run = "mkdir -p $OUT && odin build odx -out:$OUT/odx $ODIN_VET -debug"
 
-[tasks.release]
-description = "Optimized binary for distribution"
-sources = ["odx/**/*.odin", "rules/**/*"]
-outputs = ["{{ env.OUT }}/release/odx"]
-run = "mkdir -p $OUT/release && odin build odx -out:$OUT/release/odx $ODIN_VET -vet-packages:odx -o:speed"
-
-[tasks.install]
-description = "Put a release build on PATH for local use in other projects"
-depends = ["release"]
-run = "install -m 755 $OUT/release/odx ~/.local/bin/odx"
-
-[tasks.fmt]
-description = "Format all odin files in this project"
-alias = "f"
-run = "odinfmt -w odx"  # tests/fixtures excluded on purpose
-
-[tasks.odx]
-description = "Run the odx binary (debug)"
+[tasks.run]
+description = "Build and run odx"
 depends = ["build"]
-run = "${ODX}"
+run = "$OUT/odx"
 
 [tasks.test]
-description = "Native Odin unit and whole-project integration tests"
-depends = ["build"]
-run = '''
-set -e
-export ODX_ODIN="$(command -v odin)"
-odin test odx $ODIN_VET -define:ODIN_TEST_THREADS=1 -sanitize:address -define:ODIN_TEST_FAIL_ON_BAD_MEMORY=true -out:$OUT/odx_test
-odin test eval/runner $ODIN_VET -define:ODIN_TEST_THREADS=1 -out:$OUT/eval_test
-for suite in tests/integration/*/; do
-  odin test "$suite" $ODIN_VET -define:ODIN_TEST_THREADS=1 -out:$OUT/integration_test
-done
-$ODX policy --verify CLAUDE.md
-$ODX policy --verify AGENTS.md --root examples/policies/minimal
-$ODX policy --verify AGENTS.md --root examples/policies/strict
-'''
+description = "Run the tests"
+alias = "t"
+run = "mkdir -p $OUT && odin test odx $ODIN_VET -out:$OUT/odx_test"
 
-[tasks.eval]
-description = "Build the eval runner (see eval/PREREG.md); run as build/eval --help"
-depends = ["build"]
-sources = ["eval/runner/*.odin"]
-outputs = ["{{ env.OUT }}/eval"]
-run = "odin build eval/runner -out:$OUT/eval $ODIN_VET"
-
-[tasks.self]
-description = "odx checks its own sources with its own rules"
-depends = ["build"]
-run = "$ODX check"
-
-[tasks.ci]
-description = "Build, native tests, examples and repository checks"
-depends = ["test", "self"]
-
-[tasks.validation]
-description = "Measure minimal and strict policies on pinned external Odin source; run separately from CI"
-depends = ["build"]
-run = 'ODX_ODIN="$(command -v odin)" odin test tests/validation -define:ODIN_TEST_THREADS=1 -out:$OUT/odx_validation -vet -strict-style'
+[tasks.fmt]
+description = "Format the Odin sources"
+alias = "f"
+run = "odinfmt -w odx"

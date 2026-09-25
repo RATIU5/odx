@@ -1,5 +1,0 @@
-package parser
-foreign import libc "system:c"
-foreign libc {
-	getchar :: proc() -> i32 ---
-}

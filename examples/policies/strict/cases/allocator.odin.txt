@@ -1,3 +1,0 @@
-package domain
-
-untagged :: proc(value: int) -> int { return value * 2 }

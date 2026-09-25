@@ -1,8 +1,0 @@
-package parser
-Note :: "foreign import libc; count: int"
-// foreign export { count: int }
-Cursor :: struct { count: int }
-Step :: proc() -> int {
-	count := 1
-	return count
-}

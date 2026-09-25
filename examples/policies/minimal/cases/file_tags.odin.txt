@@ -1,5 +1,0 @@
-#+feature using-stmt
-#+vet !tabs
-package parser
-Status :: enum { Ready, End }
-Read :: proc() -> Status { return .Ready }

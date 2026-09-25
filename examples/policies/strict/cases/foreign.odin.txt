@@ -1,4 +1,0 @@
-#+vet explicit-allocators
-package domain
-
-foreign import libc "system:c"

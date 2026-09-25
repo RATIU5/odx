@@ -1,6 +1,0 @@
-{
-  version: 1,
-  exclude: [".odx/**", "build/**"],
-  disabled: { "errors/R3": "This example adopts only its local conditional syntax policy." },
-  odin: { explicit_allocators: "off", audit_file_tags: false },
-}

@@ -1,6 +1,0 @@
-package parser
-when false {
-	when true {
-		foreign import libc "system:c"
-	}
-}
