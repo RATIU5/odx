@@ -2,7 +2,7 @@
 
 Odin checks that it's valid Odin; odx checks that it follows your project's rules.
 
-Scope: [docs/SCOPE.md](docs/SCOPE.md).
+Scope: [.agents/SCOPE.md](.agents/SCOPE.md).
 
 ```sh
 mise install

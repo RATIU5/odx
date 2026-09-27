@@ -12,7 +12,7 @@ sources = ["odx/**/*.odin"]
 outputs = ["{{ env.OUT }}/odx"]
 run = "mkdir -p $OUT && odin build odx -out:$OUT/odx $ODIN_VET -debug"
 
-[tasks.run]
+[tasks.odx]
 description = "Build and run odx"
 depends = ["build"]
 run = "$OUT/odx"
@@ -20,7 +20,7 @@ run = "$OUT/odx"
 [tasks.test]
 description = "Run the tests"
 alias = "t"
-run = "mkdir -p $OUT && odin test odx $ODIN_VET -out:$OUT/odx_test"
+run = "mkdir -p $OUT && odin test odx $ODIN_VET -define:ODIN_TEST_FAIL_ON_BAD_MEMORY=true -out:$OUT/odx_test"
 
 [tasks.fmt]
 description = "Format the Odin sources"

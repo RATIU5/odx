@@ -6,8 +6,8 @@
 !CLAUDE.md
 !mise.toml
 !ols.json
-!docs/
-!docs/**
+!.agents/
+!.agents/**
 !odx/
 !odx/**
 !.claude/

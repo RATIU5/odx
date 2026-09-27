@@ -1,6 +1,6 @@
 # Milestones
 
-The order odx gets built in, and where each part stands. `docs/SCOPE.md` says what odx is; this file says what comes next and how to work on it.
+The order odx gets built in, and where each part stands. `.agents/SCOPE.md` says what odx is; this file says what comes next and how to work on it.
 
 ## How to work a part
 
@@ -10,7 +10,7 @@ Step states: `todo` (not started), `wip` (started, not yet presented), `review` 
 
 ### Every session: orient first
 
-1. Read `CLAUDE.md`, `docs/SCOPE.md` and this file, and follow their rules. SCOPE is the contract.
+1. Read `CLAUDE.md`, `.agents/SCOPE.md` and this file, and follow their rules. SCOPE is the contract.
 2. Read the current state: `git status`, `git log --oneline -10`, and the files the current step touches.
 3. The current part is the first row of the table that isn't `done` in every column. Its current step is the first column that isn't `done`.
    - `review`: the user hasn't approved it yet. Ask for the review; don't start the next step.
@@ -20,7 +20,7 @@ Step states: `todo` (not started), `wip` (started, not yet presented), `review` 
 
 ### Step 1: Guide
 
-Write `docs/milestones/PART_NN_<name>.md`. It holds the goal, done-when, decisions, facts and out-of-scope, and lists the golden cases by name. Implementation details belong in the code, not here.
+Write `.agents/milestones/PART_NN_<name>.md`. It holds the goal, done-when, decisions, facts and out-of-scope, and lists the golden cases by name. Implementation details belong in the code, not here.
 
 - Research first: read the relevant core or compiler behavior in `$(odin root)`, and try it in a scratch dir.
 - Put open questions to the user in one batch; don't choose silently.
@@ -55,7 +55,7 @@ Implement the part until `mise run test` passes this part's golden cases and eve
 | # | Part | Done when | Guide | Golden | Code |
 |---|------|-----------|-------|--------|------|
 | 1 | Core: CLI, odx.json, findings, output | Sorted one-line output, `--json`, exit codes 0/1/2, and a missing odx.json exits 2 with an example | done | done | done |
-| 2 | Package discovery | Every repo package is parsed and has a role or is external; duplicate names are findings | todo | todo | todo |
+| 2 | Package discovery | Every repo package is parsed and has a role or is external; duplicate names are findings | review | todo | todo |
 | 3 | Compiler pass | `odin check` runs on every package with SCOPE's flags; core, vendor and external findings are dropped and the rest deduped | todo | todo | todo |
 | 4 | Ignores | `// odx:ignore` works per statement and per file, unused ignores are findings, and the summary counts ignores | todo | todo | todo |
 | 5 | File and declaration rules | Missing `#+vet explicit-allocators` and mutable state are findings | todo | todo | todo |
