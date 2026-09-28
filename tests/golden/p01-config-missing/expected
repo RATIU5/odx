@@ -1,6 +1,0 @@
-$ odx check
-exit 2
-stdout:
-stderr:
-odx: odx.json: not found; minimal odx.json: {}
-findings: 0  ignores: 0

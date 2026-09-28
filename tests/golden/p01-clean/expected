@@ -1,5 +1,0 @@
-$ odx check
-exit 0
-stdout:
-stderr:
-findings: 0  ignores: 0

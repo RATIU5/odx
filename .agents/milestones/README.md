@@ -4,86 +4,135 @@ The order odx gets built in, and where each part stands. `.agents/SCOPE.md` says
 
 ## How to work a part
 
-Each part goes through three steps, in order: **Guide**, **Golden**, **Code**. The steps can happen in different sessions, so the Parts table below is the record of where things stand. Every step ends with the user's review, and a step is `done` only after the user approves it.
+Each part goes through three steps: **Guide**, **Golden**, **Code**. Each ends with the user's review; a step is `done` only after approval. The Parts table is the record of where things stand.
 
-Step states: `todo` (not started), `wip` (started, not yet presented), `review` (presented, waiting for the user), `done` (approved).
+States: `todo`, `wip` (started), `review` (presented, waiting for the user), `done` (approved).
 
-### Every session: orient first
+### Every session
 
-1. Read `CLAUDE.md`, `.agents/SCOPE.md` and this file, and follow their rules. SCOPE is the contract.
-2. Read the current state: `git status`, `git log --oneline -10`, and the files the current step touches.
-3. The current part is the first row of the table that isn't `done` in every column. Its current step is the first column that isn't `done`.
-   - `review`: the user hasn't approved it yet. Ask for the review; don't start the next step.
-   - `wip`: pick up where the files and git history show it stopped.
-   - `todo`: start the step.
-4. Read the current part's `PART_NN_<name>.md`, if it exists, and the earlier part files it builds on. `PART_01_core.md` defines the output format, the rule names and the golden case format.
+1. Read `CLAUDE.md`, `.agents/SCOPE.md` and this file.
+2. Read `git status`, `git log --oneline -10`, and the files the current step touches.
+3. The current part is the first row not `done` in every column; its current step is the first column not `done`.
+   - `review`: ask for the review; don't start the next step.
+   - `wip`: continue from where the files and git history stop.
+   - `todo`: start it.
+4. Read the current part's `PART_NN_<name>.md` and the earlier part files it builds on. `PART_01_core.md` defines the output format and the golden case format.
 
-### Step 1: Guide
+Do one step, then stop for review.
 
-Write `.agents/milestones/PART_NN_<name>.md`. It holds the goal, done-when, decisions, facts and out-of-scope, and lists the golden cases by name. Implementation details belong in the code, not here.
+### Guide
 
-- Research first: read the relevant core or compiler behavior in `$(odin root)`, and try it in a scratch dir.
-- Put open questions to the user in one batch; don't choose silently.
-- Set Guide to `review` and ask the user to review the file.
+Write `.agents/milestones/PART_NN_<name>.md`: goal, done-when, decisions, facts, open questions, out-of-scope, and the golden cases by name. How the code works belongs in the code.
 
-### Step 2: Golden
+- Research in `$(odin root)` and in a scratch directory.
+- Check every decision against SCOPE. What SCOPE doesn't answer is an open question.
+- Ask open questions in one batch.
+- Set Guide to `review`.
 
-Write the cases the guide lists, in `tests/golden/pNN-<behavior>/`, in the format `PART_01_core.md` defines. Each case covers one behavior, with the smallest input that shows it. The cases are the executable spec.
+### Golden
 
-- For each rule: one clear violation, one clean near-miss that must not be a finding, the edge cases SCOPE names, and the inputs that should make odx exit 2.
-- Compile every Odin input with the pinned `odin` and SCOPE's flags. If the compiler already reports it, it's the compiler pass's job, not an odx rule.
-- Mark every claim about Odin VERIFIED, citing `file:line` or the command output, or UNVERIFIED. Don't write a case on an UNVERIFIED claim.
-- Check each expected output against SCOPE: `file:line`, rule name, a message that states facts with no fix or hint, sorting, and the exit code. Findings must be complete, and nothing may be reported twice.
-- Set Golden to `review`, and give the user a table of every case: name, input summary, expected output and exit code, verification notes, and open questions.
+Write the listed cases in `tests/golden-NN/<behavior>/`, in Part 1's format. One behavior per case, smallest input that shows it.
 
-### Step 3: Code
+- Per rule: a violation, a near-miss that isn't a finding, SCOPE's edge cases, and the inputs that exit 2.
+- Compile every Odin input with the pinned `odin`. What the compiler with SCOPE's flags reports is the compiler pass's job.
+- Mark each claim about Odin VERIFIED (`file:line` or command output) or UNVERIFIED. No case rests on an UNVERIFIED claim.
+- Check each expected output against SCOPE: `path:line:col`, rule ID, a factual message with no hint, order, deduplication, exit code. Complete, and nothing twice.
+- Set Golden to `review` and give the user a table: case, input, expected output and exit code, verification, open questions.
 
-Implement the part until `mise run test` passes this part's golden cases and every earlier part's.
+### Code
 
-- Use the `odin` skill, and check core API signatures against `$(odin root)`.
-- Golden files are the spec. Don't edit an `expected` file to match the code; if one looks wrong, ask the user.
-- Set Code to `review` and ask the user to review the code. Once it's approved, move the part's facts into Facts below and add any open questions.
+Implement until `mise run test` passes this part's cases and every earlier part's.
+
+- Use the `odin` skill; check signatures against `$(odin root)`.
+- Never edit an `expected` file to match the code. If one looks wrong, ask.
+- Keep to this part.
+- Set Code to `review`. Once approved, move lasting facts into Facts below.
 
 ### Throughout
 
-- Before relying on any fact below or in a part file, re-verify it against `$(odin root)` or with a small program. Facts go stale after Odin updates. Fix anything that turns out wrong.
-- When stuck, or when SCOPE doesn't answer something, ask the user. Don't pick silently.
-- Update this table in the same change as the step's work.
+- Re-verify a fact before relying on it if the pinned Odin changed.
+- When SCOPE is silent or wrong, ask the user. SCOPE changes only through the `scope` skill.
+- Update the table in the same change as the work.
+
+### Every Odin bump
+
+1. Parse every file in `$(odin root)/base`, `core` and `vendor` with `core:odin/parser`; list the files it can't read.
+2. Re-verify every fact below.
+3. Re-probe which strict flags `-vet-packages` and `-strict-style-packages` scope, and whether `-warnings-as-errors` fires in base, core or vendor.
+4. Re-check the patched runtime's hook points and the `#+vet` names.
 
 ## Parts
 
 | # | Part | Done when | Guide | Golden | Code |
 |---|------|-----------|-------|--------|------|
-| 1 | Core: CLI, odx.json, findings, output | Sorted one-line output, `--json`, exit codes 0/1/2, and a missing odx.json exits 2 with an example | done | done | done |
-| 2 | Package discovery | Every repo package is parsed and has a role or is external; duplicate names are findings | review | todo | todo |
-| 3 | Compiler pass | `odin check` runs on every package with SCOPE's flags; core, vendor and external findings are dropped and the rest deduped | todo | todo | todo |
-| 4 | Ignores | `// odx:ignore` works per statement and per file, unused ignores are findings, and the summary counts ignores | todo | todo | todo |
-| 5 | File and declaration rules | Missing `#+vet explicit-allocators` and mutable state are findings | todo | todo | todo |
-| 6 | Import boundaries | Imports resolve like the compiler's, and role limits hold through the whole graph | todo | todo | todo |
-| 7 | require_results | Error-returning procedures without the attribute are findings | todo | todo | todo |
-| 8 | Dynamic array and map rule | A local dynamic array or map without an explicit allocator is a finding | todo | todo | todo |
-| 9 | `odx run` | Leaks and bad frees are reported on every exit path from a patched runtime copy | todo | todo | todo |
-| 10 | `odx test` | Test failures, leaks and bad frees are findings | todo | todo | todo |
-| 11 | AddressSanitizer | A working sanitizer toolchain is probed and cached; run and test use it or say why they can't | todo | todo | todo |
+| 1 | Core: CLI, odx.json, output | Every command parses its arguments (else `usage`), finds the repo root, reads `odx.json` strictly or runs on defaults, and prints findings, summary, `--json` and exit-2 codes as SCOPE says | todo | todo | todo |
+| 2 | Discovery and roles | Every package is found, with excluded, hidden and external trees skipped and symlinks handled; each gets its role and strictness; its files are parsed; bad `stateless` entries are `config-missing-dir` | todo | todo | todo |
+| 3 | Compiler pass | The `odin` pin is enforced, each package is checked alone with scoped strict flags, findings in other project packages are dropped, and odx's rules run only after a clean compile or on packages with no host files | todo | todo | todo |
+| 4 | Ignores | `// odx:ignore` is found with the tokenizer and applies to the next statement or the whole file; `ignore-invalid`, `ignore-unused` and the ignored count follow SCOPE | todo | todo | todo |
+| 5 | File and statement rules | `explicit-allocators-tag`, `vet-negation`, `using-param`, `do-stmt`, `stateless-state` and `parse-unsupported` report where SCOPE says | todo | todo | todo |
+| 6 | Imports | Imports resolve by real path; `import-boundary` follows the whole graph and `import-outside-project` covers every non-external package | todo | todo | todo |
+| 7 | Procedure rules | `require-results` and `allocator-param` report public procedures as SCOPE defines them | todo | todo | todo |
+| 8 | Pending, init, `--next` | `pending-clean` reports clean or stale entries, `odx init` writes and prints what SCOPE says, and `--next` checks under the next `version` | todo | todo | todo |
+| 9 | Patched runtime and `odx run` | `odx run` reports `leak`, `bad-free`, `panic` and `crash` on every exit path SCOPE lists, threads included | todo | todo | todo |
+| 10 | `odx test` | Tests run per package with scoped strict flags, on the heap and the patched runtime, with SCOPE's runtime findings and no `leak` for pending packages | todo | todo | todo |
+| 11 | AddressSanitizer | `test` and `run` report `asan` with a working LLVM clang, or run without it and report `asan: off` | todo | todo | todo |
 
-Parts 1–4 come before the rules because every rule needs findings, packages and ignores. Parts 5–8 go from least to most heuristic.
+Every rule needs output, packages, the compiler pass and ignores, so Parts 1–4 come first. Parts 5–7 go from least to most heuristic. Part 8 needs every check rule. `test` reuses `run`'s patched runtime, and ASan builds on both.
 
-## Facts (Odin dev-2026-09, verified 2026-09-24; re-verify before use if odin version changed)
+## Facts
 
-- `odin check <dir> -no-entry-point -json-errors` gives structured errors on stderr, with absolute paths. The default `-max-error-count` is 36, so raise it. Checking is staged: a syntax or style error hides the type and vet errors behind it.
-- `odin check` includes `_test.odin` files. It compiles only files whose build tags match the host target.
-- `#+vet explicit-allocators` flags omitted `Allocator` parameters that default to the context allocators (make, new, delete, free, clone, aprintf and so on). It does **not** flag `append`, map insertion, or `[dynamic]T{}`/`map[K]V{}` literals. That gap is why Part 8 exists.
-- `core:odin/parser` parses every file whatever its build tags, and returns ok even on a syntax error, so check `syntax_error_count`. `file.tags` holds the raw `#+` lines, and `parse_file_tags` doesn't decode `vet`. There is no type information, so Parts 6–8 are syntactic.
-- `-vet` also vets packages imported through `-collection`, so odx has to filter by path. `-disable-non-constant-globals` does not forbid `g: int`.
-- `core:encoding/json` covers both odx.json and `--json` output.
-- `ODIN_ROOT` pointed at a copy of the root, with `base/` patched, swaps in the runtime without changing user code. `-collection:base=` is rejected. The report hooks go in `__init_context`, `runtime.exit`, the default `assertion_failure_proc` before `trap()`, `bounds_trap` and `type_assertion_trap_contextless`. `base` can't import `core:mem`, so the tracker has to live in the runtime copy. Check a free against the tracker before calling libc `free`, or libc aborts first.
-- `odin test` exits 0 on leaks unless run with `-define:ODIN_TEST_FAIL_ON_BAD_MEMORY=true`. Leak and bad-free detail is on stderr only, as text with basenames. `ODIN_TEST_JSON_REPORT` holds only pass/fail per test.
-- `-sanitize:address` on macOS: Apple clang fails to link because of an ASan version mismatch, Homebrew LLVM 20.1.8 hangs at startup, and LLVM 22.1.8 works. odx picks the toolchain by putting its clang first on PATH, and needs a startup timeout. See llvm/llvm-project#200447.
+Pin `dev-2026-09` = `odin version dev-2026-09-nightly:a2fb372`. Verified 2026-09-27 unless marked otherwise; re-verify after a bump.
 
-## Open questions (ask the user before the part that needs the answer)
+### Compiler and flags
 
-- Build tags: odx's rules read every file, but compiler findings cover only the host target. Should SCOPE say so? (Part 3)
-- Type errors inside external packages: drop them, or report them so odx never exits 0 on a broken build? (Part 3)
-- Some core procs such as `fmt.aprintf` record a core line instead of the caller's. Group by the core line, capture a stack, or mark the finding as from core? (Part 9)
-- A user-set `assertion_failure_proc` or a direct `libc.exit` skips the report. Report "no report possible", or accept the gap? (Part 9)
-- The exact LLVM cutoff in SCOPE (22.1.3) isn't verified; only 20.1.8 hanging and 22.1.8 working were seen. Without LLVM 22 or later installed, "sanitizer off, here's why" will be the common path. (Part 11)
+- `odin check <dir> -no-entry-point -json-errors` writes errors to stderr with absolute paths. `-max-error-count` defaults to 36. Checking is staged: a syntax or style error hides later type and vet errors.
+- `-json-errors` labels syntax and `-strict-style` errors `"type":"warning"`; don't rely on `type`. Fixed upstream in PR #7550, after this pin.
+- odin-lang/Odin#7072: `odin check -vet` can segfault (parser data race). A compiler crash is `compiler-output`.
+- `-vet` = unused-variables, unused-imports, shadowing, using-stmt, deprecated, cast (`build_settings.cpp:323`).
+- `-vet-packages` and `-strict-style-packages` match package names and scope `-vet` and `-strict-style` (probe).
+- `-vet-using-param` and `-disallow-do` apply to every file the compiler reads, core included (probe). Core and vendor use `do` only in comments.
+- `-warnings-as-errors` reports nothing from `fmt`, `os`, `encoding/json`, `odin/parser`, `thread`, `net` or `vendor:stb/image` (probe). Not proven for all of core.
+- Two same-named packages in one import graph are a compile error, so name scoping can't match the wrong package (probe).
+- A file's `#+vet` tag adds to the command-line flags, escapes `-vet-packages`, and supports `!` negation (`parser.cpp:7154-7167`).
+- `#+vet explicit-allocators` fires only when a call omits a parameter whose default is `context.allocator` or `context.temp_allocator` (`check_expr.cpp:6916`). It misses `append`, map insertion, `fmt.tprint*` and dynamic literals.
+- `odin check` skips `#+test` files entirely, type errors included; `odin test -vet` checks them. `_test.odin` files are compiled by `odin check` (probe).
+- `odin check` compiles only files whose build tags match the target.
+- Columns count code points; `core:odin/tokenizer` counts bytes.
+- The compiler reads symlinked `.odin` files and reports positions at the target path.
+- Import paths are joined, not contained: `core:../../x` escapes the collection (`parser.cpp:6848-6853`). `-collection:shared=` is accepted; `core` can't be redefined.
+
+### Parser and declarations
+
+- `core:odin/parser` parses every file whatever its build tags and returns ok on a syntax error; check `syntax_error_count`. `file.tags` holds raw `#+` lines; `parse_file_tags` doesn't decode `vet`. No type information. (2026-09-24)
+- `core:odin/parser` can't read triple-quoted `"""` strings: 3 of 1618 files in base, core and vendor, plus the `base/intrinsics` and `base/builtin` pseudo-files.
+- `Value_Decl.pos` is the name's position; attributes have their own, earlier position.
+- `@(require_results)` on a proc group is ignored; on a foreign block it applies to every member.
+- `#optional_allocator_error` exists (`core/strings/conversion.odin:24`).
+- `@(static, rodata)` locals are legal. Foreign-block variables are writable. Map literals can't be constants or `@(rodata)`.
+- `odin doc -doc-format` omits `@(private)`, `@(private="file")` and nested procedures (probe).
+
+### odx.json
+
+- `core:encoding/json` skips a BOM, accepts trailing commas and trailing text, and stops at NUL, so odx.json needs a strict reader on `json.Tokenizer`.
+
+### Runtime, tests and sanitizer
+
+- `ODIN_ROOT` pointed at a copy with a patched `base/` swaps the runtime without user code changes; `-collection:base=` is rejected. Hooks: `__init_context`, `runtime.exit`, the default `assertion_failure_proc` before `trap()`, `bounds_trap`, `type_assertion_trap_contextless`. `base` can't import `core:mem`, so the tracker lives in the runtime copy. Check a free against the tracker before libc `free`. (2026-09-24)
+- `odin test` always runs tests on a `thread.Pool`, even with `ODIN_TEST_THREADS=1` (`core/testing/runner.odin:374-392`).
+- `odin test` gives each test a tracking allocator over a rollback stack (`core/testing/runner.odin:36-40`), so ASan misses use-after-free there; on `runtime.heap_allocator()` it's caught (probe).
+- `odin test` exits 0 on leaks unless `-define:ODIN_TEST_FAIL_ON_BAD_MEMORY=true`. Leak detail is stderr text with basenames only. (2026-09-24)
+- `-sanitize:address` on macOS: Homebrew LLVM 20.1.8 hangs at startup, 22.1.8 works (llvm/llvm-project#200447). Apple clang fails to link ASan on macOS 27.2. `ODIN_CLANG_PATH` selects the linking clang (`src/linker.cpp:447-448`).
+
+## Open questions
+
+Ask before the part that needs the answer.
+
+- Part 1: what fields does the `--json` `summary` object hold?
+- Part 3: is the first release's supported `odin` range only `dev-2026-09`?
+- Part 8: what does `pending-clean` mean for a pending package with no host files?
+- Part 8: what does `--next` do when no higher `version` exists?
+- Part 9: which frame is the `path:line` for `crash`, `panic`, and a `leak` allocated inside core: the innermost repo frame? (SCOPE open question)
+- Part 9: a user-set `assertion_failure_proc` or a direct `libc.exit` skips the report. Report nothing, or `crash`?
+- Part 10: how do tests get the heap and the tracker without code changes: patch `core/testing` in the runtime copy?
+- Part 11: where does `asan: off` go in the summary line?
+- Part 11: how does odx tell an ASan startup hang from a program waiting on input: a version cutoff or a timed test build?
