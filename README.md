@@ -1,6 +1,6 @@
 # odx
 
-A strict checker for Odin projects: pinned compiler flags on every package, rules at package boundaries, and memory-checked tests and runs.
+A strict, opinionated checker for Odin projects: format, naming and syntax rules on top of pinned compiler flags, then memory-checked tests and runs.
 
 Scope: [.agents/SCOPE.md](.agents/SCOPE.md).
 

@@ -1,6 +1,6 @@
 # odx
 
-A strict checker for Odin projects, written in Odin. The contract: @.agents/SCOPE.md. Items under "Later" and "Never" are out of scope unless the user says otherwise.
+A strict checker for Odin projects, written in Odin. The contract: @.agents/SCOPE.md, with `.agents/scopes/check.md` and `.agents/scopes/memory.md`; terms in `.agents/GLOSSARY.md`. Items under "Later" and "Never" are out of scope unless the user says otherwise.
 
 ## Commands
 
