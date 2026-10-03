@@ -1,0 +1,4 @@
+--- stdout
+--- stderr
+odx: error: config-invalid: collection 'libs' path '..' is outside the repo
+--- exit 2

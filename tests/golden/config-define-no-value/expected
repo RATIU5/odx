@@ -1,0 +1,5 @@
+--- stdout
+--- stderr
+odx: error: config-invalid: 'defines' entry 'FLAG' is not 'NAME=value'
+odx: error: config-invalid: 'defines' entry 'EMPTY=' is not 'NAME=value'
+--- exit 2

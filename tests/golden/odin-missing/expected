@@ -1,0 +1,4 @@
+--- stdout
+--- stderr
+odx: error: odin-missing: 'odin' is not on PATH
+--- exit 2

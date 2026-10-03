@@ -1,0 +1,4 @@
+--- stdout
+--- stderr
+odx: error: usage: unknown flag '--nope' for 'check'
+--- exit 2

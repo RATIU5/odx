@@ -1,0 +1,4 @@
+--- stdout
+--- stderr
+odx: error: config-invalid: unknown key 'bogus'
+--- exit 2

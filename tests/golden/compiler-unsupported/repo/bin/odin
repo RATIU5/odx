@@ -1,0 +1,2 @@
+#!/bin/sh
+echo "$0 version dev-2025-01-nightly:0000000"

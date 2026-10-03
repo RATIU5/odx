@@ -1,0 +1,4 @@
+--- stdout
+--- stderr
+odx: error: compiler-mismatch: odx.json pins odin dev-2026-08-nightly:0000000, but the running compiler is <odin>
+--- exit 2

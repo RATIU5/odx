@@ -1,0 +1,5 @@
+--- stdout
+{"version":1,"findings":[],"errors":[],"summary":{"findings":0,"ignored":0,"pending":1,"skipped":1,"rules":1,"release":"<release>","odin":"<odin>"}}
+--- stderr
+odx: skipped lib/win: no non-test file compiles for darwin_arm64 or linux_amd64
+--- exit 0

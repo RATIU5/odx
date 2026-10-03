@@ -1,0 +1,5 @@
+--- stdout
+third_party/dep/dep.odin:4:9: odin: Cannot convert '"three"' to 'int' from 'untyped string', got "three"
+odx: 1 findings, 0 ignored, 0 pending, 0 skipped (rules 1, odx <release>, odin <odin>)
+--- stderr
+--- exit 1

@@ -12,6 +12,12 @@ sources = ["odx/**/*.odin"]
 outputs = ["{{ env.OUT }}/odx"]
 run = "mkdir -p $OUT && odin build odx -out:$OUT/odx $ODIN_VET -debug"
 
+[tasks.release]
+description = "Build the optimized odx binary that perf rules measure"
+sources = ["odx/**/*.odin"]
+outputs = ["{{ env.OUT }}/release/odx"]
+run = "mkdir -p $OUT/release && odin build odx -out:$OUT/release/odx $ODIN_VET -o:speed"
+
 [tasks.odx]
 description = "Build and run odx"
 depends = ["build"]
@@ -22,7 +28,18 @@ description = "Run the tests"
 alias = "t"
 run = "mkdir -p $OUT && odin test odx $ODIN_VET -define:ODIN_TEST_FAIL_ON_BAD_MEMORY=true -out:$OUT/odx_test"
 
+[tasks.golden]
+description = "Run the golden cases against the built binary"
+alias = "g"
+depends = ["build"]
+run = "odin build tests/runner -out:$OUT/golden-runner $ODIN_VET && $OUT/golden-runner $OUT/odx tests/golden"
+
+[tasks.selection]
+description = "Diff odx's file selection against the compiler's; rerun on every compiler bump"
+alias = "s"
+run = "mkdir -p $OUT && odin build tests/selection -out:$OUT/selection $ODIN_VET && tests/selection/diff.sh $OUT/selection"
+
 [tasks.fmt]
 description = "Format the Odin sources"
 alias = "f"
-run = "odinfmt -w odx"
+run = "odinfmt -w odx && odinfmt -w tests/runner && odinfmt -w tests/selection"

@@ -1,0 +1,5 @@
+--- stdout
+{"version":1,"findings":[],"errors":[],"summary":{"findings":0,"ignored":0,"pending":0,"skipped":0,"rules":1,"release":"<release>","odin":"<odin>"}}
+--- stderr
+odx: no odx.json, so rule set 1, the running compiler and every package strict
+--- exit 0

@@ -1,0 +1,4 @@
+--- stdout
+--- stderr
+odx: error: config-invalid: 'lib' is listed under both 'vendored' and 'pending'
+--- exit 2

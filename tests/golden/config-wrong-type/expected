@@ -1,0 +1,4 @@
+--- stdout
+--- stderr
+odx: error: config-invalid: 'version' must be an integer
+--- exit 2

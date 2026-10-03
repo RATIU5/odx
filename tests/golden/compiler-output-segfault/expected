@@ -1,0 +1,5 @@
+--- stdout
+--- stderr
+odx: no odx.json, so rule set 1, the running compiler and every package strict
+odx: error: compiler-output: checking 'lib' for darwin_arm64 ended with exit code 11; stderr was empty
+--- exit 2

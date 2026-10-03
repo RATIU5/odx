@@ -1,0 +1,4 @@
+#!/bin/sh
+# On `check`, dies by SIGSEGV.
+. "$(dirname "$0")/../pass-through.sh"
+kill -SEGV $$

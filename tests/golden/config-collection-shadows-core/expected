@@ -1,0 +1,7 @@
+--- stdout
+--- stderr
+odx: error: config-invalid: collection name 'core' is reserved for the Odin root
+odx: error: config-invalid: collection name 'base' is reserved for the Odin root
+odx: error: config-invalid: collection name 'vendor' is reserved for the Odin root
+odx: error: config-invalid: collection name 'shared' is reserved for the Odin root
+--- exit 2

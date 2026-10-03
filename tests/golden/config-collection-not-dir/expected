@@ -1,0 +1,5 @@
+--- stdout
+--- stderr
+odx: error: config-invalid: collection 'libs' path 'missing' is not a directory
+odx: error: config-invalid: collection 'file' path 'notes.txt' is not a directory
+--- exit 2

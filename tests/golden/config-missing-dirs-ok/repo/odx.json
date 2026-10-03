@@ -1,0 +1,1 @@
+{"version": 1, "odin": "dev-2026-09-nightly:a2fb372", "vendored": ["third_party"], "exclude_dirs": ["gen"], "pending": {"old": "odx init 2026-10-03"}, "collections": [], "defines": ["FOO=1"]}

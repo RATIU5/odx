@@ -1,0 +1,3 @@
+# Compiler warnings count only where the team owns the code
+
+`-warnings-as-errors` can't be limited to one package, so a deprecation inside a pending package, a vendored tree or the Odin root became an error in every strict importer's check, and nobody could fix or hold it back. odx no longer passes the flag. It reads each compiler entry as an error or a warning and places warnings by location. A warning in a strict package is an `odin` finding, a warning in a pending package is held back, and a warning in vendored code or the Odin root is dropped. Errors count wherever they lie, because every package must compile.

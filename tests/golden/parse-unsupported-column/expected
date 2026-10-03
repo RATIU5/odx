@@ -1,0 +1,6 @@
+--- stdout
+tq.odin:4:16: parse-unsupported: odx can't parse this file: expected ';', got string
+odx: 1 findings, 0 ignored, 0 pending, 0 skipped (rules 1, odx <release>, odin <odin>)
+--- stderr
+odx: no odx.json, so rule set 1, the running compiler and every package strict
+--- exit 1

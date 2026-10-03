@@ -1,0 +1,6 @@
+--- stdout
+app/app.odin:7:23: odin: Cannot assign value 'proc(a: string, b: int) -> bool {...}' of type 'proc(string, int) -> bool' to 'proc(string, string) -> bool' in a procedure argument Note: The input parameter types differ between the procedure signature types Expected: string, string Got:      string, int
+odx: 1 findings, 0 ignored, 0 pending, 0 skipped (rules 1, odx <release>, odin <odin>)
+--- stderr
+odx: no odx.json, so rule set 1, the running compiler and every package strict
+--- exit 1

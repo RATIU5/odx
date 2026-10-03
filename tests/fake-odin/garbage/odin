@@ -1,0 +1,5 @@
+#!/bin/sh
+# On `check`, writes stderr that isn't JSON and exits 1.
+. "$(dirname "$0")/../pass-through.sh"
+echo 'this is not json' >&2
+exit 1

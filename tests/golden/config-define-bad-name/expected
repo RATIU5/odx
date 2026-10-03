@@ -1,0 +1,5 @@
+--- stdout
+--- stderr
+odx: error: config-invalid: define name '1BAD' is not an identifier
+odx: error: config-invalid: define 'GOOD' is listed twice
+--- exit 2

@@ -1,0 +1,6 @@
+--- stdout
+wrap/wrap.odin:6:9: odin: 'where' clause evaluated to false: intrinsics.type_is_ordered(T) With the following definitions: S :: []Point; T :: Point; wrap/wrap.odin(6:9) at caller location (reported at $ODIN_ROOT/core/slice/slice.odin:727:68)
+odx: 1 findings, 0 ignored, 0 pending, 0 skipped (rules 1, odx <release>, odin <odin>)
+--- stderr
+odx: no odx.json, so rule set 1, the running compiler and every package strict
+--- exit 1

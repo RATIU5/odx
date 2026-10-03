@@ -1,0 +1,5 @@
+#!/bin/sh
+# On `check`, becomes one childless process that sleeps forever. The `fake-odin-hang` argument
+# keeps it visible to `pgrep -f fake-odin` until odx kills it.
+. "$(dirname "$0")/../pass-through.sh"
+exec perl -e sleep fake-odin-hang

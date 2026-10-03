@@ -1,0 +1,4 @@
+--- stdout
+--- stderr
+odx: error: config-invalid: 'pending' entry 'lib' has an empty reason
+--- exit 2

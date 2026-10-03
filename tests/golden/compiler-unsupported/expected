@@ -1,0 +1,4 @@
+--- stdout
+--- stderr
+odx: error: compiler-unsupported: odin dev-2025-01-nightly:0000000 is outside the range this release supports: <odin>
+--- exit 2

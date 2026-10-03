@@ -1,0 +1,4 @@
+--- stdout
+--- stderr
+odx: error: config-invalid: missing required key 'version'
+--- exit 2

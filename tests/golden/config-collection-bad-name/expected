@@ -1,0 +1,6 @@
+--- stdout
+--- stderr
+odx: error: config-invalid: collection name '1libs' is not an identifier
+odx: error: config-invalid: 'collections' entry 'libs' is not 'name=path'
+odx: error: config-invalid: collection name 'a-b' is not an identifier
+--- exit 2
