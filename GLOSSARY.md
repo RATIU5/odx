@@ -33,7 +33,7 @@ A reason odx can't give a trustworthy result. Each has a permanent code, and any
 _Avoid_: failure, fatal finding
 
 **Skipped**:
-A package or file some checks couldn't run on, such as one with no files for the host or one odx can't parse. It is counted, never failed.
+A package with no files for any target odx checks, so the compiler can't check it. odx's own rules still run on it. It is counted, never failed.
 _Avoid_: excluded, ignored
 
 **Held-back finding**:
@@ -47,7 +47,7 @@ The default status of a package: every checker rule applies, and any finding fai
 _Avoid_: enforced, checked
 
 **Pending**:
-A package listed as not yet strict, with a reason. It is debt scheduled for fixing, never accepted code, and the list only shrinks.
+A package listed as not yet strict, with a reason. It is debt scheduled for fixing, never accepted code. The list grows only in the commit that raises the rule set or the compiler pin.
 _Avoid_: baseline, allowlist, legacy
 
 **Vendored**:
