@@ -2,6 +2,7 @@ package odx
 
 import "base:runtime"
 import "core:fmt"
+import "core:os"
 import "core:slice"
 import "core:strings"
 
@@ -35,4 +36,26 @@ check_compiler :: proc(
 		)
 		append(errors, Error{.Compiler_Unsupported, message})
 	}
+}
+
+// Returns the Odin root without a trailing `/`, or a message saying why it couldn't.
+read_odin_root :: proc(
+	odin: string,
+	allocator: runtime.Allocator,
+) -> (
+	root: string,
+	failure: string,
+) {
+	state, stdout, stderr, err := os.process_exec({command = {odin, "root"}}, allocator)
+	text := strings.trim_space(string(stdout))
+	if err != nil || !state.success || text == "" {
+		return "", fmt.aprintf(
+			"'%s root' failed: exit %d, %s",
+			odin,
+			state.exit_code,
+			strings.trim_space(string(stderr)),
+			allocator = allocator,
+		)
+	}
+	return strings.trim_right(text, "/"), ""
 }

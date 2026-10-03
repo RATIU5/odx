@@ -1,0 +1,3 @@
+package data
+
+GREETING :: "hello"

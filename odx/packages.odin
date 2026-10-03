@@ -3,6 +3,7 @@ package odx
 import "base:runtime"
 import "core:fmt"
 import "core:mem/virtual"
+import "core:odin/ast"
 import "core:os"
 import "core:slice"
 import "core:strings"
@@ -28,6 +29,8 @@ Source_File :: struct {
 	is_test:      bool,
 	// False when odx can't read or parse the file, so its parsed rules skip it.
 	parsed:       bool,
+	// The paths the file names, and its own link when it is a symlink, before resolving.
+	paths:        [dynamic]Path_Ref,
 }
 
 Package :: struct {
@@ -160,6 +163,10 @@ walk_dir :: proc(w: ^Walker, rel, abs, project: string) {
 					   link_err == nil {
 						file.link_target = target
 					}
+					if text, link_err := os.read_link(entry.fullpath, w.allocator);
+					   link_err == nil {
+						append(&file.paths, file_symlink_ref(text))
+					}
 				}
 				append(&pkg.files, file)
 			}
@@ -179,6 +186,7 @@ read_file :: proc(w: ^Walker, path, abs, project: string) -> (file: Source_File,
 	scratch := virtual.arena_allocator(w.scratch)
 
 	file.path = strings.clone(path, w.allocator)
+	file.paths = make([dynamic]Path_Ref, w.allocator)
 	data, err := os.read_entire_file(abs, scratch)
 	if err != nil {
 		message := fmt.aprintf(
@@ -204,7 +212,11 @@ read_file :: proc(w: ^Walker, path, abs, project: string) -> (file: Source_File,
 	parse_error: Maybe(Parse_Error)
 	{
 		context.allocator = scratch
-		parse_error = first_parse_error(src, w.allocator)
+		parsed: ^ast.File
+		parsed, parse_error = parse_source(src, w.allocator)
+		if parse_error == nil {
+			collect_path_refs(parsed, &file.paths)
+		}
 	}
 	if e, failed := parse_error.?; failed {
 		line, col := text_position(src, e.offset)

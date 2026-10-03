@@ -353,7 +353,6 @@ is_identifier :: proc(s: string) -> bool {
 	return s != ""
 }
 
-@(private = "file")
 is_within :: proc(path, dir: string) -> bool {
 	if !strings.has_prefix(path, dir) {
 		return false

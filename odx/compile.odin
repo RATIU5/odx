@@ -45,10 +45,10 @@ Pool :: struct {
 
 // Runs one `odin check` per package and target per Appendix E.4, then adds the `odin` findings and
 // held-back warnings to `result` and marks muted packages. An untrusted check adds `compiler-output`
-// instead. `odin` is the compiler's path and `root` the repo root. Allocates what it adds with
-// `allocator`.
+// instead. `odin` is the compiler's path, `odin_root` what `odin root` printed and `root` the repo
+// root. Allocates what it adds with `allocator`.
 compile :: proc(
-	odin, root: string,
+	odin, odin_root, root: string,
 	config: Config,
 	packages: []Package,
 	result: ^Result,
@@ -71,11 +71,6 @@ compile :: proc(
 	defer virtual.arena_destroy(&work)
 	scratch := virtual.arena_allocator(&work)
 
-	odin_root, root_err := read_odin_root(odin, scratch)
-	if root_err != "" {
-		append(&result.errors, Error{.Compiler_Output, strings.clone(root_err, allocator)})
-		return
-	}
 	code := make_code_map(root, odin_root, packages, config.vendored[:], scratch)
 
 	temp_dir, temp_err := os.make_directory_temp("", "odx-check-*", scratch)
@@ -262,29 +257,6 @@ check_timeout :: proc() -> time.Duration {
 		return time.Duration(ms) * time.Millisecond
 	}
 	return CHECK_TIMEOUT
-}
-
-// Returns the Odin root without a trailing `/`, or a message saying why it couldn't.
-@(private = "file")
-read_odin_root :: proc(
-	odin: string,
-	allocator: runtime.Allocator,
-) -> (
-	root: string,
-	failure: string,
-) {
-	state, stdout, stderr, err := os.process_exec({command = {odin, "root"}}, allocator)
-	text := strings.trim_space(string(stdout))
-	if err != nil || !state.success || text == "" {
-		return "", fmt.aprintf(
-			"'%s root' failed: exit %d, %s",
-			odin,
-			state.exit_code,
-			strings.trim_space(string(stderr)),
-			allocator = allocator,
-		)
-	}
-	return strings.trim_right(text, "/"), ""
 }
 
 @(private = "file")

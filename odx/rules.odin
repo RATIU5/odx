@@ -63,3 +63,13 @@ ERROR_CODES := [Error_Code]string {
 	.Compiler_Output      = "compiler-output",
 	.Init_Exists          = "init-exists",
 }
+
+add_rule_finding :: proc(result: ^Result, pkg: Package, finding: Finding) {
+	info := RULES[finding.rule]
+	if pkg.muted && !info.runs_when_muted {
+		return
+	}
+	finding := finding
+	finding.held_back = pkg.status == .Pending && info.held_back == .Yes
+	append(&result.findings, finding)
+}

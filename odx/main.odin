@@ -31,7 +31,7 @@ run :: proc() -> int {
 				os.write_string(os.stderr, NO_CONFIG_NOTE)
 			}
 			packages := discover(repo.root, config, &result, context.allocator)
-			compile(odin, repo.root, config, packages[:], &result, context.allocator)
+			check(odin, repo.root, config, packages[:], &result)
 			sort_findings(&result.findings)
 		}
 	}
@@ -39,6 +39,21 @@ run :: proc() -> int {
 		return 2
 	}
 	return exit_code(result)
+}
+
+check :: proc(odin, root: string, config: Config, packages: []Package, result: ^Result) {
+	if len(packages) == 0 {
+		return
+	}
+	odin_root, failure := read_odin_root(odin, context.allocator)
+	if failure != "" {
+		append(&result.errors, Error{.Compiler_Output, failure})
+		return
+	}
+	compile(odin, odin_root, root, config, packages, result, context.allocator)
+	if len(result.errors) == 0 {
+		check_paths(packages, root, odin_root, config.collections[:], result, context.allocator)
+	}
 }
 
 // Sets the result's compiler and rule set from `odin version` and odx.json, or adds the errors that

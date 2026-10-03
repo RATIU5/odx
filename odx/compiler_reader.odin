@@ -157,8 +157,8 @@ make_code_map :: proc(
 ) -> Code_Map {
 	context.allocator = allocator
 	code := Code_Map {
-		repo_root = real_root(repo_root),
-		odin_root = real_root(odin_root),
+		repo_root = real_root(repo_root, allocator),
+		odin_root = real_root(odin_root, allocator),
 		packages  = make(map[string]Package_Status, len(packages)),
 		vendored  = make([]string, len(vendored)),
 	}
@@ -171,9 +171,10 @@ make_code_map :: proc(
 	return code
 }
 
-@(private = "file")
-real_root :: proc(path: string) -> string {
-	real, err := os.get_absolute_path(path, context.allocator)
+// Returns the real path, or `path` when it has none, without a trailing `/`. Allocates with
+// `allocator`.
+real_root :: proc(path: string, allocator: runtime.Allocator) -> string {
+	real, err := os.get_absolute_path(path, allocator)
 	if err != nil {
 		real = path
 	}

@@ -51,10 +51,17 @@ Parse_Error :: struct {
 	message: string,
 }
 
-// Returns the error at the smallest offset that `core:odin/parser` reports, from the parser or its
-// tokenizer. `parse_file` returns true even when it reports errors (probe P5). The AST is allocated
-// with `context.allocator`, which suits a scratch arena, and the returned message with `allocator`.
-first_parse_error :: proc(src: string, allocator: runtime.Allocator) -> Maybe(Parse_Error) {
+// Parses `src` with `core:odin/parser` and returns its AST, or the error at the smallest offset that
+// the parser or its tokenizer reports. `parse_file` returns true even when it reports errors (probe P5).
+// The AST is allocated with `context.allocator`, which suits a scratch arena, and the error's message
+// with `allocator`.
+parse_source :: proc(
+	src: string,
+	allocator: runtime.Allocator,
+) -> (
+	file: ^ast.File,
+	failure: Maybe(Parse_Error),
+) {
 	first: Maybe(Parse_Error)
 	p := parser.default_parser()
 	p.warn = nil
@@ -66,14 +73,13 @@ first_parse_error :: proc(src: string, allocator: runtime.Allocator) -> Maybe(Pa
 		}
 		first^ = Parse_Error{pos.offset, fmt.aprintf(msg, ..args)}
 	}
-	file := ast.File {
-		src = src,
-	}
+	file = new(ast.File)
+	file.src = src
 	context.user_ptr = &first
-	parser.parse_file(&p, &file)
+	parser.parse_file(&p, file)
 	e, found := first.?
 	if !found {
-		return nil
+		return file, nil
 	}
-	return Parse_Error{e.offset, strings.clone(e.message, allocator)}
+	return nil, Parse_Error{e.offset, strings.clone(e.message, allocator)}
 }
