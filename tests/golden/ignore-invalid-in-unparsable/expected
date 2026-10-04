@@ -1,0 +1,9 @@
+--- stdout
+app/app.odin:4:1: ignore-invalid: only whole-file ignores apply in a file odx can't parse
+app/app.odin:6:1: ignore-invalid: write an ignore as '// odx:ignore <rules> <reason>', with one space after '//'
+app/app.odin:7:1: ignore-invalid: unknown rule 'nope'
+app/app.odin:8:8: parse-unsupported: odx can't parse this file: string literal was not terminated
+odx: 4 findings, 1 ignored, 0 pending, 0 skipped (rules 1, odx <release>, odin <odin>)
+--- stderr
+odx: no odx.json, so rule set 1, the running compiler and every package strict
+--- exit 1

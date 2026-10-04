@@ -31,6 +31,8 @@ Source_File :: struct {
 	parsed:       bool,
 	// The paths the file names, and its own link when it is a symlink, before resolving.
 	paths:        [dynamic]Path_Ref,
+	findings:     [dynamic]Finding,
+	ignores:      [dynamic]Ignore,
 }
 
 Package :: struct {
@@ -187,6 +189,8 @@ read_file :: proc(w: ^Walker, path, abs, project: string) -> (file: Source_File,
 
 	file.path = strings.clone(path, w.allocator)
 	file.paths = make([dynamic]Path_Ref, w.allocator)
+	file.findings = make([dynamic]Finding, w.allocator)
+	file.ignores = make([dynamic]Ignore, w.allocator)
 	data, err := os.read_entire_file(abs, scratch)
 	if err != nil {
 		message := fmt.aprintf(
@@ -209,6 +213,7 @@ read_file :: proc(w: ^Walker, path, abs, project: string) -> (file: Source_File,
 	if header.package_offset >= 0 {
 		file.package_line, file.package_col = text_position(src, header.package_offset)
 	}
+	check_line_length(&file.findings, file.path, src)
 	parse_error: Maybe(Parse_Error)
 	{
 		context.allocator = scratch
@@ -217,6 +222,7 @@ read_file :: proc(w: ^Walker, path, abs, project: string) -> (file: Source_File,
 		if parse_error == nil {
 			collect_path_refs(parsed, &file.paths)
 		}
+		read_ignores(&file, src, parsed, header.package_offset, w.allocator, scratch)
 	}
 	if e, failed := parse_error.?; failed {
 		line, col := text_position(src, e.offset)

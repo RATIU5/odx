@@ -1,0 +1,7 @@
+--- stdout
+app/app.odin:4:98: line-length: line is 143 columns wide, over the limit of 100
+app/app.odin:4:110: ignore-invalid: an ignore must be on its own line, above the code it covers
+odx: 2 findings, 0 ignored, 0 pending, 0 skipped (rules 1, odx <release>, odin <odin>)
+--- stderr
+odx: no odx.json, so rule set 1, the running compiler and every package strict
+--- exit 1

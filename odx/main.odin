@@ -51,9 +51,18 @@ check :: proc(odin, root: string, config: Config, packages: []Package, result: ^
 		return
 	}
 	compile(odin, odin_root, root, config, packages, result, context.allocator)
-	if len(result.errors) == 0 {
-		check_paths(packages, root, odin_root, config.collections[:], result, context.allocator)
+	if len(result.errors) > 0 {
+		return
 	}
+	check_paths(packages, root, odin_root, config.collections[:], result, context.allocator)
+	for pkg in packages {
+		for file in pkg.files {
+			for f in file.findings {
+				add_rule_finding(result, pkg, f)
+			}
+		}
+	}
+	apply_ignores(packages, result)
 }
 
 // Sets the result's compiler and rule set from `odin version` and odx.json, or adds the errors that

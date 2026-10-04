@@ -1,0 +1,7 @@
+--- stdout
+app/tq.odin:7:7: parse-unsupported: odx can't parse this file: expected ';', got string
+app/tq.odin:18:1: ignore-invalid: only whole-file ignores apply in a file odx can't parse
+odx: 2 findings, 1 ignored, 0 pending, 0 skipped (rules 1, odx <release>, odin <odin>)
+--- stderr
+odx: no odx.json, so rule set 1, the running compiler and every package strict
+--- exit 1
