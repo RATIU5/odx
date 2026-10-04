@@ -128,14 +128,16 @@ triple_quote_end :: proc(src: string, from: int) -> int {
 	return len(src)
 }
 
+// Any comment that reads as an attempt at a directive is one, so a misspelled ignore is reported
+// instead of silently suppressing nothing.
 @(private = "file")
 is_odx_directive :: proc(comment: string) -> bool {
-	if !strings.has_prefix(comment, "//") {
-		return false
-	}
-	return strings.has_prefix(strings.trim_left(comment[len("//"):], " \t"), "odx:")
+	text := strings.trim_left_space(strings.trim_left(comment, "/*"))
+	return len(text) >= len("odx:") && strings.equal_fold(text[:len("odx:")], "odx:")
 }
 
+// Returns either a valid ignore or a problem, never both. The reason or the problem is allocated
+// with `allocator` and owned by the caller. The caller fills in `line`, `col` and `covers`.
 @(private = "file")
 parse_ignore :: proc(
 	comment: string,
@@ -145,7 +147,7 @@ parse_ignore :: proc(
 	problem: string,
 ) {
 	if !strings.has_prefix(comment, "// odx:") {
-		return {}, NO_SPACE
+		return {}, strings.clone(NO_SPACE, allocator)
 	}
 	directive := comment[len("// "):]
 	name_end := strings.index_any(directive, " \t")
@@ -159,9 +161,9 @@ parse_ignore :: proc(
 	rest := directive[name_end:]
 	switch {
 	case strings.trim_space(rest) == "":
-		return {}, NO_RULE
+		return {}, strings.clone(NO_RULE, allocator)
 	case rest[0] != ' ' || rest[1] == ' ' || rest[1] == '\t':
-		return {}, ONE_SPACE
+		return {}, strings.clone(ONE_SPACE, allocator)
 	}
 	rest = rest[1:]
 	list, reason := rest, ""
@@ -170,18 +172,18 @@ parse_ignore :: proc(
 	}
 	switch {
 	case strings.has_suffix(list, ",") && reason != "", strings.has_prefix(reason, ","):
-		return {}, SPACE_IN_LIST
+		return {}, strings.clone(SPACE_IN_LIST, allocator)
 	case strings.has_prefix(list, ","),
 	     strings.has_suffix(list, ","),
 	     strings.contains(list, ",,"):
-		return {}, EMPTY_ITEM
+		return {}, strings.clone(EMPTY_ITEM, allocator)
 	}
 	ignore.rules, problem = parse_rules(list, allocator)
 	if problem != "" {
 		return {}, problem
 	}
 	if reason == "" {
-		return {}, NO_REASON
+		return {}, strings.clone(NO_REASON, allocator)
 	}
 	ignore.reason = strings.clone(reason, allocator)
 	return
@@ -230,6 +232,7 @@ rule_by_id :: proc(id: string) -> (rule: Rule, known: bool) {
 @(private = "file")
 FILE_SCOPE :: -1
 
+@(private = "file")
 Node_Span :: struct {
 	node:            ^ast.Node,
 	parent:          int,
@@ -245,6 +248,9 @@ Binder :: struct {
 	preorder:    [dynamic]Node_Span,
 }
 
+// The caller owns the binder's `preorder`, allocated with `allocator`. The binder borrows `src`,
+// `line_starts` and `tree`, so it must not outlive them.
+//
 // Skips comment groups: core:odin puts consecutive comments in one `Comment_Group` node, so a
 // stacked ignore would otherwise bind inside its own group.
 make_binder :: proc(
@@ -261,6 +267,7 @@ make_binder :: proc(
 		},
 		ancestors = make([dynamic]int, allocator),
 	}
+	defer delete(walk.ancestors)
 	visitor := ast.Visitor {
 		visit = record_node,
 		data  = &walk,
@@ -372,12 +379,17 @@ innermost_container :: proc(b: Binder, offset: int) -> (container: int) {
 	return
 }
 
-// A literal element, keyed or not, covers its own literal's lines (operator decision 2026-10-03).
+// A literal element, keyed or not and with or without `&`, covers its own literal's lines
+// (operator decision 2026-10-03).
 @(private = "file")
 own_body :: proc(target: ^ast.Node) -> ^ast.Node {
 	literal := target
 	if keyed, is_keyed := target.derived.(^ast.Field_Value); is_keyed {
 		literal = keyed.value
+	}
+	if address, is_unary := literal.derived.(^ast.Unary_Expr);
+	   is_unary && address.op.kind == .And {
+		literal = address.expr
 	}
 	if _, is_literal := literal.derived.(^ast.Comp_Lit); is_literal {
 		return literal
@@ -468,6 +480,7 @@ make_line_starts :: proc(src: string, allocator: runtime.Allocator) -> []int {
 	return starts[:]
 }
 
+@(private = "file")
 line_of :: proc(line_starts: []int, offset: int) -> int {
 	i, found := slice.binary_search(line_starts, offset)
 	return i + 1 if found else i
