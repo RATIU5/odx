@@ -1,0 +1,11 @@
+--- stdout
+app/app.odin:4:8: one-line-block: this block opens and closes on one line
+app/app.odin:5:19: one-line-block: this block opens and closes on one line
+app/app.odin:6:2: one-line-block: this block opens and closes on one line
+app/app.odin:7:18: one-line-block: this block opens and closes on one line
+app/app.odin:8:9: one-line-block: this block opens and closes on one line
+app/app.odin:8:21: one-line-block: this block opens and closes on one line
+odx: 6 findings, 0 ignored, 0 pending, 0 skipped (rules 1, odx <release>, odin <odin>)
+--- stderr
+odx: no odx.json, so rule set 1, the running compiler and every package strict
+--- exit 1

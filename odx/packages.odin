@@ -228,6 +228,7 @@ read_file :: proc(w: ^Walker, path, abs, project: string) -> (file: Source_File,
 		file.package_line, file.package_col = text_position(src, header.package_offset)
 	}
 	check_line_length(&file.findings, file.path, src)
+	check_file_tags(&file.findings, file.path, src, header.tags[:], scratch)
 	parse_error: Maybe(Parse_Error)
 	{
 		context.allocator = scratch
@@ -235,6 +236,7 @@ read_file :: proc(w: ^Walker, path, abs, project: string) -> (file: Source_File,
 		parsed, parse_error = parse_source(src, w.allocator)
 		if parse_error == nil {
 			collect_path_refs(parsed, &file.paths)
+			walk_file(parsed, file.path, &file.findings)
 		}
 		read_ignores(&file, src, parsed, header.package_offset, w.allocator, scratch)
 	}

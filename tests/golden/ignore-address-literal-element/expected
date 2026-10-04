@@ -1,8 +1,8 @@
 --- stdout
-app/app.odin:15:89: line-length: line is 119 columns wide, over the limit of 100
-app/app.odin:19:92: line-length: line is 119 columns wide, over the limit of 100
-app/app.odin:28:92: line-length: line is 119 columns wide, over the limit of 100
-odx: 3 findings, 2 ignored, 0 pending, 0 skipped (rules 1, odx <release>, odin <odin>)
+app/app.odin:16:89: line-length: line is 119 columns wide, over the limit of 100
+app/app.odin:20:92: line-length: line is 119 columns wide, over the limit of 100
+app/app.odin:29:92: line-length: line is 119 columns wide, over the limit of 100
+odx: 3 findings, 3 ignored, 0 pending, 0 skipped (rules 1, odx <release>, odin <odin>)
 --- stderr
 odx: no odx.json, so rule set 1, the running compiler and every package strict
 --- exit 1

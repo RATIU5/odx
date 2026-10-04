@@ -91,3 +91,62 @@ add_rule_finding_keeps_a_held_back_finding_held_back_in_a_strict_package :: proc
 		testing.expect_value(t, result.findings[0].owner_dir, "lib")
 	}
 }
+
+@(test)
+rules_table_matches_the_contract_flag_by_flag :: proc(t: ^testing.T) {
+	want := [Rule]Rule_Info {
+		.Odin                   = {"odin", false, true, .Strict_Only, false},
+		.Parse_Unsupported      = {"parse-unsupported", false, true, .No, false},
+		.Import_Escape          = {"import-escape", false, true, .No, true},
+		.Path_Case              = {"path-case", false, true, .No, true},
+		.Line_Length            = {"line-length", true, false, .Yes, false},
+		.Ignore_Invalid         = {"ignore-invalid", false, true, .Yes, false},
+		.Ignore_Unused          = {"ignore-unused", false, false, .Yes, false},
+		.Pending_Stale          = {"pending-stale", false, true, .No, false},
+		.Block_Comment          = {"block-comment", false, false, .Yes, true},
+		.One_Line_Block         = {"one-line-block", false, false, .Yes, true},
+		.Auto_Cast              = {"auto-cast", false, false, .Yes, true},
+		.Do_Stmt                = {"do-stmt", false, false, .Yes, true},
+		.Fallthrough            = {"fallthrough", true, false, .Yes, true},
+		.Bounds_Check_Directive = {"bounds-check-directive", true, false, .Yes, true},
+		.Vet_Disabled           = {"vet-disabled", false, false, .Yes, false},
+		.Feature_Relaxed        = {"feature-relaxed", true, false, .Yes, false},
+		.Transmute              = {"transmute", true, false, .Yes, true},
+	}
+	for got, rule in RULES {
+		w := want[rule]
+		testing.expectf(t, got.id == w.id, "%v: id %q, want %q", rule, got.id, w.id)
+		testing.expectf(
+			t,
+			got.ignorable == w.ignorable,
+			"%s: ignorable %v, want %v",
+			w.id,
+			got.ignorable,
+			w.ignorable,
+		)
+		testing.expectf(
+			t,
+			got.runs_when_muted == w.runs_when_muted,
+			"%s: runs when muted %v, want %v",
+			w.id,
+			got.runs_when_muted,
+			w.runs_when_muted,
+		)
+		testing.expectf(
+			t,
+			got.held_back == w.held_back,
+			"%s: held back %v, want %v",
+			w.id,
+			got.held_back,
+			w.held_back,
+		)
+		testing.expectf(
+			t,
+			got.needs_parse == w.needs_parse,
+			"%s: needs parse %v, want %v",
+			w.id,
+			got.needs_parse,
+			w.needs_parse,
+		)
+	}
+}

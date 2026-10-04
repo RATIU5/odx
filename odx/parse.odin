@@ -7,11 +7,16 @@ import "core:odin/parser"
 import "core:odin/tokenizer"
 import "core:strings"
 
+File_Tag :: struct {
+	// The tag's text after the `#+`.
+	body: string,
+	pos:  tokenizer.Pos,
+}
+
 // The part of a file before its declarations, read with the tokenizer so a file the parser can't
 // read still has one.
 Header :: struct {
-	// Each `#+` tag's text after the `#+`.
-	tags:           [dynamic]string,
+	tags:           [dynamic]File_Tag,
 	// The identifier after the first `package` token, or "" when there is none.
 	name:           string,
 	// The byte offset of that `package` token, or -1.
@@ -20,7 +25,7 @@ Header :: struct {
 
 // The tags and name borrow from `src`. Allocates the tag list with `allocator`.
 scan_header :: proc(src: string, allocator: runtime.Allocator) -> (header: Header) {
-	header.tags = make([dynamic]string, allocator)
+	header.tags = make([dynamic]File_Tag, allocator)
 	header.package_offset = -1
 	t: tokenizer.Tokenizer
 	tokenizer.init(&t, src, "", nil)
@@ -35,7 +40,7 @@ scan_header :: proc(src: string, allocator: runtime.Allocator) -> (header: Heade
 			if i := strings.index_byte(text, '/'); i >= 0 {
 				text = text[:i]
 			}
-			append(&header.tags, text)
+			append(&header.tags, File_Tag{text, token.pos})
 		case .Package:
 			header.package_offset = token.pos.offset
 			if next := tokenizer.scan(&t); next.kind == .Ident {

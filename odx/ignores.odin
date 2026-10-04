@@ -516,8 +516,9 @@ apply_ignores :: proc(packages: []Package, result: ^Result) {
 
 	for &pkg in packages {
 		for file in pkg.files {
+			ran := rules_that_ran(file)
 			for ignore in file.ignores {
-				if !ignore.used {
+				if !ignore.used && ignore.rules & ran != {} {
 					add_rule_finding(
 						result,
 						&pkg,
@@ -534,6 +535,16 @@ apply_ignores :: proc(packages: []Package, result: ^Result) {
 			}
 		}
 	}
+}
+
+@(private = "file")
+rules_that_ran :: proc(file: Source_File) -> (ran: bit_set[Rule]) {
+	for info, rule in RULES {
+		if file.parsed || !info.needs_parse {
+			ran += {rule}
+		}
+	}
+	return
 }
 
 @(private = "file")

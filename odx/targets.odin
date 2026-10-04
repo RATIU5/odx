@@ -111,14 +111,13 @@ Tag_Verdict :: struct {
 	ignored: bool,
 }
 
-// `tags` are the text of each `#+` tag before `package`, without the `#+`. `project` is the name the
-// compiler gives the build, the last element of the package directory's real path. `targets` is the
-// set the compiler accepts under `odin test`, so `odin check` compiles the file exactly when it is
-// in `targets` and isn't a test file.
-judge_tags :: proc(tags: []string, project: string) -> (verdict: Tag_Verdict) {
+// `project` is the name the compiler gives the build, the last element of the package directory's real
+// path. `targets` is the set the compiler accepts under `odin test`, so `odin check` compiles the file
+// exactly when it is in `targets` and isn't a test file.
+judge_tags :: proc(tags: []File_Tag, project: string) -> (verdict: Tag_Verdict) {
 	verdict.targets = ALL_TARGETS
 	for raw in tags {
-		tag := trim_tag_space(raw)
+		tag := trim_tag_space(raw.body)
 		switch {
 		case strings.has_prefix(tag, "build-project-name"):
 			if !parse_build_project_directory_tag(tag, project) {
@@ -226,7 +225,7 @@ parse_build_tag :: proc(tag: string, target: Target) -> bool {
 		num_tokens := 0
 		for {
 			p: string
-			p, s = build_tag_get_token(s)
+			p, s = tag_get_token(s, ":")
 			p = trim_tag_space(p)
 			if len(p) == 0 || p == "," {
 				break
@@ -311,7 +310,7 @@ parse_build_project_directory_tag :: proc(tag, project: string) -> bool {
 		this_kind_correct := true
 		for {
 			p: string
-			p, s = build_tag_get_token(s)
+			p, s = tag_get_token(s, ":")
 			p = trim_tag_space(p)
 			if len(p) == 0 || p == "," {
 				break
@@ -339,7 +338,6 @@ parse_build_project_directory_tag :: proc(tag, project: string) -> bool {
 }
 
 // `build_require_space_after` in parser.cpp. Returns true on the compiler's syntax error.
-@(private = "file")
 build_require_space_after :: proc(s, prefix: string) -> bool {
 	if len(s) == len(prefix) {
 		return false
@@ -347,16 +345,16 @@ build_require_space_after :: proc(s, prefix: string) -> bool {
 	return s[len(prefix)] != ' ' && len(trim_tag_space(s[len(prefix):])) != 0
 }
 
-// `build_tag_get_token` in parser.cpp. A token runs over letters, digits and `:`, with a leading `!`,
-// so `-` and `,` each end one.
-@(private = "file")
-build_tag_get_token :: proc(text: string) -> (token, rest: string) {
+// `build_tag_get_token` and `vet_tag_get_token` in parser.cpp.
+tag_get_token :: proc(text, token_bytes: string) -> (token, rest: string) {
 	s := trim_tag_space(text)
 	n := 0
 	for n < len(s) {
 		r, width := utf8.decode_rune(s[n:])
 		if n == 0 && r == '!' {
-		} else if !tokenizer.is_letter(r) && !tokenizer.is_digit(r) && r != ':' {
+		} else if !tokenizer.is_letter(r) &&
+		   !tokenizer.is_digit(r) &&
+		   !strings.contains_rune(token_bytes, r) {
 			k := max(n, width, 1)
 			return s[:k], s[k:]
 		}
@@ -434,7 +432,6 @@ equal_ignore_case :: proc(a, b: string) -> bool {
 }
 
 // `string_trim_whitespace` in string.cpp, which trims only these four and trailing NULs.
-@(private = "file")
 trim_tag_space :: proc(text: string) -> string {
 	s := strings.trim_right(text, " \t\n\r")
 	s = strings.trim_right(s, "\x00")

@@ -1,3 +1,4 @@
+// odx:ignore feature-relaxed the case needs a map literal
 #+feature dynamic-literals
 package app
 

@@ -14,6 +14,15 @@ Rule :: enum u8 {
 	Ignore_Invalid,
 	Ignore_Unused,
 	Pending_Stale,
+	Block_Comment,
+	One_Line_Block,
+	Auto_Cast,
+	Do_Stmt,
+	Fallthrough,
+	Bounds_Check_Directive,
+	Vet_Disabled,
+	Feature_Relaxed,
+	Transmute,
 }
 
 Held_Back :: enum u8 {
@@ -27,19 +36,29 @@ Rule_Info :: struct {
 	ignorable:       bool,
 	runs_when_muted: bool,
 	held_back:       Held_Back,
+	needs_parse:     bool,
 }
 
 // IDs are permanent and never reused.
 @(rodata)
 RULES := [Rule]Rule_Info {
-	.Odin              = {"odin", false, true, .Strict_Only},
-	.Parse_Unsupported = {"parse-unsupported", false, true, .No},
-	.Import_Escape     = {"import-escape", false, true, .No},
-	.Path_Case         = {"path-case", false, true, .No},
-	.Line_Length       = {"line-length", true, false, .Yes},
-	.Ignore_Invalid    = {"ignore-invalid", false, true, .Yes},
-	.Ignore_Unused     = {"ignore-unused", false, false, .Yes},
-	.Pending_Stale     = {"pending-stale", false, true, .No},
+	.Odin                   = {"odin", false, true, .Strict_Only, false},
+	.Parse_Unsupported      = {"parse-unsupported", false, true, .No, false},
+	.Import_Escape          = {"import-escape", false, true, .No, true},
+	.Path_Case              = {"path-case", false, true, .No, true},
+	.Line_Length            = {"line-length", true, false, .Yes, false},
+	.Ignore_Invalid         = {"ignore-invalid", false, true, .Yes, false},
+	.Ignore_Unused          = {"ignore-unused", false, false, .Yes, false},
+	.Pending_Stale          = {"pending-stale", false, true, .No, false},
+	.Block_Comment          = {"block-comment", false, false, .Yes, true},
+	.One_Line_Block         = {"one-line-block", false, false, .Yes, true},
+	.Auto_Cast              = {"auto-cast", false, false, .Yes, true},
+	.Do_Stmt                = {"do-stmt", false, false, .Yes, true},
+	.Fallthrough            = {"fallthrough", true, false, .Yes, true},
+	.Bounds_Check_Directive = {"bounds-check-directive", true, false, .Yes, true},
+	.Vet_Disabled           = {"vet-disabled", false, false, .Yes, false},
+	.Feature_Relaxed        = {"feature-relaxed", true, false, .Yes, false},
+	.Transmute              = {"transmute", true, false, .Yes, true},
 }
 
 Error_Code :: enum u8 {

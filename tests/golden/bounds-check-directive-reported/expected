@@ -1,0 +1,8 @@
+--- stdout
+app/app.odin:5:19: bounds-check-directive: '#no_bounds_check' isn't allowed
+app/app.odin:8:16: bounds-check-directive: '#bounds_check' isn't allowed
+app/app.odin:11:19: bounds-check-directive: '#no_bounds_check' isn't allowed
+odx: 3 findings, 0 ignored, 0 pending, 0 skipped (rules 1, odx <release>, odin <odin>)
+--- stderr
+odx: no odx.json, so rule set 1, the running compiler and every package strict
+--- exit 1
