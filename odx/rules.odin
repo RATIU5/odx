@@ -50,6 +50,7 @@ Error_Code :: enum u8 {
 	Odin_Missing,
 	Compiler_Output,
 	Init_Exists,
+	Init_Write,
 }
 
 // Codes are permanent and never reused.
@@ -62,6 +63,7 @@ ERROR_CODES := [Error_Code]string {
 	.Odin_Missing         = "odin-missing",
 	.Compiler_Output      = "compiler-output",
 	.Init_Exists          = "init-exists",
+	.Init_Write           = "init-write",
 }
 
 // Adds `finding` as `pkg`'s. A nil `pkg` leaves it unowned and adds it as given, with no mute or

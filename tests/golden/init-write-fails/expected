@@ -1,0 +1,4 @@
+--- stdout
+--- stderr
+odx: error: init-write: could not write odx.json: permission denied
+--- exit 2

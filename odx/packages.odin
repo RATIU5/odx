@@ -53,6 +53,11 @@ Package :: struct {
 	muted:         bool,
 }
 
+// Skipped means no non-test file compiles for either target, so the compiler never checks it.
+is_skipped :: proc(p: Package) -> bool {
+	return p.check_targets == {} && !p.name_conflict
+}
+
 @(private = "file")
 Walker :: struct {
 	config:    Config,

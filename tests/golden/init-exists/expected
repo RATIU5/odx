@@ -1,0 +1,4 @@
+--- stdout
+--- stderr
+odx: error: init-exists: odx.json already exists, so odx init wrote nothing
+--- exit 2

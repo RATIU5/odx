@@ -158,7 +158,6 @@ render_result :: proc(out, err: ^strings.Builder, result: Result, cmd: Check_Com
 	)
 }
 
-@(private = "file")
 render_finding_text :: proc(out: ^strings.Builder, f: Finding) {
 	fmt.sbprintf(out, "%s:%d:%d: %s: %s\n", f.path, f.line, f.col, RULES[f.rule].id, f.message)
 }

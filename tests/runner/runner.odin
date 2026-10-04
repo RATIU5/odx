@@ -1,8 +1,10 @@
-// Case layout: `repo/` is copied to a temp dir and used as the working directory, `args` holds
-// whitespace-separated arguments, the optional `env` holds `KEY=VALUE` lines applied over the
-// inherited environment, the optional `cwd` names the subdirectory of `repo/` to run in, and
-// `expected` holds the output as `render` writes it. An `env` value expands `${NAME}` from the
-// inherited environment, and `${ODX_TESTS}` is the absolute `tests` dir.
+// Case layout: `repo/` is copied to a temp dir and used as the working directory, `args` holds one
+// command per line as whitespace-separated arguments, run in order on the same copy, the optional
+// `env` holds `KEY=VALUE` lines applied over the inherited environment, the optional `cwd` names the
+// subdirectory of `repo/` to run in, the optional `readonly` file makes the copy's root directory
+// read-only while the commands run, and `expected` holds the output as `run_case` renders it. An
+// `env` value expands `${NAME}` from the inherited environment, and `${ODX_TESTS}` is the absolute
+// `tests` dir. The rendering ends with `odx.json` when the commands created or changed it.
 package golden_runner
 
 import odx "../../odx"
@@ -13,6 +15,11 @@ import "core:strings"
 import "core:time"
 
 CASE_TIMEOUT :: 30 * time.Second
+
+Placeholders :: struct {
+	odin_version: string,
+	today:        string,
+}
 
 Outcome :: struct {
 	stdout:    string,
@@ -40,6 +47,12 @@ run :: proc() -> int {
 		fmt.eprintln("runner: could not read 'odin version'")
 		return 2
 	}
+	today, today_ok := read_today()
+	if !today_ok {
+		fmt.eprintln("runner: could not read 'date +%F'")
+		return 2
+	}
+	placeholders := Placeholders{odin_version, today}
 
 	golden := os.args[2]
 	golden_abs, golden_err := os.get_absolute_path(golden, context.allocator)
@@ -65,13 +78,12 @@ run :: proc() -> int {
 			fmt.tprintf("%s/expected", dir),
 			context.allocator,
 		)
-		outcome, run_err := run_case(odx_bin, dir, tests_dir)
+		actual, run_err := run_case(odx_bin, dir, tests_dir, placeholders)
 		if expected_err != nil || run_err != "" {
 			failed += 1
 			fmt.printfln("FAIL %s: %s", entry.name, run_err != "" ? run_err : "no expected file")
 			continue
 		}
-		actual := render(outcome, odin_version)
 		if actual == string(expected) {
 			passed += 1
 			fmt.printfln("PASS %s", entry.name)
@@ -107,20 +119,40 @@ read_odin_version :: proc() -> (version: string, ok: bool) {
 	return strings.trim_prefix(text, "odin version "), true
 }
 
-// Returns a non-empty reason when the case couldn't be run.
-run_case :: proc(odx_bin, dir, tests_dir: string) -> (outcome: Outcome, failure: string) {
+read_today :: proc() -> (today: string, ok: bool) {
+	state, stdout, stderr, err := os.process_exec({command = {"date", "+%F"}}, context.allocator)
+	delete(stderr)
+	text := strings.trim_right_space(string(stdout))
+	if err != nil || state.exit_code != 0 || len(text) != len("YYYY-MM-DD") {
+		return "", false
+	}
+	return text, true
+}
+
+// Runs the case's commands in order on one copy of its repo and returns their rendered output, or a
+// non-empty reason when the case couldn't be run.
+run_case :: proc(
+	odx_bin, dir, tests_dir: string,
+	placeholders: Placeholders,
+) -> (
+	actual: string,
+	failure: string,
+) {
 	ta := context.temp_allocator
 	args_text, args_err := os.read_entire_file(fmt.tprintf("%s/args", dir), ta)
 	if args_err != nil {
-		return {}, "no args file"
+		return "", "no args file"
 	}
-	command := make([dynamic]string, ta)
-	append(&command, odx_bin)
-	append(&command, ..strings.fields(string(args_text), ta))
+	commands := make([dynamic]string, ta)
+	for line in strings.split_lines(string(args_text), ta) {
+		if strings.trim_space(line) != "" {
+			append(&commands, line)
+		}
+	}
 
 	env, env_err := os.environ(ta)
 	if env_err != nil {
-		return {}, "could not read the environment"
+		return "", "could not read the environment"
 	}
 	if env_text, err := os.read_entire_file(fmt.tprintf("%s/env", dir), ta); err == nil {
 		env = apply_env(env, string(env_text), tests_dir)
@@ -128,12 +160,25 @@ run_case :: proc(odx_bin, dir, tests_dir: string) -> (outcome: Outcome, failure:
 
 	tmp, tmp_err := os.make_directory_temp("", "odx-golden-*", ta)
 	if tmp_err != nil {
-		return {}, fmt.tprintf("temp dir: %v", tmp_err)
+		return "", fmt.tprintf("temp dir: %v", tmp_err)
 	}
 	defer os.remove_all(tmp)
 	repo := fmt.tprintf("%s/repo", tmp)
 	if err := copy_tree(repo, fmt.tprintf("%s/repo", dir)); err != nil {
-		return {}, fmt.tprintf("copy repo: %v", err)
+		return "", fmt.tprintf("copy repo: %v", err)
+	}
+	config_path := fmt.tprintf("%s/%s", repo, odx.CONFIG_FILE)
+	config_before, config_before_err := os.read_entire_file(config_path, ta)
+	read_only := os.exists(fmt.tprintf("%s/readonly", dir))
+	if read_only {
+		if err := os.chmod(repo, os.Permissions_Read_All + os.Permissions_Execute_All);
+		   err != nil {
+			return "", fmt.tprintf("chmod repo: %v", err)
+		}
+	}
+	// remove_all can't empty a read-only directory.
+	defer if read_only {
+		os.chmod(repo, os.Permissions_Default_Directory)
 	}
 
 	working_dir := repo
@@ -141,6 +186,38 @@ run_case :: proc(odx_bin, dir, tests_dir: string) -> (outcome: Outcome, failure:
 		working_dir = fmt.tprintf("%s/%s", repo, strings.trim_space(string(cwd_text)))
 	}
 
+	b := strings.builder_make(ta)
+	for line in commands {
+		command := make([dynamic]string, ta)
+		append(&command, odx_bin)
+		append(&command, ..strings.fields(line, ta))
+		outcome, run_err := run_command(command[:], working_dir, env, tmp)
+		if run_err != "" {
+			return "", run_err
+		}
+		if len(commands) > 1 {
+			fmt.sbprintf(&b, "=== odx %s\n", strings.trim_space(line))
+		}
+		render(&b, outcome, placeholders)
+	}
+	config_after, config_after_err := os.read_entire_file(config_path, ta)
+	if config_after_err == nil &&
+	   (config_before_err != nil || string(config_before) != string(config_after)) {
+		write_stream(&b, odx.CONFIG_FILE, string(config_after), placeholders)
+	}
+	return strings.to_string(b), ""
+}
+
+run_command :: proc(
+	command: []string,
+	working_dir: string,
+	env: []string,
+	tmp: string,
+) -> (
+	outcome: Outcome,
+	failure: string,
+) {
+	ta := context.temp_allocator
 	out_path, err_path := fmt.tprintf("%s/stdout", tmp), fmt.tprintf("%s/stderr", tmp)
 	out_file, out_err := os.create(out_path)
 	if out_err != nil {
@@ -227,22 +304,21 @@ apply_env :: proc(env: []string, text, tests_dir: string) -> []string {
 	return result[:]
 }
 
-render :: proc(outcome: Outcome, odin_version: string) -> string {
-	b := strings.builder_make(context.temp_allocator)
-	write_stream(&b, "stdout", outcome.stdout, odin_version)
-	write_stream(&b, "stderr", outcome.stderr, odin_version)
+render :: proc(b: ^strings.Builder, outcome: Outcome, placeholders: Placeholders) {
+	write_stream(b, "stdout", outcome.stdout, placeholders)
+	write_stream(b, "stderr", outcome.stderr, placeholders)
 	if outcome.timed_out {
-		fmt.sbprintf(&b, "--- timed out after %v\n", CASE_TIMEOUT)
+		fmt.sbprintf(b, "--- timed out after %v\n", CASE_TIMEOUT)
 	} else {
-		fmt.sbprintf(&b, "--- exit %d\n", outcome.exit_code)
+		fmt.sbprintf(b, "--- exit %d\n", outcome.exit_code)
 	}
-	return strings.to_string(b)
 }
 
-write_stream :: proc(b: ^strings.Builder, name, raw, odin_version: string) {
+write_stream :: proc(b: ^strings.Builder, name, raw: string, placeholders: Placeholders) {
 	ta := context.temp_allocator
-	text, _ := strings.replace_all(raw, odin_version, "<odin>", ta)
+	text, _ := strings.replace_all(raw, placeholders.odin_version, "<odin>", ta)
 	text, _ = strings.replace_all(text, odx.RELEASE, "<release>", ta)
+	text, _ = strings.replace_all(text, placeholders.today, "<date>", ta)
 	fmt.sbprintf(b, "--- %s\n%s", name, text)
 	if text != "" && !strings.has_suffix(text, "\n") {
 		strings.write_string(b, "\n\\ no newline at end\n")

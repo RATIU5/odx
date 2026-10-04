@@ -1,0 +1,13 @@
+--- stdout
+init: 1 strict, 1 pending, 0 vendored, 1 skipped
+--- stderr
+odx: skipped tests: no non-test file compiles for darwin_arm64 or linux_amd64
+--- exit 0
+--- odx.json
+{
+	"version": 1,
+	"odin": "<odin>",
+	"pending": {
+		"long": "odx init <date>"
+	}
+}

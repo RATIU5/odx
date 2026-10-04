@@ -19,26 +19,44 @@ run :: proc() -> int {
 	case Error:
 		append(&result.errors, parsed)
 	case Init_Command:
-		append(&result.errors, Error{.Usage, "'odx init' is not built yet"})
+		return run_init()
 	case Check_Command:
 		cmd = parsed
-	}
-
-	if len(result.errors) == 0 {
-		repo, config, odin := load(&result)
-		if len(result.errors) == 0 {
-			if !repo.has_config {
-				os.write_string(os.stderr, NO_CONFIG_NOTE)
-			}
-			packages := discover(repo.root, config, &result, context.allocator)
-			check(odin, repo.root, config, packages[:], &result)
-			sort_and_dedupe_findings(&result.findings)
-		}
+		check_repo(&result)
 	}
 	if write_result(os.to_writer(os.stdout), os.to_writer(os.stderr), result, cmd) != nil {
 		return 2
 	}
 	return exit_code(result)
+}
+
+@(private = "file")
+check_repo :: proc(result: ^Result) {
+	repo := locate_repo(result)
+	if len(result.errors) > 0 {
+		return
+	}
+	config, odin := load(repo, result)
+	if len(result.errors) > 0 {
+		return
+	}
+	if !repo.has_config {
+		os.write_string(os.stderr, NO_CONFIG_NOTE)
+	}
+	packages := discover(repo.root, config, result, context.allocator)
+	check(odin, repo.root, config, packages[:], result)
+	if len(result.errors) > 0 {
+		return
+	}
+	stale := stale_pending(
+		repo.root,
+		config.pending[:],
+		packages[:],
+		result.findings[:],
+		context.allocator,
+	)
+	append(&result.findings, ..stale)
+	sort_and_dedupe_findings(&result.findings)
 }
 
 check :: proc(odin, root: string, config: Config, packages: []Package, result: ^Result) {
@@ -56,19 +74,25 @@ check :: proc(odin, root: string, config: Config, packages: []Package, result: ^
 		add_file_findings(packages, result)
 		apply_ignores(packages, result)
 	}
-	stale := stale_pending(
-		root,
-		config.pending[:],
-		packages,
-		result.findings[:],
-		context.allocator,
-	)
-	append(&result.findings, ..stale)
 }
 
-// Sets the result's compiler and rule set from `odin version` and odx.json, or adds the errors that
-// stop the run. Without odx.json, the config is empty. `odin` is the compiler's path.
-load :: proc(result: ^Result) -> (repo: Repo, config: Config, odin: string) {
+// Finds the repo root from the working directory, or adds the error that stops the run. Allocates
+// the root with `context.allocator`.
+locate_repo :: proc(result: ^Result) -> Repo {
+	cwd, cwd_err := os.get_working_directory(context.allocator)
+	if cwd_err != nil {
+		append(
+			&result.errors,
+			Error{.Config_Invalid, fmt.aprintf("could not find the repo root: %v", cwd_err)},
+		)
+		return {}
+	}
+	return find_repo(cwd, context.allocator)
+}
+
+// Sets the result's compiler and rule set from `odin version` and the repo's odx.json, or adds the
+// errors that stop the run. Without odx.json, the config is empty. `odin` is the compiler's path.
+load :: proc(repo: Repo, result: ^Result) -> (config: Config, odin: string) {
 	version: string
 	failure: Maybe(Error)
 	odin, version, failure = read_odin_version()
@@ -77,15 +101,6 @@ load :: proc(result: ^Result) -> (repo: Repo, config: Config, odin: string) {
 		return
 	}
 	result.odin = version
-	cwd, cwd_err := os.get_working_directory(context.allocator)
-	if cwd_err != nil {
-		append(
-			&result.errors,
-			Error{.Config_Invalid, fmt.aprintf("could not find the repo root: %v", cwd_err)},
-		)
-		return
-	}
-	repo = find_repo(cwd, context.allocator)
 	if !repo.has_config {
 		check_compiler(&result.errors, version, nil, context.allocator)
 		return
