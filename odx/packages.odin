@@ -72,8 +72,9 @@ Walker :: struct {
 
 // Walks the repo at `root` per Appendix E.3 and returns its packages in path order. Each file holds
 // the findings odx reads from it alone, and the first disagreeing file of a package whose files
-// disagree on the name holds that `odin` finding. Adds the skipped and pending counts and a note per
-// skipped package to `result`. Allocates the packages and what it adds to `result` with `allocator`.
+// disagree on the name holds that `odin` finding. Adds the skipped and pending counts, a note per
+// skipped package and a `dir-unreadable` error per directory it can't list to `result`. Allocates the
+// packages and what it adds to `result` with `allocator`.
 discover :: proc(
 	root: string,
 	config: Config,
@@ -120,14 +121,13 @@ SKIP_REASON :: "no non-test file compiles for darwin_arm64 or linux_amd64"
 walk_dir :: proc(w: ^Walker, rel, abs, project: string) {
 	entries, err := os.read_directory_by_path(abs, -1, w.listings)
 	if err != nil {
-		w.result.skipped += 1
-		note := fmt.aprintf(
-			"odx: skipped %s: can't read the directory: %s",
+		message := fmt.aprintf(
+			"could not list %s: %s",
 			rel,
 			os.error_string(err),
 			allocator = w.allocator,
 		)
-		append(&w.result.notes, note)
+		append(&w.result.errors, Error{.Dir_Unreadable, message})
 		return
 	}
 	slice.sort_by(entries, proc(a, b: os.File_Info) -> bool {return a.name < b.name})

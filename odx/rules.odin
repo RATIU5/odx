@@ -51,6 +51,7 @@ Error_Code :: enum u8 {
 	Compiler_Output,
 	Init_Exists,
 	Init_Write,
+	Dir_Unreadable,
 }
 
 // Codes are permanent and never reused.
@@ -64,6 +65,7 @@ ERROR_CODES := [Error_Code]string {
 	.Compiler_Output      = "compiler-output",
 	.Init_Exists          = "init-exists",
 	.Init_Write           = "init-write",
+	.Dir_Unreadable       = "dir-unreadable",
 }
 
 // Adds `finding` as `pkg`'s. A nil `pkg` leaves it unowned and adds it as given, with no mute or

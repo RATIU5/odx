@@ -1,0 +1,11 @@
+--- stdout
+init: 1 strict, 0 pending, 0 vendored, 2 skipped
+--- stderr
+odx: skipped external/lib: no non-test file compiles for darwin_arm64 or linux_amd64
+odx: skipped vendor: no non-test file compiles for darwin_arm64 or linux_amd64
+--- exit 0
+--- odx.json
+{
+	"version": 1,
+	"odin": "<odin>"
+}

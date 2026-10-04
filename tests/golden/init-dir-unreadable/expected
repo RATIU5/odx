@@ -1,0 +1,4 @@
+--- stdout
+--- stderr
+odx: error: dir-unreadable: could not list src/locked: permission denied
+--- exit 2

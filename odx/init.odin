@@ -105,7 +105,9 @@ plan_init :: proc(result: ^Result) -> (root: string, report: Init_Report) {
 	report.vendored = config.vendored[:]
 
 	packages := discover(root, config, result, context.allocator)
-	report.skipped = result.skipped
+	if len(result.errors) > 0 {
+		return
+	}
 	check(odin, root, config, packages[:], result)
 	if len(result.errors) > 0 {
 		return
@@ -158,7 +160,9 @@ plan_init :: proc(result: ^Result) -> (root: string, report: Init_Report) {
 		switch {
 		case .Held_Back in facts[p.dir]:
 			append(&pending, p.dir)
-		case !is_skipped(p):
+		case is_skipped(p):
+			report.skipped += 1
+		case:
 			report.strict += 1
 		}
 		if .Does_Not_Compile in facts[p.dir] {
@@ -181,6 +185,8 @@ find_vendored_trees :: proc(root: string, allocator: runtime.Allocator) -> [dyna
 	return trees
 }
 
+// Appends each vendored tree under `rel` to `trees`, cloned with `trees`' allocator. Its listings use
+// `context.temp_allocator`.
 @(private = "file")
 walk_for_vendored :: proc(trees: ^[dynamic]string, abs, rel: string) {
 	entries, err := os.read_directory_by_path(abs, -1, context.temp_allocator)
@@ -213,7 +219,7 @@ holds_odin_file :: proc(abs: string) -> bool {
 			if !strings.has_prefix(entry.name, ".") && holds_odin_file(entry.fullpath) {
 				return true
 			}
-		case strings.has_suffix(entry.name, ".odin"):
+		case strings.has_suffix(entry.name, ".odin") && !is_hidden_file(entry.name):
 			return true
 		}
 	}
@@ -256,7 +262,9 @@ start_json_item :: proc(b: ^strings.Builder, index: int) {
 @(private = "file")
 write_json_string :: proc(b: ^strings.Builder, s: string) {
 	options: json.Marshal_Options
-	ensure(json.marshal_to_builder(b, s, &options) == nil, "out of memory")
+	if err := json.marshal_to_builder(b, s, &options); err != nil {
+		fmt.panicf("could not encode %q as JSON: %v", s, err)
+	}
 }
 
 // Creates odx.json at `root` only when it doesn't exist, and removes a partly written one. Adds
@@ -295,7 +303,8 @@ write_config :: proc(root, text: string, result: ^Result) {
 // Allocates the date with `allocator`.
 @(private = "file")
 today :: proc(allocator: runtime.Allocator) -> string {
-	utc, _ := time.time_to_datetime(time.now())
+	utc, in_range := time.time_to_datetime(time.now())
+	ensure(in_range, "the clock is outside the range of a date")
 	date := utc
 	if zone, ok := timezone.region_load("local", context.temp_allocator); ok {
 		if local, converted := timezone.datetime_to_tz(utc, zone); converted {

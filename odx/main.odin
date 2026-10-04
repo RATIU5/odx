@@ -22,7 +22,9 @@ run :: proc() -> int {
 		return run_init()
 	case Check_Command:
 		cmd = parsed
-		check_repo(&result)
+		if check_repo(&result) != nil {
+			return 2
+		}
 	}
 	if write_result(os.to_writer(os.stdout), os.to_writer(os.stderr), result, cmd) != nil {
 		return 2
@@ -30,8 +32,10 @@ run :: proc() -> int {
 	return exit_code(result)
 }
 
-@(private = "file")
-check_repo :: proc(result: ^Result) {
+// What it allocates with `context.allocator` lives until the process exits, and the result's findings
+// borrow from it.
+@(private = "file", require_results)
+check_repo :: proc(result: ^Result) -> (note_err: os.Error) {
 	repo := locate_repo(result)
 	if len(result.errors) > 0 {
 		return
@@ -41,9 +45,12 @@ check_repo :: proc(result: ^Result) {
 		return
 	}
 	if !repo.has_config {
-		os.write_string(os.stderr, NO_CONFIG_NOTE)
+		_ = os.write_string(os.stderr, NO_CONFIG_NOTE) or_return
 	}
 	packages := discover(repo.root, config, result, context.allocator)
+	if len(result.errors) > 0 {
+		return
+	}
 	check(odin, repo.root, config, packages[:], result)
 	if len(result.errors) > 0 {
 		return
@@ -57,6 +64,7 @@ check_repo :: proc(result: ^Result) {
 	)
 	append(&result.findings, ..stale)
 	sort_and_dedupe_findings(&result.findings)
+	return
 }
 
 check :: proc(odin, root: string, config: Config, packages: []Package, result: ^Result) {

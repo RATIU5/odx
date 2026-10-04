@@ -1,5 +1,6 @@
 package odx
 
+import "core:fmt"
 import "core:testing"
 
 @(test)
@@ -33,5 +34,6 @@ render_config_round_trips_through_the_config_parser :: proc(t: ^testing.T) {
 render_config_leaves_out_empty_lists :: proc(t: ^testing.T) {
 	defer free_all(context.temp_allocator)
 	text := render_config(Init_Report{odin = "v"}, "2026-10-03", context.temp_allocator)
-	testing.expect_value(t, text, "{\n\t\"version\": 1,\n\t\"odin\": \"v\"\n}\n")
+	expected := fmt.tprintf("{{\n\t\"version\": %d,\n\t\"odin\": \"v\"\n}}\n", RULE_SET)
+	testing.expect_value(t, text, expected)
 }

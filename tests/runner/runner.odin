@@ -2,7 +2,9 @@
 // command per line as whitespace-separated arguments, run in order on the same copy, the optional
 // `env` holds `KEY=VALUE` lines applied over the inherited environment, the optional `cwd` names the
 // subdirectory of `repo/` to run in, the optional `readonly` file makes the copy's root directory
-// read-only while the commands run, and `expected` holds the output as `run_case` renders it. An
+// read-only while the commands run, the optional `unreadable` file names one `repo/`-relative
+// directory per line whose permissions are cleared while the commands run, and `expected` holds the
+// output as `run_case` renders it. An
 // `env` value expands `${NAME}` from the inherited environment, and `${ODX_TESTS}` is the absolute
 // `tests` dir. The rendering ends with `odx.json` when the commands created or changed it.
 package golden_runner
@@ -19,6 +21,11 @@ CASE_TIMEOUT :: 30 * time.Second
 Placeholders :: struct {
 	odin_version: string,
 	today:        string,
+}
+
+Dir_Mode :: struct {
+	path: string,
+	mode: os.Permissions,
 }
 
 Outcome :: struct {
@@ -169,16 +176,28 @@ run_case :: proc(
 	}
 	config_path := fmt.tprintf("%s/%s", repo, odx.CONFIG_FILE)
 	config_before, config_before_err := os.read_entire_file(config_path, ta)
-	read_only := os.exists(fmt.tprintf("%s/readonly", dir))
-	if read_only {
-		if err := os.chmod(repo, os.Permissions_Read_All + os.Permissions_Execute_All);
-		   err != nil {
-			return "", fmt.tprintf("chmod repo: %v", err)
+	dir_modes := make([dynamic]Dir_Mode, ta)
+	if os.exists(fmt.tprintf("%s/readonly", dir)) {
+		append(&dir_modes, Dir_Mode{repo, os.Permissions_Read_All + os.Permissions_Execute_All})
+	}
+	if text, err := os.read_entire_file(fmt.tprintf("%s/unreadable", dir), ta); err == nil {
+		for line in strings.split_lines(string(text), ta) {
+			if sub := strings.trim_space(line); sub != "" {
+				append(&dir_modes, Dir_Mode{fmt.tprintf("%s/%s", repo, sub), {}})
+			}
 		}
 	}
-	// remove_all can't empty a read-only directory.
-	defer if read_only {
-		os.chmod(repo, os.Permissions_Default_Directory)
+	// remove_all can't empty a directory it can't write or list.
+	defer for dm in dir_modes {
+		if err := os.chmod(dm.path, os.Permissions_Default_Directory);
+		   err != nil && failure == "" {
+			actual, failure = "", fmt.tprintf("restore %s: %v", dm.path, err)
+		}
+	}
+	for dm in dir_modes {
+		if err := os.chmod(dm.path, dm.mode); err != nil {
+			return "", fmt.tprintf("chmod %s: %v", dm.path, err)
+		}
 	}
 
 	working_dir := repo
