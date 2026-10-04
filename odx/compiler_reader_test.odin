@@ -196,7 +196,11 @@ read_check_types_each_entry_and_keeps_its_position :: proc(t: ^testing.T) {
 TEST_VENDORED := [?]string{"third_party/dep"}
 
 @(private = "file")
-test_code_map :: proc(packages: map[string]Package_Status) -> Code_Map {
+test_code_map :: proc(statuses: map[string]Package_Status) -> Code_Map {
+	packages := make(map[string]^Package, context.temp_allocator)
+	for dir, status in statuses {
+		packages[dir] = new_clone(Package{dir = dir, status = status}, context.temp_allocator)
+	}
 	return {
 		repo_root = "/repo",
 		odin_root = "/odin",
@@ -475,7 +479,7 @@ code_map_realpaths_a_symlinked_repo_root :: proc(t: ^testing.T) {
 }
 
 @(test)
-place_counts_errors_everywhere_and_warnings_where_the_team_owns_code :: proc(t: ^testing.T) {
+place_keeps_errors_everywhere_and_warnings_where_the_team_owns_code :: proc(t: ^testing.T) {
 	defer free_all(context.temp_allocator)
 	packages := make(map[string]Package_Status, context.temp_allocator)
 	packages["app"] = .Strict
@@ -483,23 +487,35 @@ place_counts_errors_everywhere_and_warnings_where_the_team_owns_code :: proc(t: 
 	code := test_code_map(packages)
 
 	cases := []struct {
-		kind: Entry_Kind,
-		path: string,
-		want: Placement,
+		kind:  Entry_Kind,
+		path:  string,
+		kept:  bool,
+		owner: string,
 	} {
-		{.Error, "app/a.odin", .Finding},
-		{.Error, "lib/a.odin", .Finding},
-		{.Error, "third_party/dep/dep.odin", .Finding},
-		{.Error, "$ODIN_ROOT/core/fmt/fmt.odin", .Finding},
-		{.Warning, "app/a.odin", .Finding},
-		{.Warning, "lib/a.odin", .Held_Back},
-		{.Warning, "third_party/dep/dep.odin", .Dropped},
-		{.Warning, "third_party/dep/inner/x.odin", .Dropped},
-		{.Warning, "$ODIN_ROOT/core/fmt/fmt.odin", .Dropped},
+		{.Error, "app/a.odin", true, "app"},
+		{.Error, "lib/a.odin", true, "lib"},
+		{.Error, "third_party/dep/dep.odin", true, ""},
+		{.Error, "$ODIN_ROOT/core/fmt/fmt.odin", true, ""},
+		{.Warning, "app/a.odin", true, "app"},
+		{.Warning, "lib/a.odin", true, "lib"},
+		{.Warning, "third_party/dep/dep.odin", false, ""},
+		{.Warning, "third_party/dep/inner/x.odin", false, ""},
+		{.Warning, "$ODIN_ROOT/core/fmt/fmt.odin", false, ""},
 	}
 	for c in cases {
-		got := place(c.kind, c.path, code)
-		testing.expectf(t, got == c.want, "%v at %s: got %v, want %v", c.kind, c.path, got, c.want)
+		owner, kept := place(c.kind, c.path, code)
+		got_owner := owner.dir if owner != nil else ""
+		testing.expectf(
+			t,
+			kept == c.kept && got_owner == c.owner,
+			"%v at %s: kept %v by %q, want %v by %q",
+			c.kind,
+			c.path,
+			kept,
+			got_owner,
+			c.kept,
+			c.owner,
+		)
 	}
 }
 

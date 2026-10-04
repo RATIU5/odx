@@ -19,7 +19,7 @@ Rule :: enum u8 {
 Held_Back :: enum u8 {
 	No,
 	Yes,
-	Warnings_Only,
+	Strict_Only,
 }
 
 Rule_Info :: struct {
@@ -32,7 +32,7 @@ Rule_Info :: struct {
 // IDs are permanent and never reused.
 @(rodata)
 RULES := [Rule]Rule_Info {
-	.Odin              = {"odin", false, true, .Warnings_Only},
+	.Odin              = {"odin", false, true, .Strict_Only},
 	.Parse_Unsupported = {"parse-unsupported", false, true, .No},
 	.Import_Escape     = {"import-escape", false, true, .No},
 	.Path_Case         = {"path-case", false, true, .No},
@@ -64,12 +64,37 @@ ERROR_CODES := [Error_Code]string {
 	.Init_Exists          = "init-exists",
 }
 
-add_rule_finding :: proc(result: ^Result, pkg: Package, finding: Finding) {
+// The added finding borrows its strings and `pkg`'s dir.
+add_rule_finding :: proc(result: ^Result, pkg: ^Package, finding: Finding, strict_only: bool) {
 	info := RULES[finding.rule]
+	if pkg == nil {
+		append(&result.findings, finding)
+		return
+	}
 	if pkg.muted && !info.runs_when_muted {
 		return
 	}
+	held: bool
+	switch info.held_back {
+	case .No:
+	case .Yes:
+		held = true
+	case .Strict_Only:
+		held = strict_only
+	}
 	finding := finding
-	finding.held_back = pkg.status == .Pending && info.held_back == .Yes
+	finding.owner_dir = pkg.dir
+	finding.held_back = pkg.status == .Pending && held
 	append(&result.findings, finding)
+}
+
+// The added findings borrow their strings from `packages`.
+add_file_findings :: proc(packages: []Package, result: ^Result) {
+	for &pkg in packages {
+		for file in pkg.files {
+			for f in file.findings {
+				add_rule_finding(result, &pkg, f, false)
+			}
+		}
+	}
 }

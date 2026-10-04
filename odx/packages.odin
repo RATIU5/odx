@@ -65,10 +65,10 @@ Walker :: struct {
 	scratch:   ^virtual.Arena,
 }
 
-// Walks the repo at `root` per Appendix E.3 and returns its packages in path order. Adds the
-// `parse-unsupported` findings, the `odin` finding for each package whose files disagree on the
-// name, the skipped and pending counts, and a note per skipped package to `result`. Allocates the
-// packages and what it adds to `result` with `allocator`.
+// Walks the repo at `root` per Appendix E.3 and returns its packages in path order. Each file holds
+// the findings odx reads from it alone, and the first disagreeing file of a package whose files
+// disagree on the name holds that `odin` finding. Adds the skipped and pending counts and a note per
+// skipped package to `result`. Allocates the packages and what it adds to `result` with `allocator`.
 discover :: proc(
 	root: string,
 	config: Config,
@@ -198,7 +198,16 @@ read_file :: proc(w: ^Walker, path, abs, project: string) -> (file: Source_File,
 			os.error_string(err),
 			allocator = w.allocator,
 		)
-		append(&w.result.findings, Finding{file.path, 1, 1, .Parse_Unsupported, message, false})
+		append(
+			&file.findings,
+			Finding {
+				path = file.path,
+				line = 1,
+				col = 1,
+				rule = .Parse_Unsupported,
+				message = message,
+			},
+		)
 		return file, true
 	}
 	src := string(data)
@@ -228,8 +237,14 @@ read_file :: proc(w: ^Walker, path, abs, project: string) -> (file: Source_File,
 		line, col := text_position(src, e.offset)
 		message := fmt.aprintf("odx can't parse this file: %s", e.message, allocator = w.allocator)
 		append(
-			&w.result.findings,
-			Finding{file.path, line, col, .Parse_Unsupported, message, false},
+			&file.findings,
+			Finding {
+				path = file.path,
+				line = line,
+				col = col,
+				rule = .Parse_Unsupported,
+				message = message,
+			},
 		)
 	} else {
 		file.parsed = true
@@ -258,7 +273,7 @@ name_package :: proc(w: ^Walker, pkg: ^Package) {
 		append(&w.result.notes, note)
 		return
 	}
-	for file in pkg.files {
+	for &file in pkg.files {
 		if file.is_test || file.targets == {} || file.name == "" || file.name == pkg.name {
 			continue
 		}
@@ -268,8 +283,14 @@ name_package :: proc(w: ^Walker, pkg: ^Package) {
 			file.name,
 			allocator = w.allocator,
 		)
-		finding := Finding{file.path, file.package_line, file.package_col, .Odin, message, false}
-		append(&w.result.findings, finding)
+		finding := Finding {
+			path    = file.path,
+			line    = file.package_line,
+			col     = file.package_col,
+			rule    = .Odin,
+			message = message,
+		}
+		append(&file.findings, finding)
 		pkg.name_conflict = true
 		return
 	}

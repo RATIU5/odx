@@ -1,0 +1,6 @@
+--- stdout
+lib/lib.odin:4:9: odin: Cannot convert '"one"' to 'int' from 'untyped string', got "one"
+odx: 1 findings, 0 ignored, 1 pending, 0 skipped (rules 1, odx <release>, odin <odin>)
+--- stderr
+odx: pending findings:
+--- exit 1

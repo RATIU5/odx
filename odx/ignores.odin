@@ -514,13 +514,13 @@ apply_ignores :: proc(packages: []Package, result: ^Result) {
 	}
 	resize(&result.findings, kept)
 
-	for pkg in packages {
+	for &pkg in packages {
 		for file in pkg.files {
 			for ignore in file.ignores {
 				if !ignore.used {
 					add_rule_finding(
 						result,
-						pkg,
+						&pkg,
 						{
 							path = file.path,
 							line = ignore.line,
@@ -528,6 +528,7 @@ apply_ignores :: proc(packages: []Package, result: ^Result) {
 							rule = .Ignore_Unused,
 							message = UNUSED,
 						},
+						false,
 					)
 				}
 			}

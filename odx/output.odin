@@ -14,6 +14,7 @@ Finding :: struct {
 	rule:      Rule,
 	message:   string,
 	held_back: bool,
+	owner_dir: string,
 }
 
 Error :: struct {
@@ -53,9 +54,32 @@ finding_cmp :: proc(a, b: Finding) -> slice.Ordering {
 	return slice.Ordering(strings.compare(a.message, b.message))
 }
 
-sort_findings :: proc(findings: ^[dynamic]Finding) {
+sort_and_dedupe_findings :: proc(findings: ^[dynamic]Finding) {
 	slice.sort_by_cmp(findings[:], finding_cmp)
-	resize(findings, len(slice.unique(findings[:])))
+	same :: proc(a, b: Finding) -> bool {
+		return finding_cmp(a, b) == .Equal
+	}
+	resize(findings, len(slice.unique_proc(findings[:], same)))
+	drop_held_back_copies_of_shown(findings)
+}
+
+@(private = "file")
+drop_held_back_copies_of_shown :: proc(findings: ^[dynamic]Finding) {
+	shown_count := 0
+	for shown_count < len(findings) && !findings[shown_count].held_back {
+		shown_count += 1
+	}
+	shown := findings[:shown_count]
+	kept := shown_count
+	for f in findings[shown_count:] {
+		unheld := f
+		unheld.held_back = false
+		if _, found := slice.binary_search_by(shown, unheld, finding_cmp); !found {
+			findings[kept] = f
+			kept += 1
+		}
+	}
+	resize(findings, kept)
 }
 
 exit_code :: proc(result: Result) -> int {

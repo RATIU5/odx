@@ -28,12 +28,14 @@ check_command_scopes_strict_flags_by_package_name :: proc(t: ^testing.T) {
 	cases := []struct {
 		name:   string,
 		pkg:    Package,
+		strict: bool,
 		target: Target,
 		want:   []string,
 	} {
 		{
 			"strict, named by its package clause",
 			Package{dir = "foo", name = "bar", status = .Strict},
+			true,
 			.Linux_Amd64,
 			{
 				"-target:linux_amd64",
@@ -48,21 +50,46 @@ check_command_scopes_strict_flags_by_package_name :: proc(t: ^testing.T) {
 			},
 		},
 		{
-			"pending, without strict flags",
+			"pending, without strict flags and without warnings",
 			Package{dir = "foo", name = "bar", status = .Pending},
+			false,
 			.Darwin_Arm64,
 			{
 				"-target:darwin_arm64",
 				"-no-entry-point",
 				"-collection:libs=/repo/libs",
 				"-define:DEBUG=true",
+				"-ignore-warnings",
+			},
+		},
+		{
+			"pending, with strict flags",
+			Package{dir = "foo", name = "bar", status = .Pending},
+			true,
+			.Darwin_Arm64,
+			{
+				"-target:darwin_arm64",
+				"-no-entry-point",
+				"-collection:libs=/repo/libs",
+				"-define:DEBUG=true",
+				"-vet",
+				"-vet-cast",
+				"-strict-style",
+				"-vet-packages:bar",
+				"-strict-style-packages:bar",
 			},
 		},
 		{
 			"package main, which keeps its entry point",
 			Package{dir = "foo", name = "main", status = .Pending},
+			false,
 			.Darwin_Arm64,
-			{"-target:darwin_arm64", "-collection:libs=/repo/libs", "-define:DEBUG=true"},
+			{
+				"-target:darwin_arm64",
+				"-collection:libs=/repo/libs",
+				"-define:DEBUG=true",
+				"-ignore-warnings",
+			},
 		},
 	}
 	for c in cases {
@@ -71,6 +98,7 @@ check_command_scopes_strict_flags_by_package_name :: proc(t: ^testing.T) {
 			"/repo/foo",
 			c.pkg,
 			c.target,
+			c.strict,
 			config,
 			context.temp_allocator,
 		)

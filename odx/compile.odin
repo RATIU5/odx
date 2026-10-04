@@ -22,6 +22,7 @@ STDERR_LINES_SHOWN :: 40
 Check_Job :: struct {
 	pkg:    int,
 	target: Target,
+	strict: bool,
 }
 
 @(private = "file")
@@ -43,10 +44,10 @@ Pool :: struct {
 	stop:     bool,
 }
 
-// Runs one `odin check` per package and target per Appendix E.4, then adds the `odin` findings and
-// held-back warnings to `result` and marks muted packages. An untrusted check adds `compiler-output`
-// instead. `odin` is the compiler's path, `odin_root` what `odin root` printed and `root` the repo
-// root. Allocates what it adds with `allocator`.
+// Runs `odin check` per package and target per Appendix E.4, twice for a pending package per
+// Appendix E.7, then adds the `odin` findings to `result` and marks muted packages. An untrusted check
+// adds `compiler-output` instead. `odin` is the compiler's path, `odin_root` what `odin root` printed
+// and `root` the repo root. Allocates what it adds with `allocator`.
 compile :: proc(
 	odin, odin_root, root: string,
 	config: Config,
@@ -58,7 +59,10 @@ compile :: proc(
 	for p, i in packages {
 		for t in Target {
 			if t in p.check_targets {
-				append(&jobs, Check_Job{i, t})
+				if p.status == .Pending {
+					append(&jobs, Check_Job{pkg = i, target = t, strict = false})
+				}
+				append(&jobs, Check_Job{pkg = i, target = t, strict = true})
 			}
 		}
 	}
@@ -97,7 +101,15 @@ compile :: proc(
 		if packages[job.pkg].dir != "." {
 			dir = fmt.aprintf("%s/%s", code.repo_root, packages[job.pkg].dir, allocator = scratch)
 		}
-		pool.commands[i] = check_command(odin, dir, packages[job.pkg], job.target, config, scratch)
+		pool.commands[i] = check_command(
+			odin,
+			dir,
+			packages[job.pkg],
+			job.target,
+			job.strict,
+			config,
+			scratch,
+		)
 	}
 	run_pool(&pool)
 	defer for &arena in pool.arenas {
@@ -128,6 +140,7 @@ compile :: proc(
 			continue
 		}
 		checked := &packages[jobs[i].pkg]
+		pending_strict := jobs[i].strict && checked.status == .Pending
 		for entry in diagnostics.entries {
 			if clashes_with_foreign_procedure(entry, &foreign_decls, scratch) {
 				continue
@@ -143,35 +156,39 @@ compile :: proc(
 				append(&redeclarations, r)
 				continue
 			}
-			add_odin_finding(result, entry.kind, placed, code, allocator)
+			owner, kept := place(entry.kind, placed.path, code)
+			if !kept {
+				continue
+			}
+			if pending_strict {
+				owner = checked
+			}
+			strict_only := entry.kind == .Warning || pending_strict
+			add_odin_finding(result, owner, placed, strict_only, allocator)
 		}
 	}
 	for placed in settle_redeclarations(redeclarations[:], scratch) {
-		add_odin_finding(result, .Error, placed, code, allocator)
+		owner, _ := place(.Error, placed.path, code)
+		add_odin_finding(result, owner, placed, false, allocator)
 	}
 }
 
 @(private = "file")
 add_odin_finding :: proc(
 	result: ^Result,
-	kind: Entry_Kind,
+	owner: ^Package,
 	placed: Placed,
-	code: Code_Map,
+	strict_only: bool,
 	allocator: runtime.Allocator,
 ) {
-	placement := place(kind, placed.path, code)
-	if placement == .Dropped {
-		return
-	}
 	finding := Finding {
-		path      = strings.clone(placed.path, allocator),
-		line      = placed.line,
-		col       = placed.col,
-		rule      = .Odin,
-		message   = strings.clone(placed.message, allocator),
-		held_back = placement == .Held_Back,
+		path    = strings.clone(placed.path, allocator),
+		line    = placed.line,
+		col     = placed.col,
+		rule    = .Odin,
+		message = strings.clone(placed.message, allocator),
 	}
-	append(&result.findings, finding)
+	add_rule_finding(result, owner, finding, strict_only)
 }
 
 // An importer's check blames whichever file the compiler read first, which differs between
@@ -196,6 +213,7 @@ check_command :: proc(
 	odin, dir: string,
 	pkg: Package,
 	target: Target,
+	strict: bool,
 	config: Config,
 	allocator: runtime.Allocator,
 ) -> []string {
@@ -221,7 +239,7 @@ check_command :: proc(
 	for d in config.defines {
 		append(&args, fmt.aprintf("-define:%s=%s", d.name, d.value))
 	}
-	if pkg.status == .Strict {
+	if strict {
 		append(
 			&args,
 			"-vet",
@@ -230,6 +248,8 @@ check_command :: proc(
 			fmt.aprintf("-vet-packages:%s", pkg.name),
 			fmt.aprintf("-strict-style-packages:%s", pkg.name),
 		)
+	} else {
+		append(&args, "-ignore-warnings")
 	}
 	return args[:]
 }

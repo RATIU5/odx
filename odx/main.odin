@@ -32,7 +32,7 @@ run :: proc() -> int {
 			}
 			packages := discover(repo.root, config, &result, context.allocator)
 			check(odin, repo.root, config, packages[:], &result)
-			sort_findings(&result.findings)
+			sort_and_dedupe_findings(&result.findings)
 		}
 	}
 	if write_result(os.to_writer(os.stdout), os.to_writer(os.stderr), result, cmd) != nil {
@@ -42,27 +42,22 @@ run :: proc() -> int {
 }
 
 check :: proc(odin, root: string, config: Config, packages: []Package, result: ^Result) {
-	if len(packages) == 0 {
-		return
-	}
-	odin_root, failure := read_odin_root(odin, context.allocator)
-	if failure != "" {
-		append(&result.errors, Error{.Compiler_Output, failure})
-		return
-	}
-	compile(odin, odin_root, root, config, packages, result, context.allocator)
-	if len(result.errors) > 0 {
-		return
-	}
-	check_paths(packages, root, odin_root, config.collections[:], result, context.allocator)
-	for pkg in packages {
-		for file in pkg.files {
-			for f in file.findings {
-				add_rule_finding(result, pkg, f)
-			}
+	if len(packages) > 0 {
+		odin_root, failure := read_odin_root(odin, context.allocator)
+		if failure != "" {
+			append(&result.errors, Error{.Compiler_Output, failure})
+			return
 		}
+		compile(odin, odin_root, root, config, packages, result, context.allocator)
+		if len(result.errors) > 0 {
+			return
+		}
+		check_paths(packages, root, odin_root, config.collections[:], context.allocator)
+		add_file_findings(packages, result)
+		apply_ignores(packages, result)
 	}
-	apply_ignores(packages, result)
+	stale := stale_pending(config.pending[:], packages, result.findings[:], context.allocator)
+	append(&result.findings, ..stale)
 }
 
 // Sets the result's compiler and rule set from `odin version` and odx.json, or adds the errors that

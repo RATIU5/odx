@@ -18,7 +18,7 @@ sort_orders_by_path_line_col_rule_message_then_held_back :: proc(t: ^testing.T) 
 		Finding{path = "a.odin", line = 9, col = 1, rule = .Line_Length, message = "z"},
 	)
 
-	sort_findings(&findings)
+	sort_and_dedupe_findings(&findings)
 
 	want := []Finding {
 		{path = "a.odin", line = 9, col = 1, rule = .Line_Length, message = "z"},
@@ -39,7 +39,9 @@ sort_orders_by_path_line_col_rule_message_then_held_back :: proc(t: ^testing.T) 
 }
 
 @(test)
-sort_prints_exact_duplicates_once :: proc(t: ^testing.T) {
+sort_prints_exact_duplicates_once_and_drops_held_back_copies_of_shown_findings :: proc(
+	t: ^testing.T,
+) {
 	findings := make([dynamic]Finding)
 	defer delete(findings)
 	dup := Finding {
@@ -63,14 +65,30 @@ sort_prints_exact_duplicates_once :: proc(t: ^testing.T) {
 			message = "same",
 			held_back = true,
 		},
+		Finding {
+			path = "a.odin",
+			line = 1,
+			col = 1,
+			rule = .Odin,
+			message = "held",
+			held_back = true,
+		},
+		Finding {
+			path = "a.odin",
+			line = 1,
+			col = 1,
+			rule = .Odin,
+			message = "held",
+			held_back = true,
+		},
 	)
 
-	sort_findings(&findings)
+	sort_and_dedupe_findings(&findings)
 
 	want := []Finding {
 		{path = "a.odin", line = 3, col = 4, rule = .Odin, message = "other"},
 		dup,
-		{path = "a.odin", line = 3, col = 4, rule = .Odin, message = "same", held_back = true},
+		{path = "a.odin", line = 1, col = 1, rule = .Odin, message = "held", held_back = true},
 	}
 	testing.expect_value(t, len(findings), len(want))
 	for w, i in want {
@@ -297,4 +315,26 @@ json_escapes_control_characters :: proc(t: ^testing.T) {
 		),
 		strings.to_string(w.out),
 	)
+}
+
+@(test)
+sort_prints_a_finding_once_whichever_packages_it_counts_against :: proc(t: ^testing.T) {
+	findings := make([dynamic]Finding)
+	defer delete(findings)
+	held := Finding {
+		path      = "z/z.odin",
+		line      = 1,
+		col       = 1,
+		rule      = .Odin,
+		message   = "m",
+		held_back = true,
+	}
+	from_x, from_y := held, held
+	from_x.owner_dir = "x"
+	from_y.owner_dir = "y"
+	append(&findings, from_x, from_y)
+
+	sort_and_dedupe_findings(&findings)
+
+	testing.expect_value(t, len(findings), 1)
 }

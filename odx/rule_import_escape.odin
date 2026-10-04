@@ -177,14 +177,13 @@ Path_Resolver :: struct {
 	allocator:   runtime.Allocator,
 }
 
-// Reports `import-escape` and `path-case` per Appendix E.5 for every path the packages' files name.
-// `repo_root` and `odin_root` need not be real paths. Allocates what it adds to `result` with
-// `allocator`.
+// Adds `import-escape` and `path-case` per Appendix E.5 to the findings of each file that names an
+// escaping or miscased path. `repo_root` and `odin_root` need not be real paths. Allocates what it
+// adds with `allocator`.
 check_paths :: proc(
 	packages: []Package,
 	repo_root, odin_root: string,
 	collections: []Collection,
-	result: ^Result,
 	allocator: runtime.Allocator,
 ) {
 	work: virtual.Arena
@@ -213,12 +212,12 @@ check_paths :: proc(
 		allocator = scratch,
 	)
 
-	for pkg in packages {
+	for &pkg in packages {
 		pkg_dir := r.roots.repo
 		if pkg.dir != "." {
 			pkg_dir = fmt.aprintf("%s/%s", r.roots.repo, pkg.dir, allocator = scratch)
 		}
-		for file in pkg.files {
+		for &file in pkg.files {
 			source_dir := parent_dir(file.link_target) if file.link_target != "" else pkg_dir
 			for ref in file.paths {
 				info := PATH_KINDS[ref.kind]
@@ -236,10 +235,9 @@ check_paths :: proc(
 						reach,
 						allocator = allocator,
 					)
-					add_rule_finding(
-						result,
-						pkg,
-						{
+					append(
+						&file.findings,
+						Finding {
 							path = file.path,
 							line = ref.line,
 							col = ref.col,
@@ -257,10 +255,9 @@ check_paths :: proc(
 						d.on_disk,
 						allocator = allocator,
 					)
-					add_rule_finding(
-						result,
-						pkg,
-						{
+					append(
+						&file.findings,
+						Finding {
 							path = file.path,
 							line = ref.path_line,
 							col = ref.path_col,

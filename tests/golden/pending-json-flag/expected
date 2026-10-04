@@ -1,0 +1,4 @@
+--- stdout
+{"version":1,"findings":[{"path":"lib/lib.odin","line":3,"col":101,"rule":"line-length","message":"line is 107 columns wide, over the limit of 100","pending":true}],"errors":[],"summary":{"findings":0,"ignored":0,"pending":1,"skipped":0,"rules":1,"release":"<release>","odin":"<odin>"}}
+--- stderr
+--- exit 0

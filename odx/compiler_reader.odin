@@ -142,8 +142,9 @@ Code_Map :: struct {
 	// Real paths without a trailing `/`.
 	repo_root: string,
 	odin_root: string,
-	// Every discovered package's dir, which holds only strict and pending packages.
-	packages:  map[string]Package_Status,
+	// Every discovered package by dir. Only strict and pending packages are discovered, so a path
+	// outside them has no owner.
+	packages:  map[string]^Package,
 	// Cleaned `vendored` dirs, repo-relative.
 	vendored:  []string,
 }
@@ -159,11 +160,11 @@ make_code_map :: proc(
 	code := Code_Map {
 		repo_root = real_root(repo_root, allocator),
 		odin_root = real_root(odin_root, allocator),
-		packages  = make(map[string]Package_Status, len(packages)),
+		packages  = make(map[string]^Package, len(packages)),
 		vendored  = make([]string, len(vendored)),
 	}
-	for p in packages {
-		code.packages[p.dir] = p.status
+	for &p in packages {
+		code.packages[p.dir] = &p
 	}
 	for dir, i in vendored {
 		code.vendored[i], _ = os.clean_path(dir, allocator)
@@ -404,26 +405,11 @@ package_dir :: proc(path: string) -> string {
 	return path[:i] if i >= 0 else "."
 }
 
-Placement :: enum u8 {
-	Finding,
-	Held_Back,
-	Dropped,
-}
-
 // Errors count wherever they lie, because every package must compile. Warnings count only where the
 // team owns the code (ADR 0006).
-place :: proc(kind: Entry_Kind, path: string, code: Code_Map) -> Placement {
-	if kind == .Error {
-		return .Finding
-	}
-	status, owned := code.packages[package_dir(path)]
-	switch {
-	case !owned:
-		return .Dropped
-	case status == .Pending:
-		return .Held_Back
-	}
-	return .Finding
+place :: proc(kind: Entry_Kind, path: string, code: Code_Map) -> (owner: ^Package, kept: bool) {
+	owner = code.packages[package_dir(path)]
+	return owner, kind == .Error || owner != nil
 }
 
 // Only the package's own check mutes it, so a package that holds a finding through another package's
