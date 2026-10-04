@@ -1,0 +1,5 @@
+--- stdout
+odx.json:6:3: pending-stale: 'lib/lib.odin' is a file, not a directory
+odx: 1 findings, 0 ignored, 1 pending, 0 skipped (rules 1, odx <release>, odin <odin>)
+--- stderr
+--- exit 1

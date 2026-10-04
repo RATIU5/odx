@@ -56,7 +56,13 @@ check :: proc(odin, root: string, config: Config, packages: []Package, result: ^
 		add_file_findings(packages, result)
 		apply_ignores(packages, result)
 	}
-	stale := stale_pending(config.pending[:], packages, result.findings[:], context.allocator)
+	stale := stale_pending(
+		root,
+		config.pending[:],
+		packages,
+		result.findings[:],
+		context.allocator,
+	)
 	append(&result.findings, ..stale)
 }
 

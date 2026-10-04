@@ -1,0 +1,8 @@
+{
+	"version": 1,
+	"odin": "dev-2026-09-nightly:a2fb372",
+	"pending": {
+		"lib": "odx init 2026-10-03",
+		"lib/lib.odin": "odx init 2026-10-03"
+	}
+}

@@ -479,7 +479,7 @@ code_map_realpaths_a_symlinked_repo_root :: proc(t: ^testing.T) {
 }
 
 @(test)
-place_keeps_errors_everywhere_and_warnings_where_the_team_owns_code :: proc(t: ^testing.T) {
+owner_of_keeps_errors_everywhere_and_warnings_where_the_team_owns_code :: proc(t: ^testing.T) {
 	defer free_all(context.temp_allocator)
 	packages := make(map[string]Package_Status, context.temp_allocator)
 	packages["app"] = .Strict
@@ -503,7 +503,7 @@ place_keeps_errors_everywhere_and_warnings_where_the_team_owns_code :: proc(t: ^
 		{.Warning, "$ODIN_ROOT/core/fmt/fmt.odin", false, ""},
 	}
 	for c in cases {
-		owner, kept := place(c.kind, c.path, code)
+		owner, kept := owner_of(c.kind, c.path, code)
 		got_owner := owner.dir if owner != nil else ""
 		testing.expectf(
 			t,

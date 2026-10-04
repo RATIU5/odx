@@ -70,3 +70,24 @@ add_rule_finding_adds_an_unowned_finding_as_shown :: proc(t: ^testing.T) {
 		testing.expect_value(t, result.findings[0].owner_dir, "")
 	}
 }
+
+@(test)
+add_rule_finding_keeps_a_held_back_finding_held_back_in_a_strict_package :: proc(t: ^testing.T) {
+	result: Result
+	defer delete(result.findings)
+	pkg := Package {
+		dir    = "lib",
+		status = .Strict,
+	}
+	finding := Finding {
+		path      = "lib/a.odin",
+		rule      = .Odin,
+		held_back = true,
+	}
+	add_rule_finding(&result, &pkg, finding, false)
+	testing.expect_value(t, len(result.findings), 1)
+	if len(result.findings) == 1 {
+		testing.expect_value(t, result.findings[0].held_back, true)
+		testing.expect_value(t, result.findings[0].owner_dir, "lib")
+	}
+}

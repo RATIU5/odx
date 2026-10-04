@@ -143,13 +143,15 @@ Code_Map :: struct {
 	repo_root: string,
 	odin_root: string,
 	// Every discovered package by dir. Only strict and pending packages are discovered, so a path
-	// outside them has no owner.
+	// outside them has no owner. The pointers borrow the slice passed to `make_code_map`.
 	packages:  map[string]^Package,
 	// Cleaned `vendored` dirs, repo-relative.
 	vendored:  []string,
 }
 
-// Realpaths both roots, because the compiler reports real paths. Allocates with `allocator`.
+// Realpaths both roots, because the compiler reports real paths. Allocates with `allocator`. The map
+// borrows pointers into `packages`, so the array behind it must outlive the Code_Map and must not
+// grow or move.
 make_code_map :: proc(
 	repo_root, odin_root: string,
 	packages: []Package,
@@ -406,8 +408,9 @@ package_dir :: proc(path: string) -> string {
 }
 
 // Errors count wherever they lie, because every package must compile. Warnings count only where the
-// team owns the code (ADR 0006).
-place :: proc(kind: Entry_Kind, path: string, code: Code_Map) -> (owner: ^Package, kept: bool) {
+// team owns the code (ADR 0006). `owner` is nil outside every package, and otherwise borrows from
+// the `packages` slice behind `code`.
+owner_of :: proc(kind: Entry_Kind, path: string, code: Code_Map) -> (owner: ^Package, kept: bool) {
 	owner = code.packages[package_dir(path)]
 	return owner, kind == .Error || owner != nil
 }

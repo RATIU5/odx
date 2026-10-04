@@ -42,7 +42,7 @@ stale_pending_flags_entries_with_no_package_or_no_owned_findings :: proc(t: ^tes
 		},
 	}
 
-	stale := stale_pending(entries, packages, findings, context.temp_allocator)
+	stale := stale_pending("/repo", entries, packages, findings, context.temp_allocator)
 
 	want := []struct {
 		line: int,

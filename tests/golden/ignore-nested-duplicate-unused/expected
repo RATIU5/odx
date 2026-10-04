@@ -1,5 +1,5 @@
 --- stdout
-app/app.odin:6:2: ignore-unused: this ignore suppressed no finding; remove it
+app/app.odin:6:2: ignore-unused: this ignore suppressed no finding
 odx: 1 findings, 1 ignored, 0 pending, 0 skipped (rules 1, odx <release>, odin <odin>)
 --- stderr
 odx: no odx.json, so rule set 1, the running compiler and every package strict

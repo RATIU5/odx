@@ -64,7 +64,11 @@ ERROR_CODES := [Error_Code]string {
 	.Init_Exists          = "init-exists",
 }
 
-// The added finding borrows its strings and `pkg`'s dir.
+// Adds `finding` as `pkg`'s. A nil `pkg` leaves it unowned and adds it as given, with no mute or
+// hold-back. Otherwise it is dropped when `pkg` is muted and the rule doesn't run when muted, and
+// held back in a pending package per the rule's row in `RULES`. A finding that arrives held back
+// stays held back. `strict_only`, true for a finding only strict checking gives, matters only for
+// `.Strict_Only` rules. The added finding borrows its strings and `pkg`'s dir.
 add_rule_finding :: proc(result: ^Result, pkg: ^Package, finding: Finding, strict_only: bool) {
 	info := RULES[finding.rule]
 	if pkg == nil {
@@ -84,7 +88,7 @@ add_rule_finding :: proc(result: ^Result, pkg: ^Package, finding: Finding, stric
 	}
 	finding := finding
 	finding.owner_dir = pkg.dir
-	finding.held_back = pkg.status == .Pending && held
+	finding.held_back ||= pkg.status == .Pending && held
 	append(&result.findings, finding)
 }
 

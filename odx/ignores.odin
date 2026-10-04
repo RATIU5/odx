@@ -43,7 +43,7 @@ UNPARSABLE :: "only whole-file ignores apply in a file odx can't parse"
 @(private = "file")
 NO_TARGET :: "this ignore binds to nothing; put it directly above the code it covers"
 @(private = "file")
-UNUSED :: "this ignore suppressed no finding; remove it"
+UNUSED :: "this ignore suppressed no finding"
 
 read_ignores :: proc(
 	file: ^Source_File,

@@ -14,6 +14,8 @@ Finding :: struct {
 	rule:      Rule,
 	message:   string,
 	held_back: bool,
+	// The dir of the package the finding counts toward for `pending-stale`, or "" when none. Borrows
+	// `Package.dir`. Compare and dedupe ignore it, so `stale_pending` reads it before dedupe.
 	owner_dir: string,
 }
 
@@ -63,6 +65,8 @@ sort_and_dedupe_findings :: proc(findings: ^[dynamic]Finding) {
 	drop_held_back_copies_of_shown(findings)
 }
 
+// Needs `findings` sorted and deduped by `finding_cmp`, which puts every shown finding before every
+// held-back one, so the shown ones form a sorted prefix to binary search.
 @(private = "file")
 drop_held_back_copies_of_shown :: proc(findings: ^[dynamic]Finding) {
 	shown_count := 0
@@ -133,7 +137,7 @@ render_result :: proc(out, err: ^strings.Builder, result: Result, cmd: Check_Com
 			render_finding_text(out, f)
 		}
 	}
-	if cmd.pending {
+	if cmd.pending && count < len(result.findings) {
 		strings.write_string(err, "odx: pending findings:\n")
 		for f in result.findings {
 			if f.held_back {

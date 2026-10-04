@@ -1,6 +1,5 @@
 --- stdout
-odx.json:1:67: pending-stale: 'lib' has no findings as strict, so remove it from pending
+odx.json:1:67: pending-stale: 'lib' has no findings as strict
 odx: 1 findings, 0 ignored, 1 pending, 0 skipped (rules 1, odx <release>, odin <odin>)
 --- stderr
-odx: pending findings:
 --- exit 1

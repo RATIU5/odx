@@ -156,39 +156,33 @@ compile :: proc(
 				append(&redeclarations, r)
 				continue
 			}
-			owner, kept := place(entry.kind, placed.path, code)
+			owner, kept := owner_of(entry.kind, placed.path, code)
 			if !kept {
 				continue
 			}
-			if pending_strict {
+			if pending_strict && owner == nil {
 				owner = checked
 			}
-			strict_only := entry.kind == .Warning || pending_strict
-			add_odin_finding(result, owner, placed, strict_only, allocator)
+			finding := odin_finding(placed, allocator)
+			finding.held_back = pending_strict
+			add_rule_finding(result, owner, finding, entry.kind == .Warning)
 		}
 	}
 	for placed in settle_redeclarations(redeclarations[:], scratch) {
-		owner, _ := place(.Error, placed.path, code)
-		add_odin_finding(result, owner, placed, false, allocator)
+		owner, _ := owner_of(.Error, placed.path, code)
+		add_rule_finding(result, owner, odin_finding(placed, allocator), false)
 	}
 }
 
 @(private = "file")
-add_odin_finding :: proc(
-	result: ^Result,
-	owner: ^Package,
-	placed: Placed,
-	strict_only: bool,
-	allocator: runtime.Allocator,
-) {
-	finding := Finding {
-		path    = strings.clone(placed.path, allocator),
-		line    = placed.line,
-		col     = placed.col,
-		rule    = .Odin,
+odin_finding :: proc(placed: Placed, allocator: runtime.Allocator) -> Finding {
+	return Finding {
+		path = strings.clone(placed.path, allocator),
+		line = placed.line,
+		col = placed.col,
+		rule = .Odin,
 		message = strings.clone(placed.message, allocator),
 	}
-	add_rule_finding(result, owner, finding, strict_only)
 }
 
 // An importer's check blames whichever file the compiler read first, which differs between

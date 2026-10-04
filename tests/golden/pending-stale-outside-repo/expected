@@ -1,0 +1,7 @@
+--- stdout
+odx.json:6:3: pending-stale: '..' is outside the repo
+odx.json:7:3: pending-stale: '../lib' is outside the repo
+odx.json:8:3: pending-stale: '/usr' is outside the repo
+odx: 3 findings, 0 ignored, 1 pending, 0 skipped (rules 1, odx <release>, odin <odin>)
+--- stderr
+--- exit 1
