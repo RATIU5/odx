@@ -25,6 +25,9 @@ add_rule_finding_mutes_and_holds_back_by_the_rule_table :: proc(t: ^testing.T) {
 		{.Odin, .Pending, false, true, true, true},
 		{.Odin, .Strict, false, true, true, false},
 		{.Pending_Stale, .Strict, false, false, true, false},
+		{.Format, .Strict, false, false, true, false},
+		{.Format, .Pending, false, false, true, true},
+		{.Format, .Strict, true, false, false, false},
 	}
 	for c in cases {
 		result: Result
@@ -112,6 +115,7 @@ rules_table_matches_the_contract_flag_by_flag :: proc(t: ^testing.T) {
 		.Vet_Disabled           = {"vet-disabled", false, false, .Yes, false},
 		.Feature_Relaxed        = {"feature-relaxed", true, false, .Yes, false},
 		.Transmute              = {"transmute", true, false, .Yes, true},
+		.Format                 = {"format", false, false, .Yes, true},
 	}
 	for got, rule in RULES {
 		w := want[rule]

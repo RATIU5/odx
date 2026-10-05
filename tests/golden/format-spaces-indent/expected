@@ -1,0 +1,6 @@
+--- stdout
+app/app.odin:4:1: format: the file differs from the formatter's output
+odx: 1 findings, 0 ignored, 0 pending, 0 skipped (rules 1, odx <release>, odin <odin>)
+--- stderr
+odx: no odx.json, so rule set 1, the running compiler and every package strict
+--- exit 1

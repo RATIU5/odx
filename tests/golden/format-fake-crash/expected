@@ -1,0 +1,9 @@
+--- stdout
+app/a.odin:1:1: format: the formatter crashed, so odx can't check this file's format
+app/b.odin:1:1: format: the formatter crashed, so odx can't check this file's format
+odx: 2 findings, 0 ignored, 0 pending, 0 skipped (rules 1, odx <release>, odin <odin>)
+--- stderr
+odx: no odx.json, so rule set 1, the running compiler and every package strict
+odx: format: app/a.odin formatter crashed
+odx: format: app/b.odin formatter crashed
+--- exit 1

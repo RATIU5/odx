@@ -1,0 +1,5 @@
+__format app/clean.odin
+__format app/unaligned.odin
+__format app/broken.odin
+__format app/missing.odin
+__format

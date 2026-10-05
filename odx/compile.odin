@@ -7,11 +7,7 @@ import "core:odin/ast"
 import "core:odin/parser"
 import "core:odin/tokenizer"
 import "core:os"
-import "core:strconv"
 import "core:strings"
-import "core:sync"
-import si "core:sys/info"
-import "core:thread"
 import "core:time"
 
 CHECK_TIMEOUT :: 120 * time.Second
@@ -31,27 +27,16 @@ Check_Run :: struct {
 	timed_out: bool,
 }
 
-// Each worker writes only its own arena and the `runs` slots of the jobs it takes, so `next` and
-// `stop` are the only shared state.
-@(private = "file")
-Pool :: struct {
-	commands: [][]string,
-	runs:     []Check_Run,
-	arenas:   []virtual.Arena,
-	temp_dir: string,
-	timeout:  time.Duration,
-	next:     int,
-	stop:     bool,
-}
-
 // Runs `odin check` per package and target per Appendix E.4, twice for a pending package per
 // Appendix E.7, then adds the `odin` findings to `result` and marks muted packages. An untrusted check
 // adds `compiler-output` instead. `odin` is the compiler's path, `odin_root` what `odin root` printed
-// and `root` the repo root. Allocates what it adds with `allocator`.
+// and `root` the repo root. The checks' stderr goes to files in `temp_dir`, and they run within
+// `budget`. Allocates what it adds with `allocator`.
 compile :: proc(
-	odin, odin_root, root: string,
+	odin, odin_root, root, temp_dir: string,
 	config: Config,
 	packages: []Package,
+	budget: ^Child_Budget,
 	result: ^Result,
 	allocator: runtime.Allocator,
 ) {
@@ -77,31 +62,20 @@ compile :: proc(
 
 	code := make_code_map(root, odin_root, packages, config.vendored[:], scratch)
 
-	temp_dir, temp_err := os.make_directory_temp("", "odx-check-*", scratch)
-	if temp_err != nil {
-		message := fmt.aprintf(
-			"could not make a temp dir for compiler output: %s",
-			os.error_string(temp_err),
-			allocator = allocator,
-		)
-		append(&result.errors, Error{.Compiler_Output, message})
-		return
-	}
-	defer os.remove_all(temp_dir)
-
-	pool := Pool {
+	pool_config := Pool_Config(Check_Run) {
 		commands = make([][]string, len(jobs), scratch),
-		runs     = make([]Check_Run, len(jobs), scratch),
-		arenas   = make([]virtual.Arena, worker_count(len(jobs)), scratch),
+		captured = .Stderr,
+		read     = read_check_end,
 		temp_dir = temp_dir,
-		timeout  = check_timeout(),
+		timeout  = debug_timeout("ODX_CHECK_TIMEOUT_MS", CHECK_TIMEOUT),
+		budget   = budget,
 	}
 	for job, i in jobs {
 		dir := code.repo_root
 		if packages[job.pkg].dir != "." {
 			dir = fmt.aprintf("%s/%s", code.repo_root, packages[job.pkg].dir, allocator = scratch)
 		}
-		pool.commands[i] = check_command(
+		pool_config.commands[i] = check_command(
 			odin,
 			dir,
 			packages[job.pkg],
@@ -111,10 +85,10 @@ compile :: proc(
 			scratch,
 		)
 	}
-	run_pool(&pool)
-	defer for &arena in pool.arenas {
-		virtual.arena_destroy(&arena)
-	}
+	pool: Pool(Check_Run)
+	start_pool(&pool, pool_config, scratch)
+	join_pool(&pool)
+	defer destroy_pool(&pool)
 
 	for run, i in pool.runs {
 		if u, untrusted := run.outcome.(Untrusted); untrusted {
@@ -248,117 +222,21 @@ check_command :: proc(
 	return args[:]
 }
 
-// One heavy check can peak at 600 MB (probe R-G), so the pool never runs more checks than there are
-// gigabytes of RAM.
 @(private = "file")
-worker_count :: proc(jobs: int) -> int {
-	n := os.get_processor_core_count()
-	if total, _, _, _, ok := si.ram_stats(); ok {
-		n = min(n, int(total / (1 << 30)))
-	}
-	return clamp(n, 1, jobs)
-}
-
-@(private = "file")
-check_timeout :: proc() -> time.Duration {
-	text := ""
-	when ODIN_DEBUG {
-		// Golden cases test the timeout without waiting two minutes. Release builds ignore this, so a
-		// shipped result can't depend on the environment.
-		text = os.get_env("ODX_CHECK_TIMEOUT_MS", context.temp_allocator)
-	}
-	if ms, ok := strconv.parse_int(text, 10); ok && ms > 0 {
-		return time.Duration(ms) * time.Millisecond
-	}
-	return CHECK_TIMEOUT
-}
-
-@(private = "file")
-run_pool :: proc(pool: ^Pool) {
-	threads := make([]^thread.Thread, len(pool.arenas), context.temp_allocator)
-	for &arena, i in pool.arenas {
-		ensure(virtual.arena_init_growing(&arena) == nil, "out of memory")
-		threads[i] = thread.create_and_start_with_poly_data2(pool, i, check_worker)
-	}
-	thread.join_multiple(..threads)
-	for t in threads {
-		thread.destroy(t)
-	}
-}
-
-// Takes jobs in order, so every job before the last one started has run. An untrusted outcome stops
-// new checks and lets the running ones finish.
-@(private = "file")
-check_worker :: proc(pool: ^Pool, worker: int) {
-	allocator := virtual.arena_allocator(&pool.arenas[worker])
-	for !sync.atomic_load(&pool.stop) {
-		job := sync.atomic_add(&pool.next, 1)
-		if job >= len(pool.commands) {
-			break
-		}
-		stderr_path := fmt.aprintf("%s/%d.stderr", pool.temp_dir, job, allocator = allocator)
-		run := run_check(pool.commands[job], stderr_path, pool.timeout, allocator)
-		pool.runs[job] = run
-		if _, untrusted := run.outcome.(Untrusted); untrusted {
-			sync.atomic_store(&pool.stop, true)
-		}
-	}
-}
-
-// Stderr goes to a named file, because `os.create_temp_file` captured nothing in the reader probe
-// (Appendix C).
-@(private = "file")
-run_check :: proc(
-	command: []string,
-	stderr_path: string,
-	timeout: time.Duration,
+read_check_end :: proc(
+	end: Child_End,
 	allocator: runtime.Allocator,
 ) -> (
 	run: Check_Run,
+	stop: bool,
 ) {
-	file, create_err := os.create(stderr_path)
-	if create_err != nil {
-		reason := fmt.aprintf(
-			"couldn't capture stderr: %s",
-			os.error_string(create_err),
-			allocator = allocator,
-		)
-		return {outcome = Untrusted{reason, ""}}
+	run.timed_out = end.timed_out
+	if end.failure != "" {
+		run.outcome = Untrusted{end.failure, ""}
+	} else {
+		run.outcome = read_check(end.exit_code, end.timed_out, end.captured, allocator)
 	}
-	process, start_err := os.process_start({command = command, stderr = file})
-	os.close(file)
-	if start_err != nil {
-		reason := fmt.aprintf(
-			"couldn't start: %s",
-			os.error_string(start_err),
-			allocator = allocator,
-		)
-		return {outcome = Untrusted{reason, ""}}
-	}
-	state, wait_err := os.process_wait(process, timeout)
-	if wait_err == os.General_Error.Timeout {
-		run.timed_out = true
-		_ = os.process_kill(process)
-		state, wait_err = os.process_wait(process)
-	}
-	if wait_err != nil {
-		reason := fmt.aprintf(
-			"couldn't be waited for: %s",
-			os.error_string(wait_err),
-			allocator = allocator,
-		)
-		return {outcome = Untrusted{reason, ""}, timed_out = run.timed_out}
-	}
-	stderr, read_err := os.read_entire_file(stderr_path, allocator)
-	if read_err != nil {
-		reason := fmt.aprintf(
-			"couldn't read its stderr: %s",
-			os.error_string(read_err),
-			allocator = allocator,
-		)
-		return {outcome = Untrusted{reason, ""}, timed_out = run.timed_out}
-	}
-	run.outcome = read_check(state.exit_code, run.timed_out, string(stderr), allocator)
+	_, stop = run.outcome.(Untrusted)
 	return
 }
 
@@ -376,11 +254,7 @@ compiler_output_message :: proc(
 	b := strings.builder_make(allocator)
 	fmt.sbprintf(&b, "checking '%s' for %s ", dir, TARGETS[target].name)
 	if timed_out {
-		if timeout % time.Second == 0 {
-			fmt.sbprintf(&b, "timed out after %d s", int(timeout / time.Second))
-		} else {
-			fmt.sbprintf(&b, "timed out after %d ms", int(timeout / time.Millisecond))
-		}
+		write_timeout(&b, timeout)
 	} else {
 		strings.write_string(&b, u.reason)
 	}

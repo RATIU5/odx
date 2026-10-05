@@ -23,6 +23,7 @@ Rule :: enum u8 {
 	Vet_Disabled,
 	Feature_Relaxed,
 	Transmute,
+	Format,
 }
 
 Held_Back :: enum u8 {
@@ -59,6 +60,7 @@ RULES := [Rule]Rule_Info {
 	.Vet_Disabled           = {"vet-disabled", false, false, .Yes, false},
 	.Feature_Relaxed        = {"feature-relaxed", true, false, .Yes, false},
 	.Transmute              = {"transmute", true, false, .Yes, true},
+	.Format                 = {"format", false, false, .Yes, true},
 }
 
 Error_Code :: enum u8 {
@@ -71,6 +73,8 @@ Error_Code :: enum u8 {
 	Init_Exists,
 	Init_Write,
 	Dir_Unreadable,
+	Format_Timeout,
+	Format_Failed,
 }
 
 // Codes are permanent and never reused.
@@ -85,6 +89,8 @@ ERROR_CODES := [Error_Code]string {
 	.Init_Exists          = "init-exists",
 	.Init_Write           = "init-write",
 	.Dir_Unreadable       = "dir-unreadable",
+	.Format_Timeout       = "format-timeout",
+	.Format_Failed        = "format-failed",
 }
 
 // Adds `finding` as `pkg`'s. A nil `pkg` leaves it unowned and adds it as given, with no mute or

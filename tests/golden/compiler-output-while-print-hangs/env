@@ -1,0 +1,2 @@
+PATH=${ODX_TESTS}/fake-odin/garbage:${PATH}
+ODX_FAKE_PRINTER=hang

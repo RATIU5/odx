@@ -1,0 +1,25 @@
+=== odx __format app/clean.odin
+--- stdout
+formatted
+--- stderr
+--- exit 0
+=== odx __format app/unaligned.odin
+--- stdout
+differs 4
+--- stderr
+--- exit 0
+=== odx __format app/broken.odin
+--- stdout
+refused
+--- stderr
+--- exit 0
+=== odx __format app/missing.odin
+--- stdout
+unreadable file does not exist
+--- stderr
+--- exit 0
+=== odx __format
+--- stdout
+--- stderr
+odx: error: usage: unknown command '__format'
+--- exit 2

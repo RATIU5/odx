@@ -9,17 +9,21 @@ File_Walk :: struct {
 	path:      string,
 	src:       string,
 	findings:  ^[dynamic]Finding,
+	layout:    ^Layout,
 	ancestors: [dynamic]^ast.Node,
 }
 
-// Runs every rule that reads the AST on `file`. The findings it appends borrow `path`. The
-// ancestor stack is allocated with `context.allocator`. The caller sets that to its scratch arena,
-// where the `delete` here does nothing and the caller's `arena_free_all` reclaims the stack.
-walk_file :: proc(file: ^ast.File, path: string, findings: ^[dynamic]Finding) {
+// Runs every rule that reads the AST on `file`, and records in `layout` what `line-length` needs
+// from the parse. The findings it appends borrow `path`. The ancestor stack is allocated with
+// `context.allocator`, and `layout` grows with its lists' own allocator. The caller sets the first
+// to its scratch arena, where the `delete` here does nothing and the caller's `arena_free_all`
+// reclaims the stack.
+walk_file :: proc(file: ^ast.File, path: string, findings: ^[dynamic]Finding, layout: ^Layout) {
 	w := File_Walk {
 		path      = path,
 		src       = file.src,
 		findings  = findings,
+		layout    = layout,
 		ancestors = make([dynamic]^ast.Node, context.allocator),
 	}
 	defer delete(w.ancestors)
@@ -61,9 +65,32 @@ visit_node :: proc(v: ^ast.Visitor, node: ^ast.Node) -> ^ast.Visitor {
 		if n.tok.kind == .Fallthrough {
 			report(w, .Fallthrough, n.tok.pos, FALLTHROUGH_MESSAGE)
 		}
+	case ^ast.Struct_Type:
+		record_struct_gaps(w.layout, w.src, n.fields)
+	case ^ast.Bit_Field_Type:
+		record_bit_field_gaps(w.layout, w.src, n.fields)
+	case ^ast.Enum_Type:
+		record_value_gaps(w.layout, w.src, n.fields)
+	case ^ast.Comp_Lit:
+		record_value_gaps(w.layout, w.src, n.elems)
+	case ^ast.Value_Decl:
+		if in_foreign_block(w) && strings.has_suffix(w.src[n.pos.offset:n.end.offset], "---") {
+			append(&w.layout.foreign_decl_lines, Line_Run{n.pos.line, n.end.line})
+		}
 	}
 	append(&w.ancestors, node)
 	return v
+}
+
+// Foreign blocks often sit inside file-scope `when` statements, so any ancestor counts.
+@(private = "file")
+in_foreign_block :: proc(w: ^File_Walk) -> bool {
+	for node in w.ancestors {
+		if _, is_foreign := node.derived.(^ast.Foreign_Block_Decl); is_foreign {
+			return true
+		}
+	}
+	return false
 }
 
 // `message` must outlive the findings.

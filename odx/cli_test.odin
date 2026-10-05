@@ -3,7 +3,7 @@ package odx
 import "core:testing"
 
 @(test)
-parse_args_accepts_the_four_commands :: proc(t: ^testing.T) {
+parse_args_accepts_each_command :: proc(t: ^testing.T) {
 	cases := []struct {
 		args: []string,
 		want: Parsed_Args,
@@ -13,6 +13,8 @@ parse_args_accepts_the_four_commands :: proc(t: ^testing.T) {
 		{{"check", "--pending"}, Check_Command{pending = true}},
 		{{"check", "--pending", "--json"}, Check_Command{json = true, pending = true}},
 		{{"init"}, Init_Command{}},
+		{{"__format", "app/app.odin"}, Format_Child_Command{"app/app.odin"}},
+		{{"__format", "--json"}, Format_Child_Command{"--json"}},
 	}
 	for c in cases {
 		got := parse_args(c.args, context.allocator)
@@ -32,6 +34,8 @@ parse_args_reports_usage :: proc(t: ^testing.T) {
 		{{"check", "--nope"}, "unknown flag '--nope' for 'check'"},
 		{{"check", "src"}, "unexpected argument 'src' for 'check'"},
 		{{"init", "--json"}, "unknown flag '--json' for 'init'"},
+		{{"__format"}, "unknown command '__format'"},
+		{{"__format", "a.odin", "b.odin"}, "unknown command '__format'"},
 	}
 	for c in cases {
 		got := parse_args(c.args, context.allocator)

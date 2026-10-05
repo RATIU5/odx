@@ -11,10 +11,17 @@ Check_Command :: struct {
 
 Init_Command :: struct {}
 
+Format_Child_Command :: struct {
+	file: string,
+}
+
+FORMAT_COMMAND :: "__format"
+
 // Exactly one command, or the `usage` error that explains why there is none.
 Parsed_Args :: union {
 	Check_Command,
 	Init_Command,
+	Format_Child_Command,
 	Error,
 }
 
@@ -43,6 +50,10 @@ parse_args :: proc(args: []string, allocator: runtime.Allocator) -> Parsed_Args 
 			return bad_arg(allocator, name, rest[0])
 		}
 		return Init_Command{}
+	case FORMAT_COMMAND:
+		if len(rest) == 1 {
+			return Format_Child_Command{rest[0]}
+		}
 	}
 	return usage(allocator, "unknown command '%s'", name)
 }

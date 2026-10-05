@@ -1,0 +1,7 @@
+#!/bin/sh
+# On `check`, writes stderr that isn't JSON and exits 1, and for a package directory named `app`
+# does so only after every other check has ended.
+. "$(dirname "$0")/../pass-through.sh"
+case $2 in */app) sleep 1 ;; esac
+echo "not json from ${2##*/}" >&2
+exit 1

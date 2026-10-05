@@ -29,6 +29,7 @@ Source_File :: struct {
 	is_test:      bool,
 	// False when odx can't read or parse the file, so its parsed rules skip it.
 	parsed:       bool,
+	size:         int,
 	// The paths the file names, and its own link when it is a symlink, before resolving.
 	paths:        [dynamic]Path_Ref,
 	findings:     [dynamic]Finding,
@@ -216,6 +217,7 @@ read_file :: proc(w: ^Walker, path, abs, project: string) -> (file: Source_File,
 		return file, true
 	}
 	src := string(data)
+	file.size = len(src)
 	header := scan_header(src, scratch)
 	verdict := judge_tags(header.tags[:], project)
 	if verdict.ignored {
@@ -227,17 +229,21 @@ read_file :: proc(w: ^Walker, path, abs, project: string) -> (file: Source_File,
 	if header.package_offset >= 0 {
 		file.package_line, file.package_col = text_position(src, header.package_offset)
 	}
-	check_line_length(&file.findings, file.path, src)
 	check_file_tags(&file.findings, file.path, src, header.tags[:], scratch)
 	parse_error: Maybe(Parse_Error)
 	{
 		context.allocator = scratch
 		parsed: ^ast.File
 		parsed, parse_error = parse_source(src, w.allocator)
+		layout := Layout {
+			gaps               = make([dynamic]Alignment_Gap, scratch),
+			foreign_decl_lines = make([dynamic]Line_Run, scratch),
+		}
 		if parse_error == nil {
 			collect_path_refs(parsed, &file.paths)
-			walk_file(parsed, file.path, &file.findings)
+			walk_file(parsed, file.path, &file.findings, &layout)
 		}
+		check_line_length(&file.findings, file.path, src, layout)
 		read_ignores(&file, src, parsed, header.package_offset, w.allocator, scratch)
 	}
 	if e, failed := parse_error.?; failed {

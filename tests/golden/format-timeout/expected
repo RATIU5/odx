@@ -1,0 +1,5 @@
+--- stdout
+--- stderr
+odx: no odx.json, so rule set 1, the running compiler and every package strict
+odx: error: format-timeout: formatting 'app/app.odin' timed out after 200 ms
+--- exit 2

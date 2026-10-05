@@ -39,7 +39,19 @@ description = "Diff odx's file selection against the compiler's; rerun on every 
 alias = "s"
 run = "mkdir -p $OUT && odin build tests/selection -out:$OUT/selection $ODIN_VET && tests/selection/diff.sh $OUT/selection"
 
+[tasks.build-fixture-fmt]
+hide = true
+sources = ["odx/**/*.odin", "tests/fixture_fmt/*.odin"]
+outputs = ["{{ env.OUT }}/fixture-fmt"]
+run = "mkdir -p $OUT && odin build tests/fixture_fmt -out:$OUT/fixture-fmt $ODIN_VET"
+
+[tasks.fixture-fmt]
+description = "Rewrite the given Odin files, or a directory's own files, with the printer the format rule checks against"
+depends = ["build-fixture-fmt"]
+run = "$OUT/fixture-fmt"
+
 [tasks.fmt]
-description = "Format the Odin sources"
+description = "Format the Odin sources with the vendored printer, which is left as upstream wrote it"
 alias = "f"
-run = "odinfmt -w odx && odinfmt -w tests/runner && odinfmt -w tests/selection"
+depends = ["build-fixture-fmt"]
+run = "$OUT/fixture-fmt odx tests/runner tests/selection tests/fixture_fmt"

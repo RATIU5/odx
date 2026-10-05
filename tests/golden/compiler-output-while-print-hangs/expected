@@ -1,0 +1,6 @@
+--- stdout
+--- stderr
+odx: no odx.json, so rule set 1, the running compiler and every package strict
+odx: error: compiler-output: checking 'lib' for darwin_arm64 exited 1 without one compiler JSON document on stderr; stderr:
+	this is not json
+--- exit 2

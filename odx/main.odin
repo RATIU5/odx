@@ -20,6 +20,8 @@ run :: proc() -> int {
 		append(&result.errors, parsed)
 	case Init_Command:
 		return run_init()
+	case Format_Child_Command:
+		return run_format(parsed)
 	case Check_Command:
 		cmd = parsed
 		if check_repo(&result) != nil {
@@ -74,7 +76,35 @@ check :: proc(odin, root: string, config: Config, packages: []Package, result: ^
 			append(&result.errors, Error{.Compiler_Output, failure})
 			return
 		}
-		compile(odin, odin_root, root, config, packages, result, context.allocator)
+		temp_dir, temp_err := os.make_directory_temp("", "odx-check-*", context.allocator)
+		if temp_err != nil {
+			message := fmt.aprintf(
+				"could not make a temp dir for compiler output: %s",
+				os.error_string(temp_err),
+			)
+			append(&result.errors, Error{.Compiler_Output, message})
+			return
+		}
+		defer os.remove_all(temp_dir)
+		budget: Child_Budget
+		init_child_budget(&budget, worker_count())
+		format := start_format(root, temp_dir, packages, &budget, context.allocator)
+		compile(
+			odin,
+			odin_root,
+			root,
+			temp_dir,
+			config,
+			packages,
+			&budget,
+			result,
+			context.allocator,
+		)
+		if len(result.errors) > 0 {
+			abandon_format(format)
+			return
+		}
+		finish_format(format, packages, result, context.allocator)
 		if len(result.errors) > 0 {
 			return
 		}
