@@ -26,7 +26,7 @@ run = "$OUT/odx"
 [tasks.test]
 description = "Run the tests"
 alias = "t"
-run = "mkdir -p $OUT && odin test odx $ODIN_VET -define:ODIN_TEST_FAIL_ON_BAD_MEMORY=true -out:$OUT/odx_test"
+run = "mkdir -p $OUT && odin test odx $ODIN_VET -define:ODIN_TEST_FAIL_ON_BAD_MEMORY=true -out:$OUT/odx_test && odin test tests/runner $ODIN_VET -define:ODIN_TEST_FAIL_ON_BAD_MEMORY=true -out:$OUT/runner_test"
 
 [tasks.golden]
 description = "Run the golden cases against the built binary"

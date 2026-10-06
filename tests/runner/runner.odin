@@ -75,7 +75,7 @@ run :: proc() -> int {
 	}
 	slice.sort_by(entries, proc(a, b: os.File_Info) -> bool {return a.name < b.name})
 
-	passed, failed := 0, 0
+	passed, failed, rerun := 0, 0, 0
 	for entry in entries {
 		if entry.type != .Directory {
 			continue
@@ -86,6 +86,11 @@ run :: proc() -> int {
 			context.allocator,
 		)
 		actual, run_err := run_case(odx_bin, dir, tests_dir, placeholders)
+		if expected_err == nil && run_err == "" && should_rerun(string(expected), actual) {
+			rerun += 1
+			fmt.printfln("RERUN %s (compiler exit 11)", entry.name)
+			actual, run_err = run_case(odx_bin, dir, tests_dir, placeholders)
+		}
 		if expected_err != nil || run_err != "" {
 			failed += 1
 			fmt.printfln("FAIL %s: %s", entry.name, run_err != "" ? run_err : "no expected file")
@@ -105,11 +110,28 @@ run :: proc() -> int {
 		}
 		free_all(context.temp_allocator)
 	}
-	fmt.printfln("golden: %d passed, %d failed", passed, failed)
+	fmt.printfln("golden: %d passed, %d failed, %d rerun", passed, failed, rerun)
 	if failed > 0 || passed == 0 {
 		return 1
 	}
 	return 0
+}
+
+// The pinned compiler sometimes segfaults under load, and odx reports that without retrying. So the
+// runner reruns a case once when odx reports that crash and the case doesn't expect one.
+should_rerun :: proc(expected, actual: string) -> bool {
+	return reports_compiler_crash(actual) && !reports_compiler_crash(expected)
+}
+
+reports_compiler_crash :: proc(rendered: string) -> bool {
+	rest := rendered
+	for line in strings.split_lines_iterator(&rest) {
+		if strings.has_prefix(line, "odx: error: compiler-output: ") &&
+		   strings.has_suffix(line, " ended with exit code 11; stderr was empty") {
+			return true
+		}
+	}
+	return false
 }
 
 // The runner reads the version itself, so a wrong version in odx's output never normalizes away.
