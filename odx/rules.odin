@@ -24,6 +24,8 @@ Rule :: enum u8 {
 	Feature_Relaxed,
 	Transmute,
 	Format,
+	Proc_Length,
+	Nesting_Depth,
 }
 
 Held_Back :: enum u8 {
@@ -61,6 +63,8 @@ RULES := [Rule]Rule_Info {
 	.Feature_Relaxed        = {"feature-relaxed", true, false, .Yes, false},
 	.Transmute              = {"transmute", true, false, .Yes, true},
 	.Format                 = {"format", false, false, .Yes, true},
+	.Proc_Length            = {"proc-length", true, false, .Yes, true},
+	.Nesting_Depth          = {"nesting-depth", true, false, .Yes, true},
 }
 
 Error_Code :: enum u8 {

@@ -116,6 +116,8 @@ rules_table_matches_the_contract_flag_by_flag :: proc(t: ^testing.T) {
 		.Feature_Relaxed        = {"feature-relaxed", true, false, .Yes, false},
 		.Transmute              = {"transmute", true, false, .Yes, true},
 		.Format                 = {"format", false, false, .Yes, true},
+		.Proc_Length            = {"proc-length", true, false, .Yes, true},
+		.Nesting_Depth          = {"nesting-depth", true, false, .Yes, true},
 	}
 	for got, rule in RULES {
 		w := want[rule]
