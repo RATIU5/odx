@@ -27,20 +27,30 @@ Check_Run :: struct {
 	timed_out: bool,
 }
 
-// Runs `odin check` per package and target per Appendix E.4, twice for a pending package per
-// Appendix E.7, then adds the `odin` findings to `result` and marks muted packages. An untrusted check
-// adds `compiler-output` instead. `odin` is the compiler's path, `odin_root` what `odin root` printed
-// and `root` the repo root. The checks' stderr goes to files in `temp_dir`, and they run within
-// `budget`. Allocates what it adds with `allocator`.
-compile :: proc(
+// Every check child of one `odx check`. The jobs, the code map and the pool's lists live in `work`.
+Check_Jobs :: struct {
+	jobs: []Check_Job,
+	code: Code_Map,
+	pool: Pool(Check_Run),
+	work: virtual.Arena,
+}
+
+// Starts `odin check` per package and target per Appendix E.4, twice for a pending package per
+// Appendix E.7, and returns without waiting. `finish_compile` must follow. `odin` is the compiler's
+// path, `odin_root` what `odin root` printed and `root` the repo root. The checks' stderr goes to
+// files in `temp_dir`, and they run within `budget`. Allocates the jobs with `allocator`.
+start_compile :: proc(
 	odin, odin_root, root, temp_dir: string,
 	config: Config,
 	packages: []Package,
 	budget: ^Child_Budget,
-	result: ^Result,
 	allocator: runtime.Allocator,
-) {
-	jobs := make([dynamic]Check_Job, context.temp_allocator)
+) -> ^Check_Jobs {
+	checks := new(Check_Jobs, allocator)
+	ensure(virtual.arena_init_growing(&checks.work) == nil, "out of memory")
+	scratch := virtual.arena_allocator(&checks.work)
+
+	jobs := make([dynamic]Check_Job, scratch)
 	for p, i in packages {
 		for t in Target {
 			if t in p.check_targets {
@@ -51,16 +61,13 @@ compile :: proc(
 			}
 		}
 	}
+	checks.jobs = jobs[:]
 	if len(jobs) == 0 {
-		return
+		return checks
 	}
 
-	work: virtual.Arena
-	ensure(virtual.arena_init_growing(&work) == nil, "out of memory")
-	defer virtual.arena_destroy(&work)
-	scratch := virtual.arena_allocator(&work)
-
 	code := make_code_map(root, odin_root, packages, config.vendored[:], scratch)
+	checks.code = code
 
 	pool_config := Pool_Config(Check_Run) {
 		commands = make([][]string, len(jobs), scratch),
@@ -85,10 +92,26 @@ compile :: proc(
 			scratch,
 		)
 	}
-	pool: Pool(Check_Run)
-	start_pool(&pool, pool_config, scratch)
-	join_pool(&pool)
-	defer destroy_pool(&pool)
+	start_pool(&checks.pool, pool_config, scratch)
+	return checks
+}
+
+// Waits for the checks, then adds the `odin` findings to `result` and marks muted packages. An
+// untrusted check adds `compiler-output` instead. `packages` is the slice `start_compile` took.
+// Allocates what it adds with `allocator`.
+finish_compile :: proc(
+	checks: ^Check_Jobs,
+	packages: []Package,
+	result: ^Result,
+	allocator: runtime.Allocator,
+) {
+	join_pool(&checks.pool)
+	defer {
+		destroy_pool(&checks.pool)
+		virtual.arena_destroy(&checks.work)
+	}
+	jobs, code, pool := checks.jobs, checks.code, &checks.pool
+	scratch := virtual.arena_allocator(&checks.work)
 
 	for run, i in pool.runs {
 		if u, untrusted := run.outcome.(Untrusted); untrusted {

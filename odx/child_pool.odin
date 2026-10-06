@@ -11,7 +11,7 @@ import si "core:sys/info"
 import "core:thread"
 import "core:time"
 
-// How often a worker that waits for its child looks for `kill_pool`.
+// How often a worker that waits for a slot or for its child looks for a stop.
 KILL_POLL :: 20 * time.Millisecond
 
 Stream :: enum u8 {
@@ -102,7 +102,15 @@ start_pool :: proc(pool: ^Pool($Run), config: Pool_Config(Run), allocator: runti
 	pool.threads = make([]^thread.Thread, len(pool.arenas), allocator)
 	for &arena, i in pool.arenas {
 		ensure(virtual.arena_init_growing(&arena) == nil, "out of memory")
-		pool.threads[i] = thread.create_and_start_with_poly_data2(pool, i, pool_worker(Run))
+		// A slot that is free now goes to this worker, so a pool that starts later can't take it
+		// first. A zero wait never takes a slot.
+		has_slot := sync.sema_wait_with_timeout(&pool.budget.slots, time.Nanosecond)
+		pool.threads[i] = thread.create_and_start_with_poly_data3(
+			pool,
+			i,
+			has_slot,
+			pool_worker(Run),
+		)
 	}
 }
 
@@ -134,15 +142,16 @@ destroy_pool :: proc(pool: ^Pool($Run)) {
 
 // Takes a slot and then a job, so every job before the last one started has run.
 @(private = "file")
-pool_worker :: proc($Run: typeid) -> proc(pool: ^Pool(Run), worker: int) {
-	return proc(pool: ^Pool(Run), worker: int) {
+pool_worker :: proc($Run: typeid) -> proc(pool: ^Pool(Run), worker: int, has_slot: bool) {
+	return proc(pool: ^Pool(Run), worker: int, has_slot: bool) {
 			allocator := virtual.arena_allocator(&pool.arenas[worker])
+			has_slot := has_slot
 			for {
-				sync.sema_wait(&pool.budget.slots)
-				job := len(pool.commands)
-				if !sync.atomic_load(&pool.stop) {
-					job = sync.atomic_add(&pool.next, 1)
+				if !take_slot(pool.budget, &pool.stop, has_slot) {
+					break
 				}
+				has_slot = false
+				job := sync.atomic_add(&pool.next, 1)
 				end: Child_End
 				ended := false
 				if job < len(pool.commands) {
@@ -159,6 +168,25 @@ pool_worker :: proc($Run: typeid) -> proc(pool: ^Pool(Run), worker: int) {
 				}
 			}
 		}
+}
+
+// False when `stop` is set first. A stopped worker then ends without a slot, which another pool's
+// child may hold for as long as its timeout. `held` says the worker has a slot already.
+@(private = "file")
+take_slot :: proc(budget: ^Child_Budget, stop: ^bool, held: bool) -> bool {
+	held := held
+	for {
+		if sync.atomic_load(stop) {
+			if held {
+				sync.sema_post(&budget.slots)
+			}
+			return false
+		}
+		if held {
+			return true
+		}
+		held = sync.sema_wait_with_timeout(&budget.slots, KILL_POLL)
+	}
 }
 
 // `ended` is false when `kill_pool` ended the child, which then has no `end` to read. The captured
@@ -229,6 +257,11 @@ run_child :: proc(
 		// The wait reaps the child, so only the waiting thread can know its pid is still the child's.
 		state, wait_err = os.process_wait(process, min(left, KILL_POLL))
 		if wait_err != os.General_Error.Timeout {
+			if wait_err != nil {
+				// The child may still run, and nothing else would end it.
+				_ = os.process_kill(process)
+				_, _ = os.process_wait(process)
+			}
 			break
 		}
 	}

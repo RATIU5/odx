@@ -4,7 +4,9 @@ import "base:runtime"
 import "core:fmt"
 import "core:os"
 import "core:slice"
+import "core:sync"
 import "core:testing"
+import "core:thread"
 import "core:time"
 
 @(private = "file")
@@ -87,4 +89,69 @@ kill_pool_ends_the_running_children_at_once :: proc(t: ^testing.T) {
 	testing.expectf(t, took < 2 * time.Second, "the pool took %v to end", took)
 	testing.expect_value(t, budget.live, 0)
 	testing.expect_value(t, fmt.tprint(pool.runs), "[0, 0, 0, 0]")
+}
+
+@(test)
+a_stopped_worker_ends_without_a_slot :: proc(t: ^testing.T) {
+	defer free_all(context.temp_allocator)
+	dir, err := os.make_directory_temp("", "odx-pool-*", context.temp_allocator)
+	testing.expect_value(t, err, nil)
+	defer os.remove_all(dir)
+
+	budget: Child_Budget
+	init_child_budget(&budget, 1)
+	// Another pool's hung child holds the only slot.
+	sync.sema_wait(&budget.slots)
+	pool: Pool(int)
+	config := Pool_Config(int) {
+		commands = sleep_commands(1, "0"),
+		captured = .Stdout,
+		read     = exit_code_of,
+		temp_dir = dir,
+		timeout  = 10 * time.Second,
+		budget   = &budget,
+	}
+	start_pool(&pool, config, context.temp_allocator)
+	kill_pool(&pool)
+	started := time.tick_now()
+	for !thread.is_done(pool.threads[0]) && time.tick_since(started) < 2 * time.Second {
+		time.sleep(time.Millisecond)
+	}
+	ended_without_a_slot := thread.is_done(pool.threads[0])
+	sync.sema_post(&budget.slots)
+	join_pool(&pool)
+	destroy_pool(&pool)
+
+	testing.expect(t, ended_without_a_slot, "the stopped worker waited for a slot")
+	testing.expect_value(t, budget.peak, 0)
+}
+
+@(test)
+a_started_pool_holds_its_slots_before_a_later_pool_starts :: proc(t: ^testing.T) {
+	defer free_all(context.temp_allocator)
+	dir, err := os.make_directory_temp("", "odx-pool-*", context.temp_allocator)
+	testing.expect_value(t, err, nil)
+	defer os.remove_all(dir)
+
+	budget: Child_Budget
+	init_child_budget(&budget, 2)
+	pool: Pool(int)
+	config := Pool_Config(int) {
+		commands = sleep_commands(2, "0.2"),
+		captured = .Stdout,
+		read     = exit_code_of,
+		temp_dir = dir,
+		timeout  = 10 * time.Second,
+		budget   = &budget,
+	}
+	start_pool(&pool, config, context.temp_allocator)
+	slot_was_free := sync.sema_wait_with_timeout(&budget.slots, time.Nanosecond)
+	if slot_was_free {
+		sync.sema_post(&budget.slots)
+	}
+	join_pool(&pool)
+	destroy_pool(&pool)
+
+	testing.expect(t, !slot_was_free, "a slot was free after the pool started")
+	testing.expect_value(t, fmt.tprint(pool.runs), "[0, 0]")
 }

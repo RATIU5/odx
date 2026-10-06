@@ -13,6 +13,8 @@ Finding :: struct {
 	col:       int,
 	rule:      Rule,
 	message:   string,
+	// A stderr line that is printed when the finding is, and "" for none. Compare and dedupe ignore it.
+	note:      string,
 	held_back: bool,
 	// The dir of the package the finding counts toward for `pending-stale`, or "" when none. Borrows
 	// `Package.dir`. Compare and dedupe ignore it, so `stale_pending` reads it before dedupe.
@@ -121,8 +123,12 @@ render_result :: proc(out, err: ^strings.Builder, result: Result, cmd: Check_Com
 		for note in result.notes {
 			fmt.sbprintf(err, "%s\n", note)
 		}
+		render_finding_notes(err, result.findings[:], false)
 	}
 	if cmd.json {
+		if !failed && cmd.pending {
+			render_finding_notes(err, result.findings[:], true)
+		}
 		render_json(out, result, cmd, failed)
 		return
 	}
@@ -139,6 +145,7 @@ render_result :: proc(out, err: ^strings.Builder, result: Result, cmd: Check_Com
 	}
 	if cmd.pending && count < len(result.findings) {
 		strings.write_string(err, "odx: pending findings:\n")
+		render_finding_notes(err, result.findings[:], true)
 		for f in result.findings {
 			if f.held_back {
 				render_finding_text(out, f)
@@ -156,6 +163,15 @@ render_result :: proc(out, err: ^strings.Builder, result: Result, cmd: Check_Com
 		RELEASE,
 		result.odin,
 	)
+}
+
+@(private = "file")
+render_finding_notes :: proc(err: ^strings.Builder, findings: []Finding, held_back: bool) {
+	for f in findings {
+		if f.held_back == held_back && f.note != "" {
+			fmt.sbprintf(err, "%s\n", f.note)
+		}
+	}
 }
 
 render_finding_text :: proc(out: ^strings.Builder, f: Finding) {

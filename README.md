@@ -6,7 +6,7 @@ A strict, opinionated checker for Odin projects: format, naming and syntax rules
 
 1. `odx check` on any repo.
 2. `odx init` pins the release and compiler and lists failing packages as `pending`. Commit `odx.json`.
-3. During development: format with odinfmt, then fix what `odx check` reports; use `odx test` and `odx run`.
+3. During development: format with odinfmt at OLS commit `dd0f85d` and the config in odx's `odinfmt.json` (in this repo, `mise run fmt`), then fix what `odx check` reports; use `odx test` and `odx run`.
 4. CI installs the pinned odx release and runs `odx check && odx test`.
 5. Remove `pending` entries as packages are fixed; `odx check --pending` shows what's left.
 6. Upgrade: bump `version` or `odin` in `odx.json` in one commit.

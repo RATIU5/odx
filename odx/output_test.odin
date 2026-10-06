@@ -338,3 +338,61 @@ sort_prints_a_finding_once_whichever_packages_it_counts_against :: proc(t: ^test
 
 	testing.expect_value(t, len(findings), 1)
 }
+
+@(private = "file")
+noted_result :: proc() -> Result {
+	result := sample_result()
+	result.findings[0].note = "odx: format: a/b.odin formatter crashed"
+	result.findings[1].note = "odx: format: p/q.odin formatter crashed"
+	append(&result.notes, "odx: skipped x: no file")
+	return result
+}
+
+@(private = "file")
+destroy_noted :: proc(result: ^Result) {
+	delete(result.findings)
+	delete(result.notes)
+	delete(result.errors)
+}
+
+@(test)
+a_note_prints_only_when_its_finding_is_shown :: proc(t: ^testing.T) {
+	SHOWN :: "odx: skipped x: no file\nodx: format: a/b.odin formatter crashed\n"
+	HELD_BACK :: "odx: format: p/q.odin formatter crashed\n"
+	cases := []struct {
+		cmd:  Check_Command,
+		want: string,
+	} {
+		{{}, SHOWN},
+		{{json = true}, SHOWN},
+		{{pending = true}, SHOWN + "odx: pending findings:\n" + HELD_BACK},
+		{{json = true, pending = true}, SHOWN + HELD_BACK},
+	}
+	for c in cases {
+		result := noted_result()
+		defer destroy_noted(&result)
+		w: Written
+		defer destroy_written(&w)
+		write_to_builders(t, &w, result, c.cmd)
+		testing.expectf(
+			t,
+			strings.to_string(w.err) == c.want,
+			"%v: stderr is %q",
+			c.cmd,
+			strings.to_string(w.err),
+		)
+	}
+}
+
+@(test)
+an_error_prints_no_finding_note :: proc(t: ^testing.T) {
+	result := noted_result()
+	defer destroy_noted(&result)
+	append(&result.errors, Error{.Odin_Missing, "no odin"})
+
+	w: Written
+	defer destroy_written(&w)
+	write_to_builders(t, &w, result, {pending = true})
+
+	testing.expect_value(t, strings.to_string(w.err), "odx: error: odin-missing: no odin\n")
+}

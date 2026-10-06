@@ -147,13 +147,13 @@ read_format_end_takes_a_whole_result_line_however_the_child_ended :: proc(t: ^te
 		{
 			"a child that never started",
 			{failure = "couldn't start: Permission denied"},
-			Not_Run{"couldn't start: Permission denied"},
+			Run_Failed{"couldn't start: Permission denied"},
 			true,
 		},
 		{
 			"a child odx couldn't wait for",
 			{failure = "couldn't be waited for: No child processes"},
-			Not_Run{"couldn't be waited for: No child processes"},
+			Run_Failed{"couldn't be waited for: No child processes"},
 			true,
 		},
 		{"a child that SIGKILL ended", {exit_code = 9}, Crashed{}, false},
@@ -231,7 +231,12 @@ finish_format_reports_the_first_error_in_path_order :: proc(t: ^testing.T) {
 		{
 			"a child that never started, before a timeout",
 			"",
-			{Timed_Out{}, Formatted{}, Not_Run{"couldn't start: Permission denied"}, Formatted{}},
+			{
+				Timed_Out{},
+				Formatted{},
+				Run_Failed{"couldn't start: Permission denied"},
+				Formatted{},
+			},
 			{
 				.Format_Failed,
 				"odx can't run the formatter process for 'app/b.odin': couldn't start: Permission denied",

@@ -1,0 +1,13 @@
+=== odx check
+--- stdout
+odx: 0 findings, 0 ignored, 1 pending, 0 skipped (rules 1, odx <release>, odin <odin>)
+--- stderr
+--- exit 0
+=== odx check --pending
+--- stdout
+app/app.odin:1:1: format: the formatter crashed, so odx can't check this file's format
+odx: 0 findings, 0 ignored, 1 pending, 0 skipped (rules 1, odx <release>, odin <odin>)
+--- stderr
+odx: pending findings:
+odx: format: app/app.odin formatter crashed
+--- exit 0

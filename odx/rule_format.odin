@@ -74,7 +74,7 @@ Unreadable :: struct {
 Crashed :: struct {}
 
 // odx couldn't start the child, wait for it or read what it wrote.
-Not_Run :: struct {
+Run_Failed :: struct {
 	reason: string,
 }
 
@@ -94,7 +94,7 @@ Format_Outcome :: union {
 	Unreadable,
 	Timed_Out,
 	Crashed,
-	Not_Run,
+	Run_Failed,
 }
 
 // Allocates `out` with `context.allocator`. `ok` is false when the printer can't read `src`.
@@ -287,9 +287,10 @@ start_format :: proc(
 	return jobs
 }
 
-// Waits for the children, then adds each file's finding and note, or the error of the first file in
-// path order that has one. The findings borrow their paths from `packages`. Allocates the notes and
-// the error with `allocator`.
+// Waits for the children, then adds each file's finding, or the error of the first file in path
+// order that has one. A finding carries its note, so a held-back finding's note is held back too.
+// The findings borrow their paths from `packages`. Allocates the notes and the error with
+// `allocator`.
 finish_format :: proc(
 	jobs: ^Format_Jobs,
 	packages: []Package,
@@ -310,7 +311,6 @@ finish_format :: proc(
 			col  = 1,
 			rule = .Format,
 		}
-		note: string
 		switch outcome in jobs.pool.runs[job.pool_index] {
 		case Formatted:
 			continue
@@ -319,10 +319,10 @@ finish_format :: proc(
 			finding.message = FORMAT_DIFFERS_MESSAGE
 		case Refused:
 			finding.message = FORMAT_REFUSED_MESSAGE
-			note = "formatter can't read the file"
+			finding.note = format_note(job.path, "formatter can't read the file", allocator)
 		case Crashed:
 			finding.message = FORMAT_CRASHED_MESSAGE
-			note = "formatter crashed"
+			finding.note = format_note(job.path, "formatter crashed", allocator)
 		case Timed_Out:
 			b := strings.builder_make(allocator)
 			fmt.sbprintf(&b, "formatting '%s' ", job.path)
@@ -338,7 +338,7 @@ finish_format :: proc(
 			)
 			append(&result.errors, Error{.Format_Failed, message})
 			return
-		case Not_Run:
+		case Run_Failed:
 			message := fmt.aprintf(
 				"odx can't run the formatter process for '%s': %s",
 				job.path,
@@ -348,16 +348,13 @@ finish_format :: proc(
 			append(&result.errors, Error{.Format_Failed, message})
 			return
 		}
-		if finding.message == "" {
-			continue
-		}
-		pkg := &packages[job.pkg]
-		if note != "" && !pkg.muted {
-			line := fmt.aprintf("odx: format: %s %s", job.path, note, allocator = allocator)
-			append(&result.notes, line)
-		}
-		add_rule_finding(result, pkg, finding, false)
+		add_rule_finding(result, &packages[job.pkg], finding, false)
 	}
+}
+
+@(private = "file")
+format_note :: proc(path, what: string, allocator: runtime.Allocator) -> string {
+	return fmt.aprintf("odx: format: %s %s", path, what, allocator = allocator)
 }
 
 // Kills and reaps the running children instead of waiting for them, for a run that already has an
@@ -385,7 +382,7 @@ read_format_end :: proc(
 	stop: bool,
 ) {
 	if end.failure != "" {
-		return Not_Run{end.failure}, true
+		return Run_Failed{end.failure}, true
 	}
 	switch result in read_print_result(end.captured) {
 	case Formatted:

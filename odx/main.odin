@@ -88,8 +88,9 @@ check :: proc(odin, root: string, config: Config, packages: []Package, result: ^
 		defer os.remove_all(temp_dir)
 		budget: Child_Budget
 		init_child_budget(&budget, worker_count())
-		format := start_format(root, temp_dir, packages, &budget, context.allocator)
-		compile(
+		// The checks start first, because a compile error must not wait for a slot that a print holds
+		// until its timeout. A check is short, so the prints wait little.
+		checks := start_compile(
 			odin,
 			odin_root,
 			root,
@@ -97,9 +98,10 @@ check :: proc(odin, root: string, config: Config, packages: []Package, result: ^
 			config,
 			packages,
 			&budget,
-			result,
 			context.allocator,
 		)
+		format := start_format(root, temp_dir, packages, &budget, context.allocator)
+		finish_compile(checks, packages, result, context.allocator)
 		if len(result.errors) > 0 {
 			abandon_format(format)
 			return
