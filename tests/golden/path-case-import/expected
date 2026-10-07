@@ -1,6 +1,7 @@
 --- stdout
-app/app_windows.odin:3:12: path-case: import '../lib' names 'lib', which is 'Lib' on disk
-odx: 1 findings, 0 ignored, 0 pending, 0 skipped (rules 1, odx <release>, odin <odin>)
+Lib/lib.odin:1:1: package-name: package 'lib' is in directory 'Lib', which isn't snake_case
+app/app_windows.odin:3:8: path-case: import '../lib' names 'lib', which is 'Lib' on disk
+odx: 2 findings, 0 ignored, 0 pending, 0 skipped (rules 1, odx <release>, odin <odin>)
 --- stderr
 odx: no odx.json, so rule set 1, the running compiler and every package strict
 --- exit 1

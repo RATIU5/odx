@@ -1,5 +1,5 @@
 package app
 
-import lib "../lib"
+import "../lib"
 
 Z :: lib.X

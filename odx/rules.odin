@@ -26,6 +26,11 @@ Rule :: enum u8 {
 	Format,
 	Proc_Length,
 	Nesting_Depth,
+	Name_Case,
+	Package_Name,
+	File_Name,
+	Import_Alias,
+	Import_Order,
 }
 
 Held_Back :: enum u8 {
@@ -65,6 +70,11 @@ RULES := [Rule]Rule_Info {
 	.Format                 = {"format", false, false, .Yes, true},
 	.Proc_Length            = {"proc-length", true, false, .Yes, true},
 	.Nesting_Depth          = {"nesting-depth", true, false, .Yes, true},
+	.Name_Case              = {"name-case", true, false, .Yes, true},
+	.Package_Name           = {"package-name", false, false, .Yes, false},
+	.File_Name              = {"file-name", false, false, .Yes, false},
+	.Import_Alias           = {"import-alias", false, false, .Yes, true},
+	.Import_Order           = {"import-order", false, false, .Yes, true},
 }
 
 Error_Code :: enum u8 {

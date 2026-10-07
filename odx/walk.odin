@@ -42,6 +42,7 @@ walk_file :: proc(file: ^ast.File, path: string, findings: ^[dynamic]Finding, la
 		delete(w.code_line_sums)
 	}
 	check_block_comments(&w, file.comments[:])
+	check_import_order(&w, file.decls[:])
 	visitor := ast.Visitor {
 		visit = visit_node,
 		data  = &w,
@@ -75,7 +76,8 @@ visit_node :: proc(v: ^ast.Visitor, node: ^ast.Node) -> ^ast.Visitor {
 	)
 	#partial switch n in node.derived {
 	case ^ast.Block_Stmt:
-		is_body := is_proc_or_foreign_body(parent)
+		check_name_expr(w, n.label, .Label)
+		is_body := is_proc_or_foreign_block_body(parent)
 		check_block(w, n, is_body)
 		if !is_body {
 			depth += 1
@@ -89,6 +91,8 @@ visit_node :: proc(v: ^ast.Visitor, node: ^ast.Node) -> ^ast.Visitor {
 		}
 	case ^ast.Proc_Type:
 		check_bounds_check(w, n.pos, .Bounds_Check in n.tags, .No_Bounds_Check in n.tags)
+		check_field_names(w, n.params, .Parameter)
+		check_field_names(w, n.results, .Result)
 	case ^ast.Auto_Cast:
 		report(w, .Auto_Cast, n.pos, AUTO_CAST_MESSAGE)
 	case ^ast.Type_Cast:
@@ -101,13 +105,44 @@ visit_node :: proc(v: ^ast.Visitor, node: ^ast.Node) -> ^ast.Visitor {
 		}
 	case ^ast.Struct_Type:
 		record_struct_gaps(w.layout, w.src, n.fields)
+		check_field_names(w, n.poly_params)
+		check_field_names(w, n.fields, .Field)
+	case ^ast.Union_Type:
+		check_field_names(w, n.poly_params)
 	case ^ast.Bit_Field_Type:
 		record_bit_field_gaps(w.layout, w.src, n.fields)
+		for field in n.fields {
+			check_name_expr(w, field.name, .Field)
+		}
 	case ^ast.Enum_Type:
 		record_value_gaps(w.layout, w.src, n.fields)
+		check_enum_member_names(w, n.fields)
+	case ^ast.Poly_Type:
+		check_poly_name(w, n, parent)
 	case ^ast.Comp_Lit:
 		record_value_gaps(w.layout, w.src, n.elems)
+	case ^ast.Import_Decl:
+		check_import_names(w, n)
+	case ^ast.Foreign_Import_Decl:
+		check_name_expr(w, n.name, .Foreign_Import)
+	case ^ast.If_Stmt:
+		check_name_expr(w, n.label, .Label)
+	case ^ast.For_Stmt:
+		check_name_expr(w, n.label, .Label)
+	case ^ast.Switch_Stmt:
+		check_name_expr(w, n.label, .Label)
+	case ^ast.Type_Switch_Stmt:
+		check_name_expr(w, n.label, .Label)
+		check_type_switch_names(w, n.tag)
+	case ^ast.Range_Stmt:
+		check_name_expr(w, n.label, .Label)
+		check_range_names(w, n.vals)
+	case ^ast.Unroll_Range_Stmt:
+		check_name_expr(w, n.label, .Label)
+		vals := [2]^ast.Expr{n.val0, n.val1}
+		check_range_names(w, vals[:1 if n.val1 == nil else 2])
 	case ^ast.Value_Decl:
+		check_value_decl_names(w, n)
 		if in_foreign_block(w) && strings.has_suffix(w.src[n.pos.offset:n.end.offset], "---") {
 			append(&w.layout.foreign_decl_lines, Line_Run{n.pos.line, n.end.line})
 		}
@@ -117,7 +152,7 @@ visit_node :: proc(v: ^ast.Visitor, node: ^ast.Node) -> ^ast.Visitor {
 }
 
 @(private = "file")
-is_proc_or_foreign_body :: proc(parent: ^ast.Node) -> bool {
+is_proc_or_foreign_block_body :: proc(parent: ^ast.Node) -> bool {
 	if parent == nil {
 		return false
 	}

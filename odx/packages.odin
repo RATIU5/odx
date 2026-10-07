@@ -164,7 +164,7 @@ walk_dir :: proc(w: ^Walker, rel, abs, project: string) {
 			if is_hidden_file(entry.name) {
 				continue
 			}
-			if file, read := read_file(w, child, entry.fullpath, project); read {
+			if file, read := read_file(w, rel, child, entry.fullpath, project); read {
 				if entry.type == .Symlink {
 					// A link that can't be resolved can't be read either, and read_file already reported that.
 					if target, link_err := os.get_absolute_path(entry.fullpath, w.allocator);
@@ -189,7 +189,7 @@ walk_dir :: proc(w: ^Walker, rel, abs, project: string) {
 
 // `read` is false for a file odx doesn't read.
 @(private = "file")
-read_file :: proc(w: ^Walker, path, abs, project: string) -> (file: Source_File, read: bool) {
+read_file :: proc(w: ^Walker, dir, path, abs, project: string) -> (file: Source_File, read: bool) {
 	defer virtual.arena_free_all(w.scratch)
 	scratch := virtual.arena_allocator(w.scratch)
 
@@ -197,6 +197,7 @@ read_file :: proc(w: ^Walker, path, abs, project: string) -> (file: Source_File,
 	file.paths = make([dynamic]Path_Ref, w.allocator)
 	file.findings = make([dynamic]Finding, w.allocator)
 	file.ignores = make([dynamic]Ignore, w.allocator)
+	check_file_name(&file.findings, file.path)
 	data, err := os.read_entire_file(abs, scratch)
 	if err != nil {
 		message := fmt.aprintf(
@@ -229,6 +230,7 @@ read_file :: proc(w: ^Walker, path, abs, project: string) -> (file: Source_File,
 	if header.package_offset >= 0 {
 		file.package_line, file.package_col = text_position(src, header.package_offset)
 	}
+	check_package_name(&file, dir)
 	check_file_tags(&file.findings, file.path, src, header.tags[:], scratch)
 	parse_error: Maybe(Parse_Error)
 	{

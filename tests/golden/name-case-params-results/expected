@@ -1,0 +1,11 @@
+--- stdout
+app/app.odin:3:17: name-case: parameter 'Value' isn't snake_case
+app/app.odin:3:45: name-case: result 'Ok' isn't snake_case
+app/app.odin:7:15: name-case: parameter 'Count' isn't snake_case
+app/app.odin:7:27: name-case: parameter 'userName' isn't snake_case
+app/app.odin:7:65: name-case: result 'Total' isn't snake_case
+app/app.odin:13:41: name-case: parameter 'Item' isn't snake_case
+odx: 6 findings, 0 ignored, 0 pending, 0 skipped (rules 1, odx <release>, odin <odin>)
+--- stderr
+odx: no odx.json, so rule set 1, the running compiler and every package strict
+--- exit 1

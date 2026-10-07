@@ -1,3 +1,3 @@
 package app
 
-Value :: 1
+VALUE :: 1

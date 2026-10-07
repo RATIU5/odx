@@ -32,12 +32,12 @@ check_block_comments :: proc(w: ^File_Walk, groups: []^ast.Comment_Group) {
 }
 
 // The parser wraps a `do` body in a block that starts at the body's statement.
-check_block :: proc(w: ^File_Walk, block: ^ast.Block_Stmt, is_proc_or_foreign_body: bool) {
+check_block :: proc(w: ^File_Walk, block: ^ast.Block_Stmt, is_proc_or_foreign_block_body: bool) {
 	if block.uses_do {
 		report(w, .Do_Stmt, block.pos, DO_MESSAGE)
 		return
 	}
-	if len(block.stmts) == 0 || block.pos.line != block.end.line || is_proc_or_foreign_body {
+	if len(block.stmts) == 0 || block.pos.line != block.end.line || is_proc_or_foreign_block_body {
 		return
 	}
 	report(w, .One_Line_Block, block.pos, ONE_LINE_BLOCK_MESSAGE)

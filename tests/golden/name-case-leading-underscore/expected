@@ -1,0 +1,12 @@
+--- stdout
+app/app.odin:3:1: name-case: procedure '_helper' isn't snake_case
+app/app.odin:5:1: name-case: type '_Private' isn't Ada_Case
+app/app.odin:7:1: name-case: constant '_LIMIT' isn't SCREAMING_CASE
+app/app.odin:9:1: name-case: variable '_count' isn't snake_case
+app/app.odin:11:1: name-case: variable 'count_' isn't snake_case
+app/app.odin:13:1: name-case: variable 'row__count' isn't snake_case
+app/app.odin:15:16: name-case: parameter '_unused' isn't snake_case
+odx: 7 findings, 0 ignored, 0 pending, 0 skipped (rules 1, odx <release>, odin <odin>)
+--- stderr
+odx: no odx.json, so rule set 1, the running compiler and every package strict
+--- exit 1

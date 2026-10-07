@@ -1,0 +1,7 @@
+--- stdout
+app/app.odin:10:1: name-case: type 'Sdl_event' isn't Ada_Case
+app/app.odin:15:2: name-case: procedure 'SDL_Quit' isn't snake_case
+odx: 2 findings, 3 ignored, 0 pending, 0 skipped (rules 1, odx <release>, odin <odin>)
+--- stderr
+odx: no odx.json, so rule set 1, the running compiler and every package strict
+--- exit 1

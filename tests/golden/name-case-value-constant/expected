@@ -1,0 +1,11 @@
+--- stdout
+app/app.odin:3:1: name-case: constant 'max_size' isn't SCREAMING_CASE
+app/app.odin:9:1: name-case: constant 'Pi' isn't SCREAMING_CASE
+app/app.odin:13:1: name-case: constant 'Default_Name' isn't SCREAMING_CASE
+app/app.odin:17:1: name-case: constant 'debug_level' isn't SCREAMING_CASE
+app/app.odin:21:1: name-case: constant 'origin' isn't SCREAMING_CASE
+app/app.odin:25:1: name-case: constant 'double' isn't SCREAMING_CASE
+odx: 6 findings, 0 ignored, 0 pending, 0 skipped (rules 1, odx <release>, odin <odin>)
+--- stderr
+odx: no odx.json, so rule set 1, the running compiler and every package strict
+--- exit 1

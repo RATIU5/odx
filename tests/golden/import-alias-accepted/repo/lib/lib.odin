@@ -1,3 +1,3 @@
 package lib
 
-X :: 1
+LIMIT :: 5

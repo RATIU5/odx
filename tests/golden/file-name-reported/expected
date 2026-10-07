@@ -1,0 +1,9 @@
+--- stdout
+app/2d.odin:1:1: file-name: file name '2d.odin' isn't snake_case
+app/MyFile.odin:1:1: file-name: file name 'MyFile.odin' isn't snake_case
+app/my-file.odin:1:1: file-name: file name 'my-file.odin' isn't snake_case
+app/vec.math.odin:1:1: file-name: file name 'vec.math.odin' isn't snake_case
+odx: 4 findings, 0 ignored, 0 pending, 0 skipped (rules 1, odx <release>, odin <odin>)
+--- stderr
+odx: no odx.json, so rule set 1, the running compiler and every package strict
+--- exit 1

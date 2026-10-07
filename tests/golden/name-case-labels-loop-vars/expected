@@ -1,0 +1,15 @@
+--- stdout
+app/app.odin:9:2: name-case: label 'Outer' isn't snake_case
+app/app.odin:9:13: name-case: loop variable 'Item' isn't snake_case
+app/app.odin:9:19: name-case: loop variable 'Index' isn't snake_case
+app/app.odin:22:7: name-case: loop variable 'Elem' isn't snake_case
+app/app.odin:25:6: name-case: variable 'I' isn't snake_case
+app/app.odin:28:14: name-case: loop variable 'Step' isn't snake_case
+app/app.odin:31:2: name-case: label 'Pick' isn't snake_case
+app/app.odin:31:15: name-case: type-switch variable 'Value' isn't snake_case
+app/app.odin:44:2: name-case: label 'Scope' isn't snake_case
+app/app.odin:50:2: name-case: label 'Check' isn't snake_case
+odx: 10 findings, 0 ignored, 0 pending, 0 skipped (rules 1, odx <release>, odin <odin>)
+--- stderr
+odx: no odx.json, so rule set 1, the running compiler and every package strict
+--- exit 1

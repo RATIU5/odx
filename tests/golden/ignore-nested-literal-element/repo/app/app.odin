@@ -1,6 +1,6 @@
 package app
 
-table := [][][]string{
+TABLE := [][][]string{
 	// odx:ignore line-length a table of URLs
 	{
 		{"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},

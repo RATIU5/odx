@@ -110,6 +110,7 @@ close_proc :: proc(w: ^File_Walk) {
 // Reports each block that first crosses the limit and none of the blocks inside it, so one ignore
 // covers one block. The message is allocated with the findings' allocator.
 check_nesting_depth :: proc(w: ^File_Walk, block: ^ast.Block_Stmt, block_depth: int) {
+	// A block outside any procedure, such as a file-scope `when`, is exempt.
 	if block_depth != NESTING_LIMIT + 1 || len(w.procs) == 0 {
 		return
 	}

@@ -2,7 +2,7 @@ package app
 
 import "core:fmt"
 
-import lib "../Lib"
+import "../shared"
 
 TEXT :: #load("../Data/Sub/Hello.txt")
 HASH :: #load_hash("../Data/Sub/Hello.txt", "crc32")
@@ -15,5 +15,5 @@ foreign libc {
 
 show :: proc() {
 	files := #load_directory("../Data/Sub")
-	fmt.println(lib.X, len(TEXT), HASH, len(files), getpid())
+	fmt.println(shared.X, len(TEXT), HASH, len(files), getpid())
 }

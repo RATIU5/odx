@@ -28,6 +28,13 @@ add_rule_finding_mutes_and_holds_back_by_the_rule_table :: proc(t: ^testing.T) {
 		{.Format, .Strict, false, false, true, false},
 		{.Format, .Pending, false, false, true, true},
 		{.Format, .Strict, true, false, false, false},
+		{.Name_Case, .Pending, false, false, true, true},
+		{.Name_Case, .Strict, true, false, false, false},
+		{.Package_Name, .Strict, false, false, true, false},
+		{.Package_Name, .Strict, true, false, false, false},
+		{.File_Name, .Pending, false, false, true, true},
+		{.Import_Alias, .Strict, true, false, false, false},
+		{.Import_Order, .Pending, false, false, true, true},
 	}
 	for c in cases {
 		result: Result
@@ -118,6 +125,11 @@ rules_table_matches_the_contract_flag_by_flag :: proc(t: ^testing.T) {
 		.Format                 = {"format", false, false, .Yes, true},
 		.Proc_Length            = {"proc-length", true, false, .Yes, true},
 		.Nesting_Depth          = {"nesting-depth", true, false, .Yes, true},
+		.Name_Case              = {"name-case", true, false, .Yes, true},
+		.Package_Name           = {"package-name", false, false, .Yes, false},
+		.File_Name              = {"file-name", false, false, .Yes, false},
+		.Import_Alias           = {"import-alias", false, false, .Yes, true},
+		.Import_Order           = {"import-order", false, false, .Yes, true},
 	}
 	for got, rule in RULES {
 		w := want[rule]

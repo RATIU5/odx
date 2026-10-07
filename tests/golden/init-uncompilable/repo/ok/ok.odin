@@ -1,3 +1,3 @@
 package ok
 
-Value :: 1
+VALUE :: 1
