@@ -1,0 +1,7 @@
+--- stdout
+app/app.odin:9:1: name-case: type 'dword' isn't Ada_Case
+app/app.odin:13:1: name-case: constant 'Int_Max' isn't SCREAMING_CASE
+odx: 2 findings, 0 ignored, 0 pending, 0 skipped (rules 1, odx <release>, odin <odin>)
+--- stderr
+odx: no odx.json, so rule set 1, the running compiler and every package strict
+--- exit 1

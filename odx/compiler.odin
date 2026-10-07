@@ -38,24 +38,25 @@ check_compiler :: proc(
 	}
 }
 
-// Returns the Odin root without a trailing `/`, or a message saying why it couldn't.
-read_odin_root :: proc(
-	odin: string,
-	allocator: runtime.Allocator,
-) -> (
-	root: string,
+// What `odin root` printed, without a trailing `/`, or a message saying why odx couldn't read it.
+// The failure only stops a run that has packages to check.
+Odin_Root :: struct {
+	path:    string,
 	failure: string,
-) {
+}
+
+read_odin_root :: proc(odin: string, allocator: runtime.Allocator) -> Odin_Root {
 	state, stdout, stderr, err := os.process_exec({command = {odin, "root"}}, allocator)
 	text := strings.trim_space(string(stdout))
 	if err != nil || !state.success || text == "" {
-		return "", fmt.aprintf(
+		failure := fmt.aprintf(
 			"'%s root' failed: exit %d, %s",
 			odin,
 			state.exit_code,
 			strings.trim_space(string(stderr)),
 			allocator = allocator,
 		)
+		return {failure = failure}
 	}
-	return strings.trim_right(text, "/"), ""
+	return {path = strings.trim_right(text, "/")}
 }

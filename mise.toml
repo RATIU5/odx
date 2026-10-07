@@ -39,6 +39,12 @@ description = "Diff odx's file selection against the compiler's; rerun on every 
 alias = "s"
 run = "mkdir -p $OUT && odin build tests/selection -out:$OUT/selection $ODIN_VET && tests/selection/diff.sh $OUT/selection"
 
+[tasks.universe]
+description = "Diff odx/universe.odin against the table generated from the running compiler; rerun on every compiler bump"
+alias = "u"
+depends = ["build-fixture-fmt"]
+run = "odin build tests/universe -out:$OUT/universe $ODIN_VET && tests/universe/diff.sh $OUT/universe $OUT/fixture-fmt $OUT"
+
 [tasks.build-fixture-fmt]
 hide = true
 sources = ["odx/**/*.odin", "tests/fixture_fmt/*.odin"]
@@ -54,4 +60,4 @@ run = "$OUT/fixture-fmt"
 description = "Format the Odin sources with the vendored printer, which is left as upstream wrote it"
 alias = "f"
 depends = ["build-fixture-fmt"]
-run = "$OUT/fixture-fmt odx tests/runner tests/selection tests/fixture_fmt"
+run = "$OUT/fixture-fmt odx tests/runner tests/selection tests/fixture_fmt tests/universe"

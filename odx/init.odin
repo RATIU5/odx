@@ -104,11 +104,14 @@ plan_init :: proc(result: ^Result) -> (root: string, report: Init_Report) {
 	}
 	report.vendored = config.vendored[:]
 
-	packages := discover(root, config, result, context.allocator)
+	odin_root := read_odin_root(odin, context.allocator)
+	resolver: Resolver
+	init_repo_resolver(&resolver, odin_root, config, result.odin)
+	packages := discover(root, config, &resolver, result, context.allocator)
 	if len(result.errors) > 0 {
 		return
 	}
-	check(odin, root, config, packages[:], result)
+	check(odin, odin_root, root, config, packages[:], result)
 	if len(result.errors) > 0 {
 		return
 	}
@@ -133,8 +136,8 @@ plan_init :: proc(result: ^Result) -> (root: string, report: Init_Report) {
 	findings := &result.findings
 	recheck: Result
 	if len(candidates.pending) > 0 {
-		rediscovered := discover(root, candidates, &recheck, context.allocator)
-		check(odin, root, candidates, rediscovered[:], &recheck)
+		rediscovered := discover(root, candidates, &resolver, &recheck, context.allocator)
+		check(odin, odin_root, root, candidates, rediscovered[:], &recheck)
 		if len(recheck.errors) > 0 {
 			append(&result.errors, ..recheck.errors[:])
 			return

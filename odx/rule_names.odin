@@ -49,7 +49,7 @@ check_value_decl_names :: proc(w: ^File_Walk, decl: ^ast.Value_Decl) {
 			known: bool
 			kind, known = constant_kind(value, decl.type != nil)
 			if !known {
-				continue
+				kind = ALIAS_NAME_KINDS[alias_kind_at(w, value, ident.pos.offset)].? or_continue
 			}
 		} else if is_composite_literal(value) && len(w.procs) == 0 {
 			kind = .Package_Literal
@@ -67,15 +67,19 @@ is_composite_literal :: proc(value: ^ast.Expr) -> bool {
 	return is_literal
 }
 
+// The file's scope is built at its first alias declaration, since most files have none.
 @(private = "file")
-constant_kind :: proc(tagged: ^ast.Expr, has_type: bool) -> (kind: Name_Kind, known: bool) {
-	// The parser wraps a directive it has no node for, such as `#row_major`, around its operand,
-	// and the operand decides the kind.
-	value := ast.unparen_expr(tagged)
-	for value != nil {
-		tag := value.derived.(^ast.Tag_Expr) or_break
-		value = ast.unparen_expr(tag.expr)
+alias_kind_at :: proc(w: ^File_Walk, value: ^ast.Expr, offset: int) -> Kind {
+	if w.scope == nil {
+		w.scope = walked_file_scope(w.resolver, w.file, w.abs_path)
 	}
+	return alias_kind(w.resolver, value, w.scope, offset)
+}
+
+// `known` is false for an alias or a call, whose kind only the resolver can tell.
+@(private = "file")
+constant_kind :: proc(expr: ^ast.Expr, has_type: bool) -> (kind: Name_Kind, known: bool) {
+	value := unwrap_expr(expr)
 	if value == nil {
 		return
 	}
@@ -96,26 +100,8 @@ constant_kind :: proc(tagged: ^ast.Expr, has_type: bool) -> (kind: Name_Kind, kn
 		then_kind, then_known := constant_kind(v.x, has_type)
 		else_kind, else_known := constant_kind(v.y, has_type)
 		return then_kind, then_known && else_known && then_kind == else_kind
-	case ^ast.Struct_Type,
-	     ^ast.Union_Type,
-	     ^ast.Enum_Type,
-	     ^ast.Bit_Set_Type,
-	     ^ast.Bit_Field_Type,
-	     ^ast.Distinct_Type,
-	     ^ast.Proc_Type,
-	     ^ast.Pointer_Type,
-	     ^ast.Multi_Pointer_Type,
-	     ^ast.Array_Type,
-	     ^ast.Dynamic_Array_Type,
-	     ^ast.Fixed_Capacity_Dynamic_Array_Type,
-	     ^ast.Map_Type,
-	     ^ast.Matrix_Type,
-	     ^ast.Typeid_Type,
-	     ^ast.Helper_Type,
-	     ^ast.Relative_Type:
-		return .Value_Constant if has_type else .Type, true
 	}
-	return .Value_Constant, true
+	return .Type if is_type_expr(value) && !has_type else .Value_Constant, true
 }
 
 // Without a kind, the list is a struct's or union's parameters, which are parametric with or
@@ -145,6 +131,11 @@ param_kind :: proc(field: ^ast.Field) -> Name_Kind {
 }
 
 check_poly_name :: proc(w: ^File_Walk, poly: ^ast.Poly_Type, parent: ^ast.Node) {
+	check_name(w, poly.type.name, poly.type.pos, poly_name_kind(poly, parent))
+}
+
+// `.Poly_Type` or `.Poly_Value`, by where the `$` name sits under `parent`.
+poly_name_kind :: proc(poly: ^ast.Poly_Type, parent: ^ast.Node) -> Name_Kind {
 	kind := Name_Kind.Poly_Type
 	is_poly :: proc(expr: ^ast.Expr, poly: ^ast.Poly_Type) -> bool {
 		return rawptr(expr) == rawptr(poly)
@@ -169,7 +160,7 @@ check_poly_name :: proc(w: ^File_Walk, poly: ^ast.Poly_Type, parent: ^ast.Node) 
 			}
 		}
 	}
-	check_name(w, poly.type.name, poly.type.pos, kind)
+	return kind
 }
 
 check_enum_member_names :: proc(w: ^File_Walk, fields: []^ast.Expr) {

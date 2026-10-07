@@ -62,6 +62,7 @@ is_skipped :: proc(p: Package) -> bool {
 @(private = "file")
 Walker :: struct {
 	config:    Config,
+	resolver:  ^Resolver,
 	result:    ^Result,
 	packages:  [dynamic]Package,
 	allocator: runtime.Allocator,
@@ -72,13 +73,15 @@ Walker :: struct {
 }
 
 // Walks the repo at `root` per Appendix E.3 and returns its packages in path order. Each file holds
-// the findings odx reads from it alone, and the first disagreeing file of a package whose files
-// disagree on the name holds that `odin` finding. Adds the skipped and pending counts, a note per
-// skipped package and a `dir-unreadable` error per directory it can't list to `result`. Allocates the
-// packages and what it adds to `result` with `allocator`.
+// the findings odx reads from it, where `name-case` on an alias also reads the declarations
+// `resolver` finds for it, and the first disagreeing file of a package whose files disagree on the
+// name holds that `odin` finding. Adds the skipped and pending counts, a note per skipped package
+// and a `dir-unreadable` error per directory it can't list to `result`. Allocates the packages and
+// what it adds to `result` with `allocator`.
 discover :: proc(
 	root: string,
 	config: Config,
+	resolver: ^Resolver,
 	result: ^Result,
 	allocator: runtime.Allocator,
 ) -> [dynamic]Package {
@@ -90,6 +93,7 @@ discover :: proc(
 
 	w := Walker {
 		config    = config,
+		resolver  = resolver,
 		result    = result,
 		packages  = make([dynamic]Package, allocator),
 		allocator = allocator,
@@ -117,10 +121,53 @@ discover :: proc(
 @(private = "file")
 SKIP_REASON :: "no non-test file compiles for darwin_arm64 or linux_amd64"
 
+Dir_Entry_Kind :: enum u8 {
+	Other,
+	// A directory itself. A link to one is `Other`, because odx never walks it.
+	Dir,
+	// A `.odin` file the compiler never compiles, which still makes its directory a package.
+	Hidden_Source,
+	// A `.odin` file odx reads, unless its tags say `#+build ignore`.
+	Source,
+}
+
+// The entries of the directory at `abs` in name order, which is the order odx reads its files in.
+// Allocates with `allocator`.
+list_dir :: proc(
+	abs: string,
+	allocator: runtime.Allocator,
+) -> (
+	entries: []os.File_Info,
+	err: os.Error,
+) {
+	entries = os.read_directory_by_path(abs, -1, allocator) or_return
+	slice.sort_by(entries, proc(a, b: os.File_Info) -> bool {return a.name < b.name})
+	return
+}
+
+// What discovery and the resolver's loader both make of a directory entry, so they read the same
+// files. It follows a link only to learn its kind, and allocates that with `allocator`.
+dir_entry_kind :: proc(entry: os.File_Info, allocator: runtime.Allocator) -> Dir_Entry_Kind {
+	if entry.type == .Symlink {
+		if info, err := os.stat(entry.fullpath, allocator); err == nil && info.type == .Directory {
+			return .Other
+		}
+	}
+	switch {
+	case entry.type == .Directory:
+		return .Dir
+	case !strings.has_suffix(entry.name, ".odin"):
+		return .Other
+	case is_hidden_file(entry.name):
+		return .Hidden_Source
+	}
+	return .Source
+}
+
 // `project` is the name the compiler gives a build of this directory.
 @(private = "file")
 walk_dir :: proc(w: ^Walker, rel, abs, project: string) {
-	entries, err := os.read_directory_by_path(abs, -1, w.listings)
+	entries, err := list_dir(abs, w.listings)
 	if err != nil {
 		message := fmt.aprintf(
 			"could not list %s: %s",
@@ -131,7 +178,6 @@ walk_dir :: proc(w: ^Walker, rel, abs, project: string) {
 		append(&w.result.errors, Error{.Dir_Unreadable, message})
 		return
 	}
-	slice.sort_by(entries, proc(a, b: os.File_Info) -> bool {return a.name < b.name})
 
 	is_package := false
 	pkg := Package {
@@ -140,30 +186,25 @@ walk_dir :: proc(w: ^Walker, rel, abs, project: string) {
 		files  = make([dynamic]Source_File, w.allocator),
 	}
 	for entry in entries {
-		is_dir := entry.type == .Directory
-		if entry.type == .Symlink {
-			// Following the link only to learn its kind, since a directory link is never walked.
-			info, stat_err := os.stat(entry.fullpath, w.listings)
-			is_dir = stat_err == nil && info.type == .Directory
-			if is_dir {
-				continue
-			}
+		kind := dir_entry_kind(entry, w.listings)
+		if kind == .Other {
+			continue
 		}
 		child :=
 			entry.name if rel == "." else fmt.aprintf("%s/%s", rel, entry.name, allocator = w.listings)
-		switch {
-		case is_dir:
+		switch kind {
+		case .Other:
+		case .Dir:
 			if strings.has_prefix(entry.name, ".") ||
 			   is_listed_dir(w.config.exclude_dirs[:], child) ||
 			   is_listed_dir(w.config.vendored[:], child) {
 				continue
 			}
 			walk_dir(w, child, entry.fullpath, entry.name)
-		case strings.has_suffix(entry.name, ".odin"):
+		case .Hidden_Source:
 			is_package = true
-			if is_hidden_file(entry.name) {
-				continue
-			}
+		case .Source:
+			is_package = true
 			if file, read := read_file(w, rel, child, entry.fullpath, project); read {
 				if entry.type == .Symlink {
 					// A link that can't be resolved can't be read either, and read_file already reported that.
@@ -243,7 +284,7 @@ read_file :: proc(w: ^Walker, dir, path, abs, project: string) -> (file: Source_
 		}
 		if parse_error == nil {
 			collect_path_refs(parsed, &file.paths)
-			walk_file(parsed, file.path, &file.findings, &layout)
+			walk_file(parsed, file.path, abs, &file.findings, &layout, w.resolver)
 		}
 		check_line_length(&file.findings, file.path, src, layout)
 		read_ignores(&file, src, parsed, header.package_offset, w.allocator, scratch)

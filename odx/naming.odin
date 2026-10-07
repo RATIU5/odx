@@ -77,6 +77,19 @@ NAME_KIND_LABELS := [Name_Kind]string {
 	.Foreign_Import       = "foreign import name",
 }
 
+// The declaration kind whose case an alias takes, by the kind its right side resolves to. An alias
+// of a variable doesn't compile, and an unresolved one is never a finding.
+@(rodata)
+ALIAS_NAME_KINDS := [Kind]Maybe(Name_Kind) {
+	.Unknown   = nil,
+	.Type      = .Type,
+	.Poly_Type = .Type,
+	.Proc      = .Proc,
+	.Type_Proc = .Proc,
+	.Value     = .Value_Constant,
+	.Variable  = nil,
+}
+
 @(private = "file")
 Char_Class :: enum u8 {
 	Lower,

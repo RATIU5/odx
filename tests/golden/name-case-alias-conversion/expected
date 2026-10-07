@@ -1,0 +1,8 @@
+--- stdout
+app/app.odin:7:1: name-case: constant 'Nanosecond' isn't SCREAMING_CASE
+app/app.odin:11:1: name-case: constant 'Second' isn't SCREAMING_CASE
+app/app.odin:17:1: name-case: constant 'Size' isn't SCREAMING_CASE
+odx: 3 findings, 0 ignored, 0 pending, 0 skipped (rules 1, odx <release>, odin <odin>)
+--- stderr
+odx: no odx.json, so rule set 1, the running compiler and every package strict
+--- exit 1

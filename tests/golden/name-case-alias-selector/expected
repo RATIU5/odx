@@ -1,0 +1,7 @@
+--- stdout
+app/app.odin:12:1: name-case: procedure 'Write' isn't snake_case
+app/app.odin:16:1: name-case: type 'failure' isn't Ada_Case
+odx: 2 findings, 0 ignored, 0 pending, 0 skipped (rules 1, odx <release>, odin <odin>)
+--- stderr
+odx: no odx.json, so rule set 1, the running compiler and every package strict
+--- exit 1

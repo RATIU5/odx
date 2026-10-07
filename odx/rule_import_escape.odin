@@ -398,7 +398,6 @@ find_entry :: proc(r: ^Path_Resolver, dir, name: string) -> (entry: os.File_Info
 	return {}, false
 }
 
-@(private = "file")
 parent_dir :: proc(path: string) -> string {
 	i := strings.last_index_byte(path, '/')
 	return path[:i] if i > 0 else "/"

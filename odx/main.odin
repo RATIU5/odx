@@ -49,11 +49,14 @@ check_repo :: proc(result: ^Result) -> (note_err: os.Error) {
 	if !repo.has_config {
 		_ = os.write_string(os.stderr, NO_CONFIG_NOTE) or_return
 	}
-	packages := discover(repo.root, config, result, context.allocator)
+	odin_root := read_odin_root(odin, context.allocator)
+	resolver: Resolver
+	init_repo_resolver(&resolver, odin_root, config, result.odin)
+	packages := discover(repo.root, config, &resolver, result, context.allocator)
 	if len(result.errors) > 0 {
 		return
 	}
-	check(odin, repo.root, config, packages[:], result)
+	check(odin, odin_root, repo.root, config, packages[:], result)
 	if len(result.errors) > 0 {
 		return
 	}
@@ -69,11 +72,24 @@ check_repo :: proc(result: ^Result) -> (note_err: os.Error) {
 	return
 }
 
-check :: proc(odin, root: string, config: Config, packages: []Package, result: ^Result) {
+// The resolver borrows `config`'s collections and allocates with `context.allocator`. Without an
+// Odin root, imports of its collections stay unresolved, and `check` reports the failure.
+init_repo_resolver :: proc(r: ^Resolver, odin_root: Odin_Root, config: Config, compiler: string) {
+	universe, _ := universe_for(compiler)
+	resolver_init(r, odin_root.path, config.collections[:], universe, context.allocator)
+}
+
+check :: proc(
+	odin: string,
+	odin_root: Odin_Root,
+	root: string,
+	config: Config,
+	packages: []Package,
+	result: ^Result,
+) {
 	if len(packages) > 0 {
-		odin_root, failure := read_odin_root(odin, context.allocator)
-		if failure != "" {
-			append(&result.errors, Error{.Compiler_Output, failure})
+		if odin_root.failure != "" {
+			append(&result.errors, Error{.Compiler_Output, odin_root.failure})
 			return
 		}
 		temp_dir, temp_err := os.make_directory_temp("", "odx-check-*", context.allocator)
@@ -92,7 +108,7 @@ check :: proc(odin, root: string, config: Config, packages: []Package, result: ^
 		// until its timeout. A check is short, so the prints wait little.
 		checks := start_compile(
 			odin,
-			odin_root,
+			odin_root.path,
 			root,
 			temp_dir,
 			config,
@@ -110,7 +126,7 @@ check :: proc(odin, root: string, config: Config, packages: []Package, result: ^
 		if len(result.errors) > 0 {
 			return
 		}
-		check_paths(packages, root, odin_root, config.collections[:], context.allocator)
+		check_paths(packages, root, odin_root.path, config.collections[:], context.allocator)
 		add_file_findings(packages, result)
 		apply_ignores(packages, result)
 	}

@@ -1,0 +1,9 @@
+--- stdout
+app/app.odin:16:1: name-case: type 'vec3f' isn't Ada_Case
+app/app.odin:20:1: name-case: type 'update_channel' isn't Ada_Case
+app/app.odin:26:1: name-case: type 'element' isn't Ada_Case
+app/app.odin:30:1: name-case: type 'channel' isn't Ada_Case
+odx: 4 findings, 0 ignored, 0 pending, 0 skipped (rules 1, odx <release>, odin <odin>)
+--- stderr
+odx: no odx.json, so rule set 1, the running compiler and every package strict
+--- exit 1
