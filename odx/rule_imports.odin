@@ -53,9 +53,10 @@ import_step :: proc(prev, next: Import_Group, blanks, non_blanks: int) -> Import
 }
 
 // The name the compiler gives an import without an alias: the directory's name, whatever the
-// package inside declares.
+// package inside declares. A trailing `/` names the same directory.
 unaliased_import_name :: proc(path: string) -> string {
-	return path[strings.last_index_any(path, "/:") + 1:]
+	dir := strings.trim_right(path, "/")
+	return dir[strings.last_index_any(dir, "/:") + 1:]
 }
 
 // An escaped path is unquoted with `context.allocator`.

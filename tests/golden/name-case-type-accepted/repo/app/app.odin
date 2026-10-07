@@ -30,3 +30,9 @@ Nibbles :: bit_field u8 {
 	low:  u8 | 4,
 	high: u8 | 4,
 }
+
+Plain_Mat :: matrix[2, 2]f32
+
+Row_Mat :: #row_major matrix[2, 2]f32
+
+Either_Mat :: #row_major matrix[2, 2]f32 when ODIN_OS == .Windows else matrix[2, 2]f32

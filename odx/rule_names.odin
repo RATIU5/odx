@@ -11,7 +11,6 @@ check_name :: proc(w: ^File_Walk, name: string, pos: tokenizer.Pos, kind: Name_K
 	if name == "_" || has_case(name, want) {
 		return
 	}
-	line, col := source_position(w.src, pos)
 	message := fmt.aprintf(
 		"%s '%s' isn't %s",
 		NAME_KIND_LABELS[kind],
@@ -19,14 +18,7 @@ check_name :: proc(w: ^File_Walk, name: string, pos: tokenizer.Pos, kind: Name_K
 		CASE_NAMES[want],
 		allocator = w.findings.allocator,
 	)
-	finding := Finding {
-		path    = w.path,
-		line    = line,
-		col     = col,
-		rule    = .Name_Case,
-		message = message,
-	}
-	append(w.findings, finding)
+	report(w, .Name_Case, pos, message)
 }
 
 // Checks a name the parser holds as an expression: an identifier, or `&v` in a by-reference range.
@@ -76,7 +68,14 @@ is_composite_literal :: proc(value: ^ast.Expr) -> bool {
 }
 
 @(private = "file")
-constant_kind :: proc(value: ^ast.Expr, has_type: bool) -> (kind: Name_Kind, known: bool) {
+constant_kind :: proc(tagged: ^ast.Expr, has_type: bool) -> (kind: Name_Kind, known: bool) {
+	// The parser wraps a directive it has no node for, such as `#row_major`, around its operand,
+	// and the operand decides the kind.
+	value := ast.unparen_expr(tagged)
+	for value != nil {
+		tag := value.derived.(^ast.Tag_Expr) or_break
+		value = ast.unparen_expr(tag.expr)
+	}
 	if value == nil {
 		return
 	}
@@ -94,8 +93,8 @@ constant_kind :: proc(value: ^ast.Expr, has_type: bool) -> (kind: Name_Kind, kno
 		}
 	case ^ast.Ternary_When_Expr:
 		// `int when C else i32` is as much an alias as `int` is, so the branches decide.
-		then_kind, then_known := constant_kind(ast.unparen_expr(v.x), has_type)
-		else_kind, else_known := constant_kind(ast.unparen_expr(v.y), has_type)
+		then_kind, then_known := constant_kind(v.x, has_type)
+		else_kind, else_known := constant_kind(v.y, has_type)
 		return then_kind, then_known && else_known && then_kind == else_kind
 	case ^ast.Struct_Type,
 	     ^ast.Union_Type,

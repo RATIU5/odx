@@ -21,3 +21,5 @@ shape :: union {
 }
 
 lookup_table :: map[string]int
+
+row_mat :: #row_major matrix[2, 2]f32
