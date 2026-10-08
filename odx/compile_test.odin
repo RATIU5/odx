@@ -24,6 +24,16 @@ check_command_scopes_strict_flags_by_package_name :: proc(t: ^testing.T) {
 		"-thread-count:1",
 		"-ignore-unused-defineables",
 	}
+	strict_flags := []string {
+		"-no-entry-point",
+		"-collection:libs=/repo/libs",
+		"-define:DEBUG=true",
+		"-vet",
+		"-vet-cast",
+		"-strict-style",
+		"-vet-packages:bar",
+		"-strict-style-packages:bar",
+	}
 
 	cases := []struct {
 		name:   string,
@@ -37,17 +47,10 @@ check_command_scopes_strict_flags_by_package_name :: proc(t: ^testing.T) {
 			Package{dir = "foo", name = "bar", status = .Strict},
 			true,
 			.Linux_Amd64,
-			{
-				"-target:linux_amd64",
-				"-no-entry-point",
-				"-collection:libs=/repo/libs",
-				"-define:DEBUG=true",
-				"-vet",
-				"-vet-cast",
-				"-strict-style",
-				"-vet-packages:bar",
-				"-strict-style-packages:bar",
-			},
+			slice.concatenate(
+				[][]string{{"-target:linux_amd64"}, strict_flags},
+				context.temp_allocator,
+			),
 		},
 		{
 			"pending, without strict flags and without warnings",
@@ -67,17 +70,10 @@ check_command_scopes_strict_flags_by_package_name :: proc(t: ^testing.T) {
 			Package{dir = "foo", name = "bar", status = .Pending},
 			true,
 			.Darwin_Arm64,
-			{
-				"-target:darwin_arm64",
-				"-no-entry-point",
-				"-collection:libs=/repo/libs",
-				"-define:DEBUG=true",
-				"-vet",
-				"-vet-cast",
-				"-strict-style",
-				"-vet-packages:bar",
-				"-strict-style-packages:bar",
-			},
+			slice.concatenate(
+				[][]string{{"-target:darwin_arm64"}, strict_flags},
+				context.temp_allocator,
+			),
 		},
 		{
 			"package main, which keeps its entry point",
@@ -147,7 +143,7 @@ when ODIN_OS == .Darwin {
 @(export, link_name="defined")
 defined :: proc "c" () {}
 `
-	testing.expect_value(t, os.write_entire_file(path, transmute([]byte)src), nil)
+	testing.expect_value(t, os.write_entire_file(path, src), nil)
 	foreign_decls := make(map[string][]Position, 0, allocator)
 
 	cases := []struct {

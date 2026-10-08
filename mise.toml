@@ -34,6 +34,11 @@ alias = "g"
 depends = ["build"]
 run = "odin build tests/runner -out:$OUT/golden-runner $ODIN_VET && $OUT/golden-runner $OUT/odx tests/golden"
 
+[tasks.self]
+description = "Check odx's own sources with the built odx"
+depends = ["build"]
+run = "$OUT/odx check"
+
 [tasks.selection]
 description = "Diff odx's file selection against the compiler's; rerun on every compiler bump"
 alias = "s"

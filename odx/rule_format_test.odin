@@ -21,7 +21,7 @@ fake_print :: proc(src: string) -> (out: string, ok: bool) {
 
 @(test)
 print_result_prints_once_and_names_the_first_differing_line :: proc(t: ^testing.T) {
-	src :: "package a\n\nA :: 1\nB :: 2\n"
+	SRC :: "package a\n\nA :: 1\nB :: 2\n"
 	cases := []struct {
 		name: string,
 		src:  string,
@@ -29,16 +29,16 @@ print_result_prints_once_and_names_the_first_differing_line :: proc(t: ^testing.
 		ok:   bool,
 		want: Print_Result,
 	} {
-		{"the print equals the file", src, {src}, true, Formatted{}},
-		{"the print changes line 3", src, {"package a\n\nA  :: 1\nB :: 2\n"}, true, Differs{3}},
+		{"the print equals the file", SRC, {SRC}, true, Formatted{}},
+		{"the print changes line 3", SRC, {"package a\n\nA  :: 1\nB :: 2\n"}, true, Differs{3}},
 		{
 			"a second print would give the file back",
-			src,
-			{"package a\n\nA :: 1\nB  :: 2\n", src},
+			SRC,
+			{"package a\n\nA :: 1\nB  :: 2\n", SRC},
 			true,
 			Differs{4},
 		},
-		{"the printer refuses", src, {""}, false, Refused{}},
+		{"the printer refuses", SRC, {""}, false, Refused{}},
 		{
 			"CRLF line ends differ at line 1",
 			"package a\r\n\r\nA :: 1\r\n",
@@ -239,7 +239,8 @@ finish_format_reports_the_first_error_in_path_order :: proc(t: ^testing.T) {
 			},
 			{
 				.Format_Failed,
-				"odx can't run the formatter process for 'app/b.odin': couldn't start: Permission denied",
+				"odx can't run the formatter process for 'app/b.odin': " +
+				"couldn't start: Permission denied",
 			},
 		},
 		{

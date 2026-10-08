@@ -6,12 +6,14 @@ import "core:os"
 import "core:slice"
 import "core:strings"
 
-// This release's supported Odin range as `odin version` texts. Support is dropped only in a major release.
+// This release's supported Odin range as `odin version` texts. Support is dropped only in a major
+// release.
 @(rodata)
 SUPPORTED_COMPILERS := [?]string{"dev-2026-09-nightly:a2fb372"}
 
 // `running` is the running compiler's version text, and `pin` is odx.json's `odin`, absent without
-// odx.json. A mismatch is reported alone, because support only matters for the compiler that will run.
+// odx.json. A mismatch is reported alone, because support only matters for the compiler that will
+// run.
 check_compiler :: proc(
 	errors: ^[dynamic]Error,
 	running: string,

@@ -256,7 +256,8 @@ json_prints_one_document :: proc(t: ^testing.T) {
 		t,
 		strings.to_string(w.out),
 		`{"version":1,"findings":[` +
-		`{"path":"a/b.odin","line":3,"col":7,"rule":"line-length","message":"line is 120 \"wide\""},` +
+		`{"path":"a/b.odin","line":3,"col":7,"rule":"line-length",` +
+		`"message":"line is 120 \"wide\""},` +
 		`{"path":"p/q.odin","line":1,"col":1,"rule":"odin","message":"held","pending":true}],` +
 		`"errors":[],` +
 		`"summary":{"findings":1,"ignored":2,"pending":1,"skipped":3,"rules":1,"release":"` +

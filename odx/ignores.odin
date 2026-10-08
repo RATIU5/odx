@@ -472,8 +472,8 @@ last_where :: proc(clauses: []^ast.Expr) -> ^ast.Expr {
 make_line_starts :: proc(src: string, allocator: runtime.Allocator) -> []int {
 	starts := make([dynamic]int, allocator)
 	append(&starts, 0)
-	for c, i in transmute([]byte)src {
-		if c == '\n' {
+	for i in 0 ..< len(src) {
+		if src[i] == '\n' {
 			append(&starts, i + 1)
 		}
 	}

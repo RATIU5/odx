@@ -1,11 +1,13 @@
 // Prints the files odx predicts `odin check` compiles, one line per package and target:
-// `<package dir> <target> <file name>...`, with the names sorted. `diff.sh` compares it with the compiler.
+// `<package dir> <target> <file name>...`, with the names sorted. `diff.sh` compares it with the
+// compiler.
 package selection
 
-import odx "../../odx"
 import "core:fmt"
 import "core:os"
 import "core:slice"
+
+import "../../odx"
 
 main :: proc() {
 	if len(os.args) != 2 {

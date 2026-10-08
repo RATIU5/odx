@@ -16,8 +16,9 @@ DO_MESSAGE :: "'do' isn't allowed"
 BOUNDS_CHECK_MESSAGE :: "'#bounds_check' isn't allowed"
 NO_BOUNDS_CHECK_MESSAGE :: "'#no_bounds_check' isn't allowed"
 
-// The `#+feature` items that turn off an error of the pinned compiler, per `get_feature_flag_from_name`
-// in build_settings.cpp and the places the checker reads each flag. Reread them on a compiler bump.
+// The `#+feature` items that turn off an error of the pinned compiler, per
+// `get_feature_flag_from_name` in build_settings.cpp and the places the checker reads each flag.
+// Reread them on a compiler bump.
 @(private = "file", rodata)
 RELAXING_FEATURES := [?]string{"using-stmt", "dynamic-literals", "global-context"}
 
@@ -43,8 +44,9 @@ check_block :: proc(w: ^File_Walk, block: ^ast.Block_Stmt, is_proc_or_foreign_bl
 	report(w, .One_Line_Block, block.pos, ONE_LINE_BLOCK_MESSAGE)
 }
 
-// The parser sets the directive's flag on the statement or expression after it. A procedure literal's
-// directive sits on its type too, as a tag, so the walk reports the type's tags and not the literal's.
+// The parser sets the directive's flag on the statement or expression after it. A procedure
+// literal's directive sits on its type too, as a tag, so the walk reports the type's tags and not
+// the literal's.
 check_bounds_check :: proc(w: ^File_Walk, pos: tokenizer.Pos, on, off: bool) {
 	if on {
 		report(w, .Bounds_Check_Directive, pos, BOUNDS_CHECK_MESSAGE)
@@ -54,9 +56,9 @@ check_bounds_check :: proc(w: ^File_Walk, pos: tokenizer.Pos, on, off: bool) {
 	}
 }
 
-// Reports `vet-disabled` and `feature-relaxed` from the header's tags, so both also run on a file the
-// parser can't read. Each message is allocated with `findings`' allocator, and the findings borrow
-// `path`. `scratch` holds the working lists.
+// Reports `vet-disabled` and `feature-relaxed` from the header's tags, so both also run on a file
+// the parser can't read. Each message is allocated with `findings`' allocator, and the findings
+// borrow `path`. `scratch` holds the working lists.
 check_file_tags :: proc(
 	findings: ^[dynamic]Finding,
 	path, src: string,
@@ -97,9 +99,9 @@ is_spaced_tag :: proc(text, name: string) -> bool {
 	return strings.has_prefix(text, name) && !build_require_space_after(text, name)
 }
 
-// The items of a `#+vet` or `#+feature` tag that its rule reports, each once, read as `parse_vet_tag`
-// and `parse_feature_tag` in parser.cpp read them. The names borrow from `text`, and the caller owns
-// the slice, allocated with `allocator`.
+// The items of a `#+vet` or `#+feature` tag that its rule reports, each once, read as
+// `parse_vet_tag` and `parse_feature_tag` in parser.cpp read them. The names borrow from `text`,
+// and the caller owns the slice, allocated with `allocator`.
 @(private = "file")
 reported_tag_items :: proc(text: string, rule: Rule, allocator: runtime.Allocator) -> []string {
 	is_vet := rule == .Vet_Disabled

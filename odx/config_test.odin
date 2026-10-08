@@ -76,7 +76,8 @@ parse_config_keeps_pending_keys_in_order_with_positions :: proc(t: ^testing.T) {
 	allocator := virtual.arena_allocator(&arena)
 
 	text := fmt.tprintf(
-		"{{\n  \"version\": 1,\n  \"odin\": \"%s\",\n  \"pending\": {{\"zeta\": \"r1\",\n\t\"é/b\": \"r2\", \"a\": \"r3\"}}\n}}\n",
+		"{{\n  \"version\": 1,\n  \"odin\": \"%s\",\n" +
+		"  \"pending\": {{\"zeta\": \"r1\",\n\t\"é/b\": \"r2\", \"a\": \"r3\"}}\n}}\n",
 		PIN,
 	)
 	config, errors := parse_config(text, ".", allocator)

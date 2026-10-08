@@ -88,8 +88,8 @@ read_check :: proc(
 	return Diagnostics{entries}
 }
 
-// `json.parse` accepts trailing data, so the document counts only when the parser reaches the end of
-// input (probe R-H).
+// `json.parse` accepts trailing data, so the document counts only when the parser reaches the end
+// of input (probe R-H).
 @(private = "file")
 read_document :: proc(stderr: string) -> (entries: []Compiler_Entry, error_count: int, ok: bool) {
 	p := json.make_parser(stderr, .JSON, true)
@@ -107,7 +107,8 @@ read_document :: proc(stderr: string) -> (entries: []Compiler_Entry, error_count
 	return result, int(count), true
 }
 
-// Syntax errors and missing imports arrive typed as warnings (probe R-A), so the first message decides.
+// Syntax errors and missing imports arrive typed as warnings (probe R-A), so the first message
+// decides.
 @(private = "file")
 read_entry :: proc(item: json.Value) -> (entry: Compiler_Entry, ok: bool) {
 	object := item.(json.Object) or_return
@@ -149,9 +150,9 @@ Code_Map :: struct {
 	vendored:  []string,
 }
 
-// Realpaths both roots, because the compiler reports real paths. Allocates with `allocator`. The map
-// borrows pointers into `packages`, so the array behind it must outlive the Code_Map and must not
-// grow or move.
+// Realpaths both roots, because the compiler reports real paths. Allocates with `allocator`. The
+// map borrows pointers into `packages`, so the array behind it must outlive the Code_Map and must
+// not grow or move.
 make_code_map :: proc(
 	repo_root, odin_root: string,
 	packages: []Package,
@@ -258,8 +259,8 @@ join_msgs :: proc(msgs: []string) -> string {
 	return strings.to_string(b)
 }
 
-// Deletes each `/* <digits>!<digits> */`, which differs per target and importer (probe R-D), with the
-// space before it.
+// Deletes each `/* <digits>!<digits> */`, which differs per target and importer (probe R-D), with
+// the space before it.
 @(private = "file")
 delete_ids :: proc(message: string) -> string {
 	b := strings.builder_make()
@@ -415,8 +416,8 @@ owner_of :: proc(kind: Entry_Kind, path: string, code: Code_Map) -> (owner: ^Pac
 	return owner, kind == .Error || owner != nil
 }
 
-// Only the package's own check mutes it, so a package that holds a finding through another package's
-// check keeps its rules.
+// Only the package's own check mutes it, so a package that holds a finding through another
+// package's check keeps its rules.
 mutes :: proc(kind: Entry_Kind, placed: Placed, checked: Package) -> bool {
 	if kind != .Error || placed.relocated {
 		return false
@@ -472,11 +473,11 @@ read_redeclaration :: proc(
 	return r, true
 }
 
-// The compiler reports a redeclared name at each later declaration, naming the earlier ones, but the
-// one it counts as first follows the order it read the files in, which varies under load (Appendix C).
-// The positions the entries name link into one group per declared name, and odx reports each
-// declaration after the first in path order. A lone entry that names nothing keeps its message.
-// Allocates with `allocator`.
+// The compiler reports a redeclared name at each later declaration, naming the earlier ones, but
+// the one it counts as first follows the order it read the files in, which varies under load
+// (Appendix C). The positions the entries name link into one group per declared name, and odx
+// reports each declaration after the first in path order. A lone entry that names nothing keeps its
+// message. Allocates with `allocator`.
 settle_redeclarations :: proc(records: []Redeclaration, allocator: runtime.Allocator) -> []Placed {
 	context.allocator = allocator
 	Groups :: struct {

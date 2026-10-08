@@ -35,7 +35,8 @@ scan_header :: proc(src: string, allocator: runtime.Allocator) -> (header: Heade
 		case .EOF:
 			return
 		case .File_Tag:
-			// The compiler's tokenizer ends a tag at any `/`, where core's ends it only at a comment.
+			// The compiler's tokenizer ends a tag at any `/`, where core's ends it only at a
+			// comment.
 			text := token.text[len("#+"):]
 			if i := strings.index_byte(text, '/'); i >= 0 {
 				text = text[:i]
@@ -56,10 +57,10 @@ Parse_Error :: struct {
 	message: string,
 }
 
-// Parses `src` with `core:odin/parser` and returns its AST, or the error at the smallest offset that
-// the parser or its tokenizer reports. `parse_file` returns true even when it reports errors (probe P5).
-// The AST is allocated with `context.allocator`, which suits a scratch arena, and the error's message
-// with `allocator`.
+// Parses `src` with `core:odin/parser` and returns its AST, or the error at the smallest offset
+// that the parser or its tokenizer reports. `parse_file` returns true even when it reports errors
+// (probe P5). The AST is allocated with `context.allocator`, which suits a scratch arena, and the
+// error's message with `allocator`.
 parse_source :: proc(
 	src: string,
 	allocator: runtime.Allocator,

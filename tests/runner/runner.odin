@@ -1,20 +1,21 @@
 // Case layout: `repo/` is copied to a temp dir and used as the working directory, `args` holds one
 // command per line as whitespace-separated arguments, run in order on the same copy, the optional
-// `env` holds `KEY=VALUE` lines applied over the inherited environment, the optional `cwd` names the
-// subdirectory of `repo/` to run in, the optional `readonly` file makes the copy's root directory
-// read-only while the commands run, the optional `unreadable` file names one `repo/`-relative
-// directory per line whose permissions are cleared while the commands run, and `expected` holds the
-// output as `run_case` renders it. An
-// `env` value expands `${NAME}` from the inherited environment, and `${ODX_TESTS}` is the absolute
-// `tests` dir. The rendering ends with `odx.json` when the commands created or changed it.
-package golden_runner
+// `env` holds `KEY=VALUE` lines applied over the inherited environment, the optional `cwd` names
+// the subdirectory of `repo/` to run in, the optional `readonly` file makes the copy's root
+// directory read-only while the commands run, the optional `unreadable` file names one
+// `repo/`-relative directory per line whose permissions are cleared while the commands run, and
+// `expected` holds the output as `run_case` renders it. An `env` value expands `${NAME}` from the
+// inherited environment, and `${ODX_TESTS}` is the absolute `tests` dir. The rendering ends with
+// `odx.json` when the commands created or changed it.
+package runner
 
-import odx "../../odx"
 import "core:fmt"
 import "core:os"
 import "core:slice"
 import "core:strings"
 import "core:time"
+
+import "../../odx"
 
 CASE_TIMEOUT :: 30 * time.Second
 
@@ -299,8 +300,8 @@ run_command :: proc(
 	return outcome, ""
 }
 
-// Recreates symlinks as symlinks, dangling ones included, where `os.copy_directory_all` follows them
-// and fails on a dangling one.
+// Recreates symlinks as symlinks, dangling ones included, where `os.copy_directory_all` follows
+// them and fails on a dangling one.
 copy_tree :: proc(dst, src: string) -> os.Error {
 	ta := context.temp_allocator
 	os.make_directory(dst) or_return

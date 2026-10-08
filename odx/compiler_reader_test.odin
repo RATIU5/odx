@@ -8,13 +8,19 @@ import "core:strings"
 import "core:testing"
 
 @(private = "file")
-ERROR_ENTRY :: `{"type": "error", "pos": {"file": "/r/a.odin", "offset": 9, "line": 3, "column": 5, "end_column": 6}, "msgs": ["Cannot convert '\"s\"' to 'int'"]}`
+ERROR_ENTRY ::
+	`{"type": "error", "pos": {"file": "/r/a.odin", "offset": 9, "line": 3, "column": 5, ` +
+	`"end_column": 6}, "msgs": ["Cannot convert '\"s\"' to 'int'"]}`
 
 @(private = "file")
-WARNING_ENTRY :: `{"type": "warning", "pos": {"file": "/r/a.odin", "offset": 70, "line": 7, "column": 2, "end_column": 5}, "msgs": ["old is deprecated: use new"]}`
+WARNING_ENTRY ::
+	`{"type": "warning", "pos": {"file": "/r/a.odin", "offset": 70, "line": 7, "column": 2, ` +
+	`"end_column": 5}, "msgs": ["old is deprecated: use new"]}`
 
 @(private = "file")
-SYNTAX_ENTRY :: `{"type": "warning", "pos": {"file": "/r/a.odin", "offset": 46, "line": 6, "column": 0, "end_column": 0}, "msgs": ["Syntax Error: Expected '}', got 'EOF'"]}`
+SYNTAX_ENTRY ::
+	`{"type": "warning", "pos": {"file": "/r/a.odin", "offset": 46, "line": 6, "column": 0, ` +
+	`"end_column": 0}, "msgs": ["Syntax Error: Expected '}', got 'EOF'"]}`
 
 @(private = "file")
 NO_MSGS_ENTRY :: `{"type": "error", "pos": null, "msgs": []}`
@@ -42,22 +48,46 @@ outcome_name :: proc(outcome: Check_Outcome) -> string {
 	return "nil"
 }
 
-@(test)
-read_check_follows_the_decision_table :: proc(t: ^testing.T) {
+@(private = "file")
+Read_Case :: struct {
+	name:      string,
+	exit_code: int,
+	timed_out: bool,
+	stderr:    string,
+	want:      string,
+	entries:   int,
+}
+
+@(private = "file")
+expect_read_cases :: proc(t: ^testing.T, cases: []Read_Case) {
 	arena: virtual.Arena
 	testing.expect(t, virtual.arena_init_growing(&arena) == nil)
 	defer virtual.arena_destroy(&arena)
-	defer free_all(context.temp_allocator)
+	for c in cases {
+		outcome := read_check(c.exit_code, c.timed_out, c.stderr, virtual.arena_allocator(&arena))
+		got := outcome_name(outcome)
+		testing.expectf(t, got == c.want, "%s: got %s, want %s", c.name, got, c.want)
+		if d, ok := outcome.(Diagnostics); ok {
+			testing.expectf(
+				t,
+				len(d.entries) == c.entries,
+				"%s: %d entries, want %d",
+				c.name,
+				len(d.entries),
+				c.entries,
+			)
+		}
+		if u, ok := outcome.(Untrusted); ok {
+			testing.expectf(t, u.reason != "", "%s: untrusted without a reason", c.name)
+			testing.expectf(t, u.stderr == c.stderr, "%s: kept stderr %q", c.name, u.stderr)
+		}
+	}
+}
 
-	one_error := document(1, ERROR_ENTRY)
-	cases := []struct {
-		name:      string,
-		exit_code: int,
-		timed_out: bool,
-		stderr:    string,
-		want:      string,
-		entries:   int,
-	} {
+@(test)
+read_check_trusts_a_run_whose_exit_code_fits_its_document :: proc(t: ^testing.T) {
+	defer free_all(context.temp_allocator)
+	cases := []Read_Case {
 		{"exit 0, empty stderr", 0, false, "", "clean", 0},
 		{"exit 0, only warnings", 0, false, document(1, WARNING_ENTRY), "diagnostics", 1},
 		{
@@ -76,6 +106,15 @@ read_check_follows_the_decision_table :: proc(t: ^testing.T) {
 			"diagnostics",
 			1,
 		},
+	}
+	expect_read_cases(t, cases)
+}
+
+@(test)
+read_check_distrusts_every_other_run :: proc(t: ^testing.T) {
+	defer free_all(context.temp_allocator)
+	one_error := document(1, ERROR_ENTRY)
+	cases := []Read_Case {
 		{
 			"exit 5, a document then an assertion line",
 			5,
@@ -146,25 +185,7 @@ read_check_follows_the_decision_table :: proc(t: ^testing.T) {
 		},
 		{"exit 1, a JSON array", 1, false, "[1, 2]\n", "untrusted", 0},
 	}
-	for c in cases {
-		outcome := read_check(c.exit_code, c.timed_out, c.stderr, virtual.arena_allocator(&arena))
-		got := outcome_name(outcome)
-		testing.expectf(t, got == c.want, "%s: got %s, want %s", c.name, got, c.want)
-		if d, ok := outcome.(Diagnostics); ok {
-			testing.expectf(
-				t,
-				len(d.entries) == c.entries,
-				"%s: %d entries, want %d",
-				c.name,
-				len(d.entries),
-				c.entries,
-			)
-		}
-		if u, ok := outcome.(Untrusted); ok {
-			testing.expectf(t, u.reason != "", "%s: untrusted without a reason", c.name)
-			testing.expectf(t, u.stderr == c.stderr, "%s: kept stderr %q", c.name, u.stderr)
-		}
-	}
+	expect_read_cases(t, cases)
 }
 
 @(test)
@@ -250,11 +271,16 @@ normalize_joins_msgs_and_relocates_an_odin_root_location_to_the_repo_caller :: p
 
 	got := normalize(entry, test_code_map(packages), checked, virtual.arena_allocator(&arena))
 
+	MESSAGE ::
+		"'where' clause evaluated to false: intrinsics.type_is_ordered(T) " +
+		"With the following definitions: S :: []S; T :: S; " +
+		"core1/a.odin(10:6) at caller location " +
+		"(reported at $ODIN_ROOT/core/slice/slice.odin:727:68)"
 	want := Placed {
 		path      = "core1/a.odin",
 		line      = 10,
 		col       = 6,
-		message   = "'where' clause evaluated to false: intrinsics.type_is_ordered(T) With the following definitions: S :: []S; T :: S; core1/a.odin(10:6) at caller location (reported at $ODIN_ROOT/core/slice/slice.odin:727:68)",
+		message   = MESSAGE,
 		relocated = true,
 	}
 	testing.expectf(t, got == want, "got %#v\nwant %#v", got, want)
@@ -356,16 +382,24 @@ normalize_deletes_internal_ids :: proc(t: ^testing.T) {
 			col  = 19,
 			msgs = {
 				fmt.tprintf(
-					"Cannot assign value 'proc(a: string, b: int) -> bool {{...}} /* %s */' of type 'proc(string, int) -> bool'",
+					"Cannot assign value 'proc(a: string, b: int) -> bool {{...}} /* %s */' " +
+					"of type 'proc(string, int) -> bool'",
 					id,
 				),
 				"\tNote: The input parameter types differ",
 			},
 		}
-		messages[i] =
-			normalize(entry, test_code_map(packages), checked, virtual.arena_allocator(&arena)).message
+		placed := normalize(
+			entry,
+			test_code_map(packages),
+			checked,
+			virtual.arena_allocator(&arena),
+		)
+		messages[i] = placed.message
 	}
-	want := "Cannot assign value 'proc(a: string, b: int) -> bool {...}' of type 'proc(string, int) -> bool' Note: The input parameter types differ"
+	want :=
+		"Cannot assign value 'proc(a: string, b: int) -> bool {...}' " +
+		"of type 'proc(string, int) -> bool' Note: The input parameter types differ"
 	testing.expect_value(t, messages[0], want)
 	testing.expect_value(t, messages[1], want)
 }

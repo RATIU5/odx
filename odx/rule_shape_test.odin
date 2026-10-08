@@ -61,8 +61,8 @@ open_proc_reports_a_literal_with_no_parent_at_its_proc_token :: proc(t: ^testing
 	testing.expect(t, virtual.arena_init_growing(&arena) == nil)
 	defer virtual.arena_destroy(&arena)
 	context.allocator = virtual.arena_allocator(&arena)
-	src :: "package a\nf :: proc() {\n}\n"
-	file, _ := parse_source(src, context.allocator)
+	SRC :: "package a\nf :: proc() {\n}\n"
+	file, _ := parse_source(SRC, context.allocator)
 	decl := file.decls[0].derived.(^ast.Value_Decl)
 	lit := decl.values[0].derived.(^ast.Proc_Lit)
 	w := File_Walk {

@@ -67,8 +67,8 @@ Pool_Config :: struct($Run: typeid) {
 	// The child's other stream is discarded.
 	captured:    Stream,
 	// Decides a job's run from how its child ended, on a worker thread. `stop` true starts no more
-	// children. The run may borrow `end` and allocates the rest with `allocator`, both of which live
-	// until `destroy_pool`.
+	// children. The run may borrow `end` and allocates the rest with `allocator`, both of which
+	// live until `destroy_pool`.
 	read:        proc(end: Child_End, allocator: runtime.Allocator) -> (run: Run, stop: bool),
 	// Where each child's captured stream is written. Two pools can share it when they capture
 	// different streams.
@@ -77,12 +77,13 @@ Pool_Config :: struct($Run: typeid) {
 	budget:      ^Child_Budget,
 }
 
-// Each worker writes only its own arena and the `runs` slots of the jobs it takes, so `next`, `stop`,
-// `killed` and the budget are the only shared state. A pool must not move between `start_pool` and
-// `join_pool`.
+// Each worker writes only its own arena and the `runs` slots of the jobs it takes, so `next`,
+// `stop`, `killed` and the budget are the only shared state. A pool must not move between
+// `start_pool` and `join_pool`.
 Pool :: struct($Run: typeid) {
 	using config: Pool_Config(Run),
-	// Indexed by command. A job that never started, or that `kill_pool` ended, keeps the zero value.
+	// Indexed by command. A job that never started, or that `kill_pool` ended, keeps the zero
+	// value.
 	runs:         []Run,
 	arenas:       []virtual.Arena,
 	threads:      []^thread.Thread,
@@ -254,7 +255,8 @@ run_child :: proc(
 			state, wait_err = os.process_wait(process)
 			break
 		}
-		// The wait reaps the child, so only the waiting thread can know its pid is still the child's.
+		// The wait reaps the child, so only the waiting thread can know its pid is still the
+		// child's.
 		state, wait_err = os.process_wait(process, min(left, KILL_POLL))
 		if wait_err != os.General_Error.Timeout {
 			if wait_err != nil {

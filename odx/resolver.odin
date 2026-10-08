@@ -280,9 +280,9 @@ kind_of_name :: proc(r: ^Resolver, name: string, use: Use) -> Kind {
 	return kind
 }
 
-// `a.B` names a package's symbol only when `a` is an import that nothing in scope shadows. Any other
-// selector gets no case: it is a value in `Color.Red` and may be a type in `Vec3f.T`, where `T` is a
-// parameter of the parametric type `Vec3f` specializes.
+// `a.B` names a package's symbol only when `a` is an import that nothing in scope shadows. Any
+// other selector gets no case: it is a value in `Color.Red` and may be a type in `Vec3f.T`, where
+// `T` is a parameter of the parametric type `Vec3f` specializes.
 @(private = "file")
 kind_of_selector :: proc(r: ^Resolver, selector: ^ast.Selector_Expr, use: Use) -> Kind {
 	base, is_name := selector.expr.derived.(^ast.Ident)

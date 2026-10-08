@@ -4,8 +4,9 @@ import "core:odin/tokenizer"
 import "core:strings"
 import "core:unicode/utf8"
 
-// A port of the compiler's file selection at the pinned commit. `mise run selection` diffs it against
-// the compiler, so rerun that on every compiler bump. Line references are to the compiler's `src/`.
+// A port of the compiler's file selection at the pinned commit. `mise run selection` diffs it
+// against the compiler, so rerun that on every compiler bump. Line references are to the compiler's
+// `src/`.
 
 Target :: enum u8 {
 	Darwin_Arm64,
@@ -83,7 +84,8 @@ TARGET_ARCH_NAMES := [Target_Arch]string {
 	.Riscv64   = "riscv64",
 }
 
-// `subtarget_strings` in build_settings.cpp:180. `Invalid` comes last there too, as no real subtarget.
+// `subtarget_strings` in build_settings.cpp:180. `Invalid` comes last there too, as no real
+// subtarget.
 Subtarget :: enum u8 {
 	Default,
 	Iphone,
@@ -111,9 +113,9 @@ Tag_Verdict :: struct {
 	ignored: bool,
 }
 
-// `project` is the name the compiler gives the build, the last element of the package directory's real
-// path. `targets` is the set the compiler accepts under `odin test`, so `odin check` compiles the file
-// exactly when it is in `targets` and isn't a test file.
+// `project` is the name the compiler gives the build, the last element of the package directory's
+// real path. `targets` is the set the compiler accepts under `odin test`, so `odin check` compiles
+// the file exactly when it is in `targets` and isn't a test file.
 judge_tags :: proc(tags: []File_Tag, project: string) -> (verdict: Tag_Verdict) {
 	verdict.targets = ALL_TARGETS
 	for raw in tags {
@@ -204,18 +206,18 @@ remove_extension :: proc(s: string) -> string {
 // verdict all the same, and the compiler's check reports the error.
 @(private = "file")
 parse_build_tag :: proc(tag: string, target: Target) -> bool {
-	prefix :: "build"
-	if build_require_space_after(tag, prefix) {
+	PREFIX :: "build"
+	if build_require_space_after(tag, PREFIX) {
 		return true
 	}
-	s := trim_tag_space(tag[len(prefix):])
+	s := trim_tag_space(tag[len(PREFIX):])
 	if len(s) == 0 {
 		return true
 	}
 	info := TARGETS[target]
 	// odx never builds for bedrock, and both targets select the default subtarget.
-	bedrock :: false
-	selected_subtarget :: Subtarget.Default
+	BEDROCK :: false
+	SELECTED_SUBTARGET :: Subtarget.Default
 
 	any_correct := false
 	for len(s) > 0 {
@@ -243,7 +245,7 @@ parse_build_tag :: proc(tag: string, target: Target) -> bool {
 				continue
 			}
 			if p == "bedrock" {
-				this_kind_correct = bedrock == !is_notted
+				this_kind_correct = BEDROCK == !is_notted
 				continue
 			}
 
@@ -268,9 +270,9 @@ parse_build_tag :: proc(tag: string, target: Target) -> bool {
 				is_explicit_default_subtarget := equal_ignore_case(subtarget_str, "default")
 				same_subtarget :=
 					(subtarget == .Default && !is_explicit_default_subtarget) ||
-					subtarget == selected_subtarget
+					subtarget == SELECTED_SUBTARGET
 				if is_ios_subtarget &&
-				   (selected_subtarget == .Iphone || selected_subtarget == .Iphonesimulator) {
+				   (SELECTED_SUBTARGET == .Iphone || SELECTED_SUBTARGET == .Iphonesimulator) {
 					same_subtarget = true
 				}
 				if is_notted {
@@ -298,7 +300,8 @@ parse_build_tag :: proc(tag: string, target: Target) -> bool {
 	return any_correct
 }
 
-// `parse_build_project_directory_tag` in parser.cpp:7323. `project` is set in build_settings.cpp:2301.
+// `parse_build_project_directory_tag` in parser.cpp:7323. `project` is set in
+// build_settings.cpp:2301.
 @(private = "file")
 parse_build_project_directory_tag :: proc(tag, project: string) -> bool {
 	s := trim_tag_space(tag[len("build-project-name"):])

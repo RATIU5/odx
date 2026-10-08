@@ -49,8 +49,8 @@ Package :: struct {
 	check_targets: Targets,
 	// The compiled files disagree on the name, which odx reports itself.
 	name_conflict: bool,
-	// Its own check reported an error in its own files that wasn't relocated, so only the rules that
-	// run when muted apply.
+	// Its own check reported an error in its own files that wasn't relocated, so only the rules
+	// that run when muted apply.
 	muted:         bool,
 }
 
@@ -190,8 +190,10 @@ walk_dir :: proc(w: ^Walker, rel, abs, project: string) {
 		if kind == .Other {
 			continue
 		}
-		child :=
-			entry.name if rel == "." else fmt.aprintf("%s/%s", rel, entry.name, allocator = w.listings)
+		child := entry.name
+		if rel != "." {
+			child = fmt.aprintf("%s/%s", rel, entry.name, allocator = w.listings)
+		}
 		switch kind {
 		case .Other:
 		case .Dir:
@@ -207,7 +209,8 @@ walk_dir :: proc(w: ^Walker, rel, abs, project: string) {
 			is_package = true
 			if file, read := read_file(w, rel, child, entry.fullpath, project); read {
 				if entry.type == .Symlink {
-					// A link that can't be resolved can't be read either, and read_file already reported that.
+					// A link that can't be resolved can't be read either, and read_file already
+					// reported that.
 					if target, link_err := os.get_absolute_path(entry.fullpath, w.allocator);
 					   link_err == nil {
 						file.link_target = target
@@ -309,8 +312,8 @@ read_file :: proc(w: ^Walker, dir, path, abs, project: string) -> (file: Source_
 }
 
 // Names the package, reports the first compiled file whose name differs, and decides which targets
-// `odin check` runs for. The compiler blames whichever file it happens to read later, so odx goes by
-// path order to give the same finding on every filesystem.
+// `odin check` runs for. The compiler blames whichever file it happens to read later, so odx goes
+// by path order to give the same finding on every filesystem.
 @(private = "file")
 name_package :: proc(w: ^Walker, pkg: ^Package) {
 	compiled: Targets

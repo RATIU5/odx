@@ -73,12 +73,13 @@ CONFIG_KEYS := [Config_Key]Config_Key_Info {
 	.Defines      = {"defines", false, "an array of 'NAME=value' strings"},
 }
 
-// The Odin root provides these, so a collection by one of these names would shadow it or escape the repo.
+// The Odin root provides these, so a collection by one of these names would shadow it or escape the
+// repo.
 @(rodata)
 RESERVED_COLLECTIONS := [?]string{"base", "core", "vendor", "shared"}
 
-// The root is the nearest ancestor of the absolute `cwd` holding `odx.json`, else the nearest holding
-// `.git`, else `cwd`. Allocates the root with `allocator`.
+// The root is the nearest ancestor of the absolute `cwd` holding `odx.json`, else the nearest
+// holding `.git`, else `cwd`. Allocates the root with `allocator`.
 find_repo :: proc(cwd: string, allocator: runtime.Allocator) -> Repo {
 	for marker in ([]string{CONFIG_FILE, ".git"}) {
 		dir := cwd
@@ -114,7 +115,8 @@ load_config :: proc(
 }
 
 // Reports every schema problem in source order, or only the first syntax error. Collection paths
-// resolve against `root`. Allocates the config and the errors with `allocator`, which suits an arena.
+// resolve against `root`. Allocates the config and the errors with `allocator`, which suits an
+// arena.
 parse_config :: proc(
 	text, root: string,
 	allocator: runtime.Allocator,
@@ -250,8 +252,9 @@ decode_strings :: proc(value: Json_Value) -> (strs: [dynamic]string, ok: bool) {
 	return strs, true
 }
 
-// The compiler rejects an empty name or path, a name that starts with a digit, a name already in use,
-// and a path that isn't a directory. odx also requires an identifier and a path inside the repo.
+// The compiler rejects an empty name or path, a name that starts with a digit, a name already in
+// use, and a path that isn't a directory. odx also requires an identifier and a path inside the
+// repo.
 @(private = "file")
 decode_collection :: proc(config: ^Config, errors: ^[dynamic]Error, entry, real_root: string) {
 	name, path, ok := split_entry(entry)
@@ -303,8 +306,8 @@ decode_collection :: proc(config: ^Config, errors: ^[dynamic]Error, entry, real_
 	}
 }
 
-// The compiler rejects an empty name or value, a name that starts with a digit, and a name already in use.
-// It accepts any non-empty value. odx also requires an identifier.
+// The compiler rejects an empty name or value, a name that starts with a digit, and a name already
+// in use. It accepts any non-empty value. odx also requires an identifier.
 @(private = "file")
 decode_define :: proc(config: ^Config, errors: ^[dynamic]Error, entry: string) {
 	name, value, ok := split_entry(entry)

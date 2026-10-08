@@ -23,8 +23,8 @@ Path_Kind_Info :: struct {
 	// The directive's name in source, or "" for a kind that isn't a directive.
 	directive:        string,
 	allows_odin_code: bool,
-	// Odin source spells the path, so collections apply, `path-case` checks it, and it resolves from
-	// the directory of the file's real path, as the compiler does for a file symlink.
+	// Odin source spells the path, so collections apply, `path-case` checks it, and it resolves
+	// from the directory of the file's real path, as the compiler does for a file symlink.
 	in_source:        bool,
 }
 
@@ -276,8 +276,9 @@ MAX_LINKS :: 40
 
 // Returns the path with every symlink followed, or nil for a `system:` library or a collection odx
 // doesn't know, which name no path, and the first spelled component whose case differs from the
-// directory entry it names. `dir` is the real path of the directory it resolves from. A missing part
-// is taken as written, so a link or path into a tree that isn't there escapes on every machine alike.
+// directory entry it names. `dir` is the real path of the directory it resolves from. A missing
+// part is taken as written, so a link or path into a tree that isn't there escapes on every machine
+// alike.
 @(private = "file")
 resolve_path :: proc(
 	r: ^Path_Resolver,

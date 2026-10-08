@@ -13,11 +13,13 @@ Finding :: struct {
 	col:       int,
 	rule:      Rule,
 	message:   string,
-	// A stderr line that is printed when the finding is, and "" for none. Compare and dedupe ignore it.
+	// A stderr line that is printed when the finding is, and "" for none. Compare and dedupe ignore
+	// it.
 	note:      string,
 	held_back: bool,
-	// The dir of the package the finding counts toward for `pending-stale`, or "" when none. Borrows
-	// `Package.dir`. Compare and dedupe ignore it, so `stale_pending` reads it before dedupe.
+	// The dir of the package the finding counts toward for `pending-stale`, or "" when none.
+	// Borrows `Package.dir`. Compare and dedupe ignore it, so `stale_pending` reads it before
+	// dedupe.
 	owner_dir: string,
 }
 
@@ -224,7 +226,8 @@ render_json :: proc(out: ^strings.Builder, result: Result, cmd: Check_Command, f
 	}
 	fmt.sbprintf(
 		out,
-		`],"summary":{{"findings":%d,"ignored":%d,"pending":%d,"skipped":%d,"rules":%d,"release":"%s","odin":`,
+		`],"summary":{{"findings":%d,"ignored":%d,"pending":%d,"skipped":%d,"rules":%d,` +
+		`"release":"%s","odin":`,
 		count,
 		ignored,
 		pending,

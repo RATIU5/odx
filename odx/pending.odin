@@ -6,9 +6,9 @@ import "core:os"
 import "core:slice"
 import "core:strings"
 
-// Returns a `pending-stale` finding for each entry that Appendix E.7 calls stale. An entry's findings
-// are those whose `owner_dir` is its package, so a finding located in a package it imports never
-// counts toward it. The caller owns the returned slice and its messages, both allocated with
+// Returns a `pending-stale` finding for each entry that Appendix E.7 calls stale. An entry's
+// findings are those whose `owner_dir` is its package, so a finding located in a package it imports
+// never counts toward it. The caller owns the returned slice and its messages, both allocated with
 // `allocator`.
 stale_pending :: proc(
 	repo_root: string,

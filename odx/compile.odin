@@ -198,8 +198,8 @@ reports_name_conflict :: proc(entry: Compiler_Entry, placed: Placed, packages: [
 	return false
 }
 
-// Appendix E.4's command line. The package-scoped flags take the package's name, never its directory
-// (probe R-C). Allocates with `allocator`.
+// Appendix E.4's command line. The package-scoped flags take the package's name, never its
+// directory (probe R-C). Allocates with `allocator`.
 check_command :: proc(
 	odin, dir: string,
 	pkg: Package,
@@ -306,8 +306,8 @@ Position :: struct {
 
 // A definition whose link name a foreign procedure also declares is not an error. The compiler
 // reports it only when it happens to check the foreign declaration first (src/check_decl.cpp:1656
-// and :1262), so odx drops it every time, using its own AST at the "other at" position. `foreign_decls`
-// caches each file's foreign procedure names.
+// and :1262), so odx drops it every time, using its own AST at the "other at" position.
+// `foreign_decls` caches each file's foreign procedure names.
 clashes_with_foreign_procedure :: proc(
 	entry: Compiler_Entry,
 	foreign_decls: ^map[string][]Position,

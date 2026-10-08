@@ -13,6 +13,7 @@ import "core:strconv"
 import "core:strings"
 import "core:sys/posix"
 import "core:time"
+
 import printer "ols_printer"
 
 // The printer reads `core:odin` from the compiler that builds odx, so another compiler can change
@@ -222,10 +223,10 @@ Format_Jobs :: struct {
 	failure: string,
 }
 
-// Starts one `__format` child per parsed file of `packages`, largest file first, and returns without
-// waiting. A print that crashes or hangs then ends its child and never odx. `finish_format` or
-// `abandon_format` must follow. `root` is the repo root, where the children run within `budget`, and
-// their stdout goes to files in `temp_dir`. Allocates the jobs with `allocator`.
+// Starts one `__format` child per parsed file of `packages`, largest file first, and returns
+// without waiting. A print that crashes or hangs then ends its child and never odx. `finish_format`
+// or `abandon_format` must follow. `root` is the repo root, where the children run within `budget`,
+// and their stdout goes to files in `temp_dir`. Allocates the jobs with `allocator`.
 start_format :: proc(
 	root, temp_dir: string,
 	packages: []Package,

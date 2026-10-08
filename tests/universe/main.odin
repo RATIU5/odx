@@ -371,8 +371,8 @@ is_identifier :: proc(text: string) -> bool {
 	return text != ""
 }
 
-// Fails for an `intrinsics.name` that code under `dir` uses and the table lacks, which is how a name
-// the compiler declares and the documentation omits shows. Comment lines don't count.
+// Fails for an `intrinsics.name` that code under `dir` uses and the table lacks, which is how a
+// name the compiler declares and the documentation omits shows. Comment lines don't count.
 uses_are_covered :: proc(table: Table, dir: string) -> (ok: bool) {
 	PREFIX :: "intrinsics."
 	entries, err := os.read_directory_by_path(dir, -1, context.allocator)

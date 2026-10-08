@@ -5,12 +5,13 @@
 // formatted. Subdirectories are left alone, which is how `mise run fmt` skips `odx/ols_printer`.
 package fixture_fmt
 
-import odx "../../odx"
 import "core:fmt"
 import "core:mem/virtual"
 import "core:os"
 import "core:slice"
 import "core:strings"
+
+import "../../odx"
 
 main :: proc() {
 	os.exit(run())

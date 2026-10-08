@@ -34,8 +34,8 @@ run :: proc() -> int {
 	return exit_code(result)
 }
 
-// What it allocates with `context.allocator` lives until the process exits, and the result's findings
-// borrow from it.
+// What it allocates with `context.allocator` lives until the process exits, and the result's
+// findings borrow from it.
 @(private = "file", require_results)
 check_repo :: proc(result: ^Result) -> (note_err: os.Error) {
 	repo := locate_repo(result)
@@ -104,8 +104,8 @@ check :: proc(
 		defer os.remove_all(temp_dir)
 		budget: Child_Budget
 		init_child_budget(&budget, worker_count())
-		// The checks start first, because a compile error must not wait for a slot that a print holds
-		// until its timeout. A check is short, so the prints wait little.
+		// The checks start first, because a compile error must not wait for a slot that a print
+		// holds until its timeout. A check is short, so the prints wait little.
 		checks := start_compile(
 			odin,
 			odin_root.path,
@@ -202,8 +202,8 @@ read_odin_version :: proc() -> (odin: string, version: string, failure: Maybe(Er
 	return odin, text[len(prefix):], nil
 }
 
-// Searches only `PATH`'s non-empty entries, so a file named `name` in the working directory never runs.
-// Allocates the returned path with `context.allocator`.
+// Searches only `PATH`'s non-empty entries, so a file named `name` in the working directory never
+// runs. Allocates the returned path with `context.allocator`.
 find_on_path :: proc(name: string) -> (path: string, found: bool) {
 	dirs := strings.split(os.get_env("PATH", context.temp_allocator), ":", context.temp_allocator)
 	for dir in dirs {

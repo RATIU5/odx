@@ -1,4 +1,4 @@
-package golden_runner
+package runner
 
 import "core:testing"
 
@@ -6,7 +6,8 @@ import "core:testing"
 rerun_only_for_an_unexpected_compiler_crash :: proc(t: ^testing.T) {
 	CRASH ::
 		"--- stderr\n" +
-		"odx: error: compiler-output: checking 'lib' for darwin_arm64 ended with exit code 11; stderr was empty\n" +
+		"odx: error: compiler-output: checking 'lib' for darwin_arm64 " +
+		"ended with exit code 11; stderr was empty\n" +
 		"--- exit 2\n"
 	CLEAN :: "--- stdout\nodx: 1 package checked\n--- stderr\n--- exit 0\n"
 	cases := []struct {
@@ -19,7 +20,8 @@ rerun_only_for_an_unexpected_compiler_crash :: proc(t: ^testing.T) {
 		{"crash where a crash was expected", CRASH, CRASH, false},
 		{
 			"crash where a crash in another package was expected",
-			"odx: error: compiler-output: checking 'app' for darwin_arm64 ended with exit code 11; stderr was empty\n",
+			"odx: error: compiler-output: checking 'app' for darwin_arm64 " +
+			"ended with exit code 11; stderr was empty\n",
 			CRASH,
 			false,
 		},
@@ -28,13 +30,15 @@ rerun_only_for_an_unexpected_compiler_crash :: proc(t: ^testing.T) {
 		{
 			"another exit code",
 			CLEAN,
-			"odx: error: compiler-output: checking 'lib' for darwin_arm64 ended with exit code 5; stderr was empty\n",
+			"odx: error: compiler-output: checking 'lib' for darwin_arm64 " +
+			"ended with exit code 5; stderr was empty\n",
 			false,
 		},
 		{
 			"exit 11 with stderr",
 			CLEAN,
-			"odx: error: compiler-output: checking 'lib' for darwin_arm64 ended with exit code 11; stderr:\n\tboom\n",
+			"odx: error: compiler-output: checking 'lib' for darwin_arm64 " +
+			"ended with exit code 11; stderr:\n\tboom\n",
 			false,
 		},
 		{

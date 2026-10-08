@@ -188,8 +188,8 @@ find_vendored_trees :: proc(root: string, allocator: runtime.Allocator) -> [dyna
 	return trees
 }
 
-// Appends each vendored tree under `rel` to `trees`, cloned with `trees`' allocator. Its listings use
-// `context.temp_allocator`.
+// Appends each vendored tree under `rel` to `trees`, cloned with `trees`' allocator. Its listings
+// use `context.temp_allocator`.
 @(private = "file")
 walk_for_vendored :: proc(trees: ^[dynamic]string, abs, rel: string) {
 	entries, err := os.read_directory_by_path(abs, -1, context.temp_allocator)
