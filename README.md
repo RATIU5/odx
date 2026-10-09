@@ -5,8 +5,8 @@ A strict, opinionated checker for Odin projects: format, naming and syntax rules
 ## Workflow
 
 1. `odx check` on any repo.
-2. `odx init` pins the rule set and compiler and lists failing packages as `pending`. Commit `odx.json`.
-3. During development: format with odinfmt at OLS commit `dd0f85d` and the config in odx's `odinfmt.json` (in this repo, `mise run fmt`), then fix what `odx check` reports. `odx test` and `odx run` are planned and don't exist yet.
+2. `odx init` pins the rule set and compiler, lists failing packages as `pending`, and writes `odx.json` and `odinfmt.json`. Commit both files.
+3. During development: format with odinfmt at OLS commit `dd0f85d`, which reads the `odinfmt.json` that `odx init` wrote (in this repo, `mise run fmt`), then fix what `odx check` reports. `odx test` and `odx run` are planned and don't exist yet.
 4. CI installs odx and runs `odx check`. `odx test` joins it when it exists.
 5. Remove `pending` entries as packages are fixed; `odx check --pending` shows what's left.
 6. Upgrade: bump `version` or `odin` in `odx.json` in one commit.
@@ -18,10 +18,16 @@ A strict, opinionated checker for Odin projects: format, naming and syntax rules
 | `odx check` | Checks every package under the repo root and prints the findings. |
 | `odx check --json` | Prints the same result as one JSON document on stdout. |
 | `odx check --pending` | Also prints the held-back findings of pending packages. |
-| `odx init` | Writes `odx.json` for a repo that has none. |
+| `odx init` | Writes `odx.json` and `odinfmt.json` for a repo that has no `odx.json`. |
+| `odx --help` | Prints the commands, the flags and the exit codes. |
+| `odx --version` | Prints the release, its rule set and the compiler it supports, as `odx 0.1.0, rule set 1, odin dev-2026-09-nightly:a2fb372`. |
 | `odx test`, `odx run` | Planned. Today each is a `usage` error. |
 
 The repo root is the nearest directory above the working directory that holds `odx.json`, else the nearest that holds `.git`, else the working directory.
+
+`odx --help` and `odx --version` need no repo, no `odx.json` and no `odin` on `PATH`. Any other spelling, such as `odx help` or `odx check --help`, is a `usage` error, and every `usage` error ends with `; run 'odx --help'`.
+
+`odx init` writes nothing when `odx.json` exists, or when an `odinfmt.json` exists that differs from the one it writes. Both are the error `init-exists`. It leaves an `odinfmt.json` with the same bytes as it is.
 
 ## Output and exit codes
 
@@ -40,6 +46,14 @@ odx: 0 findings, 2 ignored, 0 pending, 0 skipped (rules 1, odx 0.1.0, odin dev-2
 `--json` prints `{"version":1,"findings":[...],"errors":[...],"summary":{...}}`. Each finding has `path`, `line`, `col`, `rule` and `message`. `errors` is non-empty when the exit is 2, except for a usage error, which prints no JSON.
 
 `--pending` prints the held-back findings after the others, under the stderr line `odx: pending findings:`. In `--json` each carries `"pending": true`. The exit code doesn't change.
+
+A package whose own compile check reports an error in its own files gets only its `odin`, `parse-unsupported`, `import-escape`, `path-case` and `ignore-invalid` findings. When that hides a finding, stderr says so with one line per package, and stdout and `--json` stay the same:
+
+```text
+odx: app: compile errors hide this package's other findings
+```
+
+Fix the compile errors and run `odx check` again to see the rest. For a pending package the line prints only with `--pending`.
 
 ## `odx.json`
 
@@ -114,7 +128,7 @@ git checkout dd0f85d31c91e9d04202cc422288d15b52206474
 ./odinfmt.sh   # builds ./odinfmt with the odin on PATH, which must be the pinned compiler
 ```
 
-Copy `odinfmt.json` from the root of the odx repo to the root of your repo, so `odinfmt` uses the configuration odx checks against. odx itself ignores any `odinfmt.json` in the checked repo.
+`odx init` writes `odinfmt.json` at the repo root, so `odinfmt` uses the configuration odx checks against. A repo that already has `odx.json` copies `odinfmt.json` from the root of the odx repo, because `odx init` writes nothing there. odx itself ignores any `odinfmt.json` in the checked repo. `odinfmt -w .` also rewrites vendored trees, so pass it the directories you own, as in `odinfmt -w src`.
 
 In the odx repo, `mise run fmt` runs the vendored printer and not the machine's `odinfmt`.
 
