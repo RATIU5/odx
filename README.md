@@ -78,7 +78,7 @@ All rules belong to rule set 1. A rule that can be ignored takes an ignore with 
 | Rule | Ignorable | Reports |
 | --- | --- | --- |
 | `odin` | no | An error or a warning from `odin check` with odx's strict flags. |
-| `parse-unsupported` | no | A file that odx's parser can't read. |
+| `parse-unsupported` | no | A file that odx can't read or parse. [Files odx can't read](#files-odx-cant-read) lists the cases. |
 | `import-escape` | no | An import, `#load` or `foreign import` path that leaves the repo. |
 | `path-case` | no | A path whose case differs from the directory entry on disk. |
 | `line-length` | yes | A line wider than 100 columns, with a tab counted as 4. |
@@ -102,6 +102,31 @@ All rules belong to rule set 1. A rule that can be ignored takes an ignore with 
 | `file-name` | no | A `.odin` file name that isn't `snake_case`. |
 | `import-alias` | no | An import alias equal to the name the import has without one. |
 | `import-order` | no | Imports out of group order or spaced wrongly. Groups run `base:` and `core:`, then `vendor:`, then other collections, then relative paths, with one blank line between groups. |
+
+## Files odx can't read
+
+Each case below is the finding `parse-unsupported`, which no ignore covers. The rules that need the file's syntax tree, `format` among them, don't run on that file. The rest of its package is checked as usual, except in the first case.
+
+- A `.odin` entry that is neither a regular file nor a link to one, such as a FIFO, a socket, a device or a link to `/dev/null`. The finding is at `1:1`, and odx never opens the entry. A hidden entry such as `.notes.odin` is exempt, because the compiler never opens it.
+- A link that doesn't resolve. The finding is at `1:1`.
+- A file with no `package` clause, which includes a 0-byte file and a file that holds only comments. The compiler accepts a 0-byte file and reports the others, so those also get an `odin` finding.
+- A file that `core:odin/parser` reports an error for.
+
+The compiler reads every `.odin` entry of a package and of the packages it imports, and it waits forever on a FIFO. So odx doesn't run `odin check` for the package that holds such an entry, or for any package odx checks that reaches it through imports. Those packages get every rule except `odin`, and stderr names each one:
+
+```text
+odx: app: not compiled, because lib/x.odin isn't a regular file
+```
+
+Stdout and `--json` stay the same. For a pending package the line prints only with `--pending`. Such a package is never counted as skipped. An entry in a tree odx doesn't check, such as a vendored one, still reaches the compiler when a checked package imports that tree.
+
+odx opens no other path that the repo names unless it is a regular file or a directory. An `odx.json` that is anything else is the error `config-invalid`. An `odinfmt.json` that is a FIFO or a device is the error `init-exists`. A `collections` path, a `pending` entry or an import that names one is treated as a file, not a directory.
+
+odx sets no nesting limit of its own. It parses 1,000 nested parentheses as it parses 10, and it reads at least twice as deep as the compiler does. The compiler's stack ends first, near 3,000 nested parentheses, and a compiler that crashes is the error `compiler-output`.
+
+The formatter runs in its own process for each file, and that process ends when it has taken 2 GB more memory than it started with. The file then gets the `format` finding `the formatter crashed, so odx can't check this file's format`, and stderr names it. A type with 20 `proc() ->` in a row does this. The largest file measured, 2 MB of generated tables, takes 0.2 GB.
+
+An `odx.json` that nests objects and arrays more than 16 deep is the error `config-invalid`, at the bracket that passes the limit.
 
 ## Ignores
 
