@@ -1,4 +1,4 @@
 --- stdout
 --- stderr
-odx: error: usage: unknown flag '--nope' for 'check'
+odx: error: usage: unknown flag '--nope' for 'check'; run 'odx --help'
 --- exit 2

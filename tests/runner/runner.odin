@@ -6,7 +6,7 @@
 // `repo/`-relative directory per line whose permissions are cleared while the commands run, and
 // `expected` holds the output as `run_case` renders it. An `env` value expands `${NAME}` from the
 // inherited environment, and `${ODX_TESTS}` is the absolute `tests` dir. The rendering ends with
-// `odx.json` when the commands created or changed it.
+// `odx.json` and then `odinfmt.json`, each only when the commands created or changed it.
 package runner
 
 import "core:fmt"
@@ -18,6 +18,15 @@ import "core:time"
 import "../../odx"
 
 CASE_TIMEOUT :: 30 * time.Second
+
+@(rodata)
+WRITTEN_FILES := [?]string{odx.CONFIG_FILE, odx.ODINFMT_FILE}
+
+// A file's text, or that there is none.
+Snapshot :: struct {
+	text:   string,
+	exists: bool,
+}
 
 Placeholders :: struct {
 	odin_version: string,
@@ -197,8 +206,10 @@ run_case :: proc(
 	if err := copy_tree(repo, fmt.tprintf("%s/repo", dir)); err != nil {
 		return "", fmt.tprintf("copy repo: %v", err)
 	}
-	config_path := fmt.tprintf("%s/%s", repo, odx.CONFIG_FILE)
-	config_before, config_before_err := os.read_entire_file(config_path, ta)
+	before: [len(WRITTEN_FILES)]Snapshot
+	for name, i in WRITTEN_FILES {
+		before[i] = snapshot(repo, name)
+	}
 	dir_modes := make([dynamic]Dir_Mode, ta)
 	if os.exists(fmt.tprintf("%s/readonly", dir)) {
 		append(&dir_modes, Dir_Mode{repo, os.Permissions_Read_All + os.Permissions_Execute_All})
@@ -242,12 +253,18 @@ run_case :: proc(
 		}
 		render(&b, outcome, placeholders)
 	}
-	config_after, config_after_err := os.read_entire_file(config_path, ta)
-	if config_after_err == nil &&
-	   (config_before_err != nil || string(config_before) != string(config_after)) {
-		write_stream(&b, odx.CONFIG_FILE, string(config_after), placeholders)
+	for name, i in WRITTEN_FILES {
+		if after := snapshot(repo, name); after.exists && after != before[i] {
+			write_stream(&b, name, after.text, placeholders)
+		}
 	}
 	return strings.to_string(b), ""
+}
+
+// Allocates the text with `context.temp_allocator`.
+snapshot :: proc(repo, name: string) -> Snapshot {
+	data, err := os.read_entire_file(fmt.tprintf("%s/%s", repo, name), context.temp_allocator)
+	return {string(data), err == nil}
 }
 
 run_command :: proc(

@@ -9,7 +9,10 @@ import "core:strings"
 import "core:time"
 import "core:time/timezone"
 
-INIT_EXISTS :: "odx.json already exists, so odx init wrote nothing"
+INIT_EXISTS :: "%s already exists, so odx init wrote nothing"
+INIT_ODINFMT_DIFFERS ::
+	ODINFMT_FILE +
+	" already exists and differs from the one odx init writes, so odx init wrote nothing"
 
 @(rodata)
 VENDORED_NAMES := [?]string{"vendor", "third_party", "external"}
@@ -17,15 +20,17 @@ VENDORED_NAMES := [?]string{"vendor", "third_party", "external"}
 // What `odx init` decided for a repo without odx.json. Dirs are repo-relative with `/` and in path
 // order.
 Init_Report :: struct {
-	odin:          string,
-	pending:       []string,
-	vendored:      []string,
-	strict:        int,
-	skipped:       int,
-	not_compiling: []string,
+	odin:           string,
+	pending:        []string,
+	vendored:       []string,
+	strict:         int,
+	skipped:        int,
+	not_compiling:  []string,
+	// False when odinfmt.json is already there with the bytes init writes.
+	writes_odinfmt: bool,
 	// Findings that pending can't hold back, other than the `odin` errors of packages that don't
 	// compile.
-	shown:         []Finding,
+	shown:          []Finding,
 }
 
 @(private = "file")
@@ -45,7 +50,7 @@ run_init :: proc() -> int {
 	root, report := plan_init(&result)
 	if len(result.errors) == 0 {
 		text := render_config(report, today(context.allocator), context.allocator)
-		write_config(root, text, &result)
+		write_init_files(root, text, report.writes_odinfmt, &result)
 	}
 	if len(result.errors) > 0 {
 		write_result(os.to_writer(os.stdout), os.to_writer(os.stderr), result, {})
@@ -90,7 +95,12 @@ plan_init :: proc(result: ^Result) -> (root: string, report: Init_Report) {
 		return
 	}
 	if repo.has_config {
-		append(&result.errors, Error{.Init_Exists, INIT_EXISTS})
+		append(&result.errors, Error{.Init_Exists, fmt.aprintf(INIT_EXISTS, CONFIG_FILE)})
+		return
+	}
+	// Both files are looked at before anything is written, so a refused init changes nothing.
+	report.writes_odinfmt = needs_odinfmt(repo.root, result)
+	if len(result.errors) > 0 {
 		return
 	}
 	_, odin := load(repo, result)
@@ -270,11 +280,54 @@ write_json_string :: proc(b: ^strings.Builder, s: string) {
 	}
 }
 
-// Creates odx.json at `root` only when it doesn't exist, and removes a partly written one. Adds
+// Whether init has to write odinfmt.json at `root`. False when the file is there with the bytes
+// init writes, and false with `init-exists` added when it is there with other bytes or can't be
+// read. The message is allocated with `context.allocator`.
+needs_odinfmt :: proc(root: string, result: ^Result) -> bool {
+	path := fmt.tprintf("%s/%s", root, ODINFMT_FILE)
+	data, err := os.read_entire_file(path, context.temp_allocator)
+	switch {
+	case err == os.General_Error.Not_Exist:
+		return true
+	case err != nil:
+		message := fmt.aprintf(
+			"%s already exists and odx can't read it (%s), so odx init wrote nothing",
+			ODINFMT_FILE,
+			os.error_string(err),
+		)
+		append(&result.errors, Error{.Init_Exists, message})
+	case string(data) != ODINFMT_JSON:
+		append(&result.errors, Error{.Init_Exists, strings.clone(INIT_ODINFMT_DIFFERS)})
+	}
+	return false
+}
+
+// Creates odx.json at `root`, and odinfmt.json beside it when `with_odinfmt`. When the second file
+// can't be created, the first is removed, so a failed init leaves no file. Adds `init-exists` or
+// `init-write` on failure, with the message allocated with `context.allocator`.
+write_init_files :: proc(root, config: string, with_odinfmt: bool, result: ^Result) {
+	if !write_new_file(root, CONFIG_FILE, config, result) || !with_odinfmt {
+		return
+	}
+	if write_new_file(root, ODINFMT_FILE, ODINFMT_JSON, result) {
+		return
+	}
+	if err := os.remove(fmt.tprintf("%s/%s", root, CONFIG_FILE)); err != nil {
+		message := fmt.aprintf(
+			"could not remove %s after %s could not be written: %s",
+			CONFIG_FILE,
+			ODINFMT_FILE,
+			os.error_string(err),
+		)
+		append(&result.errors, Error{.Init_Write, message})
+	}
+}
+
+// Creates `name` at `root` only when it doesn't exist, and removes a partly written one. Adds
 // `init-exists` or `init-write` on failure, with the message allocated with `context.allocator`.
 @(private = "file")
-write_config :: proc(root, text: string, result: ^Result) {
-	path := fmt.tprintf("%s/%s", root, CONFIG_FILE)
+write_new_file :: proc(root, name, text: string, result: ^Result) -> (written: bool) {
+	path := fmt.tprintf("%s/%s", root, name)
 	file, err := os.open(path, {.Write, .Create, .Excl}, os.Permissions_Default_File)
 	remove_err: os.Error
 	if err == nil {
@@ -287,20 +340,23 @@ write_config :: proc(root, text: string, result: ^Result) {
 		}
 	}
 	switch {
+	case err == nil:
+		return true
 	case err == os.General_Error.Exist:
-		append(&result.errors, Error{.Init_Exists, INIT_EXISTS})
-	case err != nil && remove_err != nil:
+		append(&result.errors, Error{.Init_Exists, fmt.aprintf(INIT_EXISTS, name)})
+	case remove_err != nil:
 		message := fmt.aprintf(
 			"could not write %s: %s, and could not remove the partly written file: %s",
-			CONFIG_FILE,
+			name,
 			os.error_string(err),
 			os.error_string(remove_err),
 		)
 		append(&result.errors, Error{.Init_Write, message})
-	case err != nil:
-		message := fmt.aprintf("could not write %s: %s", CONFIG_FILE, os.error_string(err))
+	case:
+		message := fmt.aprintf("could not write %s: %s", name, os.error_string(err))
 		append(&result.errors, Error{.Init_Write, message})
 	}
+	return false
 }
 
 // Allocates the date with `allocator`.

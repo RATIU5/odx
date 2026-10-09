@@ -1,4 +1,4 @@
 --- stdout
 --- stderr
-odx: error: usage: unknown command 'frob'
+odx: error: usage: unknown command 'frob'; run 'odx --help'
 --- exit 2

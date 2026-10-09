@@ -109,7 +109,9 @@ ERROR_CODES := [Error_Code]string {
 
 // Adds `finding` as `pkg`'s. A nil `pkg` leaves it unowned and adds it as given, with no mute or
 // hold-back. Otherwise it is dropped when `pkg` is muted and the rule doesn't run when muted, and
-// held back in a pending package per the rule's row in `RULES`. A finding that arrives held back
+// held back in a pending package per the rule's row in `RULES`. A dropped finding counts as hidden
+// unless an ignore covers it, which uses the ignore as a shown finding would. So a muted package
+// must get its findings before its unused ignores are looked for. A finding that arrives held back
 // stays held back. `strict_only`, true for a finding only strict checking gives, matters only for
 // `.Strict_Only` rules. The added finding borrows its strings and `pkg`'s dir.
 add_rule_finding :: proc(result: ^Result, pkg: ^Package, finding: Finding, strict_only: bool) {
@@ -119,6 +121,11 @@ add_rule_finding :: proc(result: ^Result, pkg: ^Package, finding: Finding, stric
 		return
 	}
 	if pkg.muted && !info.runs_when_muted {
+		if ignore := ignore_covering(pkg, finding); ignore != nil {
+			ignore.used = true
+		} else {
+			pkg.hidden += 1
+		}
 		return
 	}
 	held: bool
@@ -133,6 +140,17 @@ add_rule_finding :: proc(result: ^Result, pkg: ^Package, finding: Finding, stric
 	finding.owner_dir = pkg.dir
 	finding.held_back ||= pkg.status == .Pending && held
 	append(&result.findings, finding)
+}
+
+// Lists the packages whose compile errors hid a finding, in the order of `packages`. A pending
+// package's hidden findings are all held back, because every rule that a mute drops is. The list
+// borrows the packages' dirs.
+note_hidden :: proc(packages: []Package, result: ^Result) {
+	for p in packages {
+		if p.hidden > 0 {
+			append(&result.hidden, Hidden_Package{dir = p.dir, held_back = p.status == .Pending})
+		}
+	}
 }
 
 // The added findings borrow their strings from `packages`.

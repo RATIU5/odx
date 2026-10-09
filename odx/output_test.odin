@@ -397,3 +397,111 @@ an_error_prints_no_finding_note :: proc(t: ^testing.T) {
 
 	testing.expect_value(t, strings.to_string(w.err), "odx: error: odin-missing: no odin\n")
 }
+
+@(test)
+help_names_every_command_and_exit_code_in_under_20_lines :: proc(t: ^testing.T) {
+	wanted := []string {
+		"odx check",
+		"--json",
+		"--pending",
+		"odx init",
+		"--help",
+		"--version",
+		"  0  ",
+		"  1  ",
+		"  2  ",
+	}
+	for want in wanted {
+		testing.expectf(t, strings.contains(HELP, want), "the help text lacks %q", want)
+	}
+	for unwanted in ([]string{"__format", "odx test", "odx run"}) {
+		testing.expectf(t, !strings.contains(HELP, unwanted), "the help text names %q", unwanted)
+	}
+	testing.expect(t, strings.has_suffix(HELP, "\n"), "the help text must end its last line")
+	testing.expect(t, strings.count(HELP, "\n") < 20, "the help text must stay under 20 lines")
+}
+
+@(test)
+version_line_names_the_release_the_rule_set_and_the_compiler :: proc(t: ^testing.T) {
+	line := version_line(context.allocator)
+	defer delete(line)
+	testing.expect_value(t, line, "odx 0.1.0, rule set 1, odin dev-2026-09-nightly:a2fb372\n")
+}
+
+HIDDEN_ROOT_LINE :: "odx: .: compile errors hide this package's other findings\n"
+HIDDEN_LIB_LINE :: "odx: lib: compile errors hide this package's other findings\n"
+
+hidden_result :: proc() -> Result {
+	result := sample_result()
+	append(&result.notes, "odx: skipped t: no file")
+	append(
+		&result.hidden,
+		Hidden_Package{dir = "."},
+		Hidden_Package{dir = "lib", held_back = true},
+	)
+	result.findings[0].note = "odx: format: a/b.odin formatter crashed"
+	return result
+}
+
+destroy_hidden_result :: proc(result: ^Result) {
+	delete(result.findings)
+	delete(result.notes)
+	delete(result.hidden)
+}
+
+@(test)
+hidden_lines_follow_the_notes_and_leave_stdout_alone :: proc(t: ^testing.T) {
+	result := hidden_result()
+	defer destroy_hidden_result(&result)
+	plain := sample_result()
+	defer delete(plain.findings)
+
+	for cmd in ([]Check_Command{{}, {json = true}}) {
+		w, without: Written
+		defer destroy_written(&w)
+		defer destroy_written(&without)
+		write_to_builders(t, &w, result, cmd)
+		write_to_builders(t, &without, plain, cmd)
+		testing.expect_value(t, strings.to_string(w.out), strings.to_string(without.out))
+		testing.expect_value(
+			t,
+			strings.to_string(w.err),
+			"odx: skipped t: no file\n" +
+			HIDDEN_ROOT_LINE +
+			"odx: format: a/b.odin formatter crashed\n",
+		)
+	}
+}
+
+@(test)
+hidden_line_of_a_pending_package_needs_the_pending_flag :: proc(t: ^testing.T) {
+	result := hidden_result()
+	defer destroy_hidden_result(&result)
+
+	for cmd in ([]Check_Command{{pending = true}, {pending = true, json = true}}) {
+		w: Written
+		defer destroy_written(&w)
+		write_to_builders(t, &w, result, cmd)
+		got := strings.to_string(w.err)
+		testing.expectf(
+			t,
+			strings.contains(got, HIDDEN_ROOT_LINE + HIDDEN_LIB_LINE),
+			"json %v: stderr is %q",
+			cmd.json,
+			got,
+		)
+	}
+}
+
+@(test)
+hidden_lines_are_not_written_with_an_error :: proc(t: ^testing.T) {
+	result := hidden_result()
+	defer destroy_hidden_result(&result)
+	append(&result.errors, Error{.Config_Invalid, "bad"})
+	defer delete(result.errors)
+
+	w: Written
+	defer destroy_written(&w)
+	write_to_builders(t, &w, result, {pending = true})
+	testing.expect_value(t, strings.to_string(w.err), "odx: error: config-invalid: bad\n")
+}

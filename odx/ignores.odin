@@ -537,6 +537,19 @@ apply_ignores :: proc(packages: []Package, result: ^Result) {
 	}
 }
 
+// The ignore in `pkg` that would suppress `f`, or nil.
+ignore_covering :: proc(pkg: ^Package, f: Finding) -> ^Ignore {
+	if !RULES[f.rule].ignorable {
+		return nil
+	}
+	for &file in pkg.files {
+		if file.path == f.path {
+			return last_covering(file.ignores[:], f)
+		}
+	}
+	return nil
+}
+
 @(private = "file")
 rules_that_ran :: proc(file: Source_File) -> (ran: bit_set[Rule]) {
 	for info, rule in RULES {

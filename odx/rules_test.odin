@@ -1,5 +1,6 @@
 package odx
 
+import "core:slice"
 import "core:testing"
 
 @(test)
@@ -166,5 +167,86 @@ rules_table_matches_the_contract_flag_by_flag :: proc(t: ^testing.T) {
 			got.needs_parse,
 			w.needs_parse,
 		)
+	}
+}
+
+@(test)
+add_rule_finding_counts_what_a_muted_package_hides :: proc(t: ^testing.T) {
+	cases := []struct {
+		rule:   Rule,
+		muted:  bool,
+		line:   int,
+		hidden: int,
+	} {
+		{.Name_Case, true, 9, 1},
+		{.Format, true, 9, 1},
+		{.Ignore_Unused, true, 9, 1},
+		{.Name_Case, false, 9, 0},
+		{.Odin, true, 9, 0},
+		{.Ignore_Invalid, true, 9, 0},
+		// Line 3 is under an ignore for `name-case` alone.
+		{.Name_Case, true, 3, 0},
+		{.Proc_Length, true, 3, 1},
+	}
+	for c in cases {
+		result: Result
+		defer delete(result.findings)
+		covers := [1]Line_Run{{3, 3}}
+		ignores := [1]Ignore{{line = 2, col = 1, rules = {.Name_Case}, covers = covers[:]}}
+		files := [1]Source_File{{path = "lib/a.odin"}}
+		pkg := Package {
+			dir   = "lib",
+			muted = c.muted,
+			files = slice.into_dynamic(files[:]),
+		}
+		append(&pkg.files, files[0])
+		pkg.files[0].ignores = slice.into_dynamic(ignores[:])
+		append(&pkg.files[0].ignores, ignores[0])
+		add_rule_finding(
+			&result,
+			&pkg,
+			Finding{path = "lib/a.odin", line = c.line, col = 1, rule = c.rule},
+			false,
+		)
+		testing.expectf(
+			t,
+			pkg.hidden == c.hidden,
+			"%v at line %d (muted %v): hidden %d, want %d",
+			c.rule,
+			c.line,
+			c.muted,
+			pkg.hidden,
+			c.hidden,
+		)
+		covered := c.muted && c.rule == .Name_Case && c.line == 3
+		testing.expectf(
+			t,
+			pkg.files[0].ignores[0].used == covered,
+			"%v at line %d (muted %v): the ignore is used %v",
+			c.rule,
+			c.line,
+			c.muted,
+			pkg.files[0].ignores[0].used,
+		)
+	}
+}
+
+@(test)
+note_hidden_lists_each_package_with_a_hidden_finding_in_package_order :: proc(t: ^testing.T) {
+	packages := []Package {
+		{dir = ".", muted = true, hidden = 1},
+		{dir = "a", muted = true},
+		{dir = "b", muted = true, hidden = 2, status = .Pending},
+		{dir = "c"},
+	}
+	result: Result
+	defer delete(result.hidden)
+	note_hidden(packages, &result)
+	want := []Hidden_Package{{dir = "."}, {dir = "b", held_back = true}}
+	testing.expect_value(t, len(result.hidden), len(want))
+	for w, i in want {
+		if i < len(result.hidden) {
+			testing.expect_value(t, result.hidden[i], w)
+		}
 	}
 }

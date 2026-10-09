@@ -52,6 +52,8 @@ Package :: struct {
 	// Its own check reported an error in its own files that wasn't relocated, so only the rules
 	// that run when muted apply.
 	muted:         bool,
+	// How many findings were dropped because it is muted, without those an ignore covers.
+	hidden:        int,
 }
 
 // Skipped means no non-test file compiles for either target, so the compiler never checks it.

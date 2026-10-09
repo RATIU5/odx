@@ -1,8 +1,14 @@
 package odx
 
+import "base:runtime"
+import "core:encoding/json"
 import "core:mem/virtual"
+import "core:reflect"
+import "core:slice"
 import "core:strings"
 import "core:testing"
+
+import printer "ols_printer"
 
 // The fake printer's script. Each test runs on one thread, so each sees its own copy.
 @(thread_local)
@@ -267,4 +273,94 @@ finish_format_reports_the_first_error_in_path_order :: proc(t: ^testing.T) {
 			testing.expectf(t, result.errors[0] == c.want, "%s: got %v", c.name, result.errors[0])
 		}
 	}
+}
+
+// The keys on which `text`, an odinfmt.json, and `config` disagree: a key with another value, a
+// field the file lacks, then a key the config lacks. Allocates with `allocator`.
+config_disagreements :: proc(
+	text: string,
+	config: printer.Config,
+	allocator: runtime.Allocator,
+) -> [dynamic]string {
+	keys := make([dynamic]string, allocator)
+	value, err := json.parse_string(text, parse_integers = true, allocator = allocator)
+	object, is_object := value.(json.Object)
+	if err != nil || !is_object {
+		append(&keys, "<not a JSON object>")
+		return keys
+	}
+	config := config
+	names := reflect.struct_field_names(printer.Config)
+	for name in names {
+		field := reflect.struct_field_value_by_name(config, name)
+		same := false
+		switch written in object[name] {
+		case json.Integer:
+			n, is_int := field.(int)
+			same = is_int && i64(n) == written
+		case json.Boolean:
+			b, is_bool := field.(bool)
+			same = is_bool && b == written
+		case json.String:
+			member, is_enum := reflect.enum_name_from_value_any(field)
+			same = is_enum && member == written
+		case json.Null, json.Float, json.Array, json.Object:
+		}
+		if !same {
+			append(&keys, name)
+		}
+	}
+	for key in object {
+		if !slice.contains(names, key) {
+			append(&keys, key)
+		}
+	}
+	return keys
+}
+
+@(test)
+odinfmt_json_agrees_with_the_format_config_on_every_key :: proc(t: ^testing.T) {
+	defer free_all(context.temp_allocator)
+	keys := config_disagreements(ODINFMT_JSON, FORMAT_CONFIG, context.temp_allocator)
+	testing.expectf(t, len(keys) == 0, "odinfmt.json and FORMAT_CONFIG disagree on %v", keys)
+}
+
+@(test)
+config_disagreements_names_each_key_that_differs_or_is_missing :: proc(t: ^testing.T) {
+	defer free_all(context.temp_allocator)
+	ta := context.temp_allocator
+	cases := []struct {
+		old, new: string,
+		key:      string,
+	} {
+		{`"character_width": 100`, `"character_width": 80`, "character_width"},
+		{`"tabs": true`, `"tabs": false`, "tabs"},
+		{`"brace_style": "_1TBS"`, `"brace_style": "Allman"`, "brace_style"},
+		{`"newline_style": "LF"`, `"newline_style": 1`, "newline_style"},
+		{`"sort_imports": true,`, ``, "sort_imports"},
+		{`"spaces": 4,`, `"spaces": 4, "line_width": 100,`, "line_width"},
+	}
+	for c in cases {
+		testing.expectf(t, strings.contains(ODINFMT_JSON, c.old), "no %q in odinfmt.json", c.old)
+		copy, _ := strings.replace(ODINFMT_JSON, c.old, c.new, 1, ta)
+		keys := config_disagreements(copy, FORMAT_CONFIG, ta)
+		testing.expectf(
+			t,
+			len(keys) == 1 && keys[0] == c.key,
+			"%q became %q: got %v, want [%s]",
+			c.old,
+			c.new,
+			keys,
+			c.key,
+		)
+	}
+	changed := FORMAT_CONFIG
+	changed.align_comments = true
+	keys := config_disagreements(ODINFMT_JSON, changed, ta)
+	testing.expectf(
+		t,
+		len(keys) == 1 && keys[0] == "align_comments",
+		"a changed config: got %v, want [align_comments]",
+		keys,
+	)
 }

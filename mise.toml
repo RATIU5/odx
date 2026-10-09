@@ -8,13 +8,13 @@ ODIN_VET = "-vet -vet-tabs -vet-cast -strict-style -warnings-as-errors"
 [tasks.build]
 description = "Build the odx binary (debug)"
 alias = "b"
-sources = ["odx/**/*.odin"]
+sources = ["odx/**/*.odin", "odinfmt.json"]
 outputs = ["{{ env.OUT }}/odx"]
 run = "mkdir -p $OUT && odin build odx -out:$OUT/odx $ODIN_VET -debug"
 
 [tasks.release]
 description = "Build the optimized odx binary that perf rules measure"
-sources = ["odx/**/*.odin"]
+sources = ["odx/**/*.odin", "odinfmt.json"]
 outputs = ["{{ env.OUT }}/release/odx"]
 run = "mkdir -p $OUT/release && odin build odx -out:$OUT/release/odx $ODIN_VET -o:speed"
 

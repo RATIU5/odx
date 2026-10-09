@@ -1,0 +1,22 @@
+--- stdout
+odx checks Odin code against one standard.
+
+Usage:
+  odx check [--json] [--pending]
+  odx init
+  odx --help
+  odx --version
+
+  odx check      Checks every package under the repo root and prints the findings.
+    --json       Prints the same result as one JSON document on stdout.
+    --pending    Also prints the held-back findings of pending packages.
+  odx init       Writes odx.json and odinfmt.json for a repo that has no odx.json.
+  odx --help     Prints this text.
+  odx --version  Prints the release, its rule set and the compiler it supports.
+
+Exit codes:
+  0  No findings.
+  1  At least one finding.
+  2  An error: odx can't give a trustworthy result.
+--- stderr
+--- exit 0

@@ -22,6 +22,10 @@ run :: proc() -> int {
 		return run_init()
 	case Format_Child_Command:
 		return run_format(parsed)
+	case Help_Command:
+		return print(HELP)
+	case Version_Command:
+		return print(version_line(context.allocator))
 	case Check_Command:
 		cmd = parsed
 		if check_repo(&result) != nil {
@@ -32,6 +36,14 @@ run :: proc() -> int {
 		return 2
 	}
 	return exit_code(result)
+}
+
+@(private = "file")
+print :: proc(text: string) -> int {
+	if _, err := os.write_string(os.stdout, text); err != nil {
+		return 2
+	}
+	return 0
 }
 
 // What it allocates with `context.allocator` lives until the process exits, and the result's
@@ -129,6 +141,7 @@ check :: proc(
 		check_paths(packages, root, odin_root.path, config.collections[:], context.allocator)
 		add_file_findings(packages, result)
 		apply_ignores(packages, result)
+		note_hidden(packages, result)
 	}
 }
 

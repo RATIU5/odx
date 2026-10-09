@@ -33,6 +33,12 @@ FORMAT_DIFFERS_MESSAGE :: "the file differs from the formatter's output"
 FORMAT_REFUSED_MESSAGE :: "the formatter can't read the file"
 FORMAT_CRASHED_MESSAGE :: "the formatter crashed, so odx can't check this file's format"
 
+ODINFMT_FILE :: "odinfmt.json"
+
+// The config the team's odinfmt reads, which `odx init` writes. A unit test holds it to
+// `FORMAT_CONFIG` key by key, so the repo's file is the one copy that is edited by hand.
+ODINFMT_JSON :: #load("../odinfmt.json", string)
+
 // Appendix E.6. odx ignores any `odinfmt.json` in the checked repo.
 FORMAT_CONFIG :: printer.Config {
 	character_width              = 100,

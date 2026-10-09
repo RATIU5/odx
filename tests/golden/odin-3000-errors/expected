@@ -3002,4 +3002,5 @@ lib/lib.odin:3002:33: odin: Cannot convert '"x"' to 'int' from 'untyped string',
 odx: 3000 findings, 0 ignored, 0 pending, 0 skipped (rules 1, odx <release>, odin <odin>)
 --- stderr
 odx: no odx.json, so rule set 1, the running compiler and every package strict
+odx: lib: compile errors hide this package's other findings
 --- exit 1

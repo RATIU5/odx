@@ -1,0 +1,35 @@
+=== odx help
+--- stdout
+--- stderr
+odx: error: usage: unknown command 'help'; run 'odx --help'
+--- exit 2
+=== odx -h
+--- stdout
+--- stderr
+odx: error: usage: unknown command '-h'; run 'odx --help'
+--- exit 2
+=== odx version
+--- stdout
+--- stderr
+odx: error: usage: unknown command 'version'; run 'odx --help'
+--- exit 2
+=== odx -V
+--- stdout
+--- stderr
+odx: error: usage: unknown command '-V'; run 'odx --help'
+--- exit 2
+=== odx check --help
+--- stdout
+--- stderr
+odx: error: usage: unknown flag '--help' for 'check'; run 'odx --help'
+--- exit 2
+=== odx init --version
+--- stdout
+--- stderr
+odx: error: usage: unknown flag '--version' for 'init'; run 'odx --help'
+--- exit 2
+=== odx --help check
+--- stdout
+--- stderr
+odx: error: usage: unexpected argument 'check' for '--help'; run 'odx --help'
+--- exit 2

@@ -1,11 +1,35 @@
 package odx
 
+import "base:runtime"
 import "core:fmt"
 import "core:io"
 import "core:slice"
 import "core:strings"
 
 JSON_VERSION :: 1
+
+HIDDEN_LINE :: "odx: %s: compile errors hide this package's other findings\n"
+
+HELP :: `odx checks Odin code against one standard.
+
+Usage:
+  odx check [--json] [--pending]
+  odx init
+  odx --help
+  odx --version
+
+  odx check      Checks every package under the repo root and prints the findings.
+    --json       Prints the same result as one JSON document on stdout.
+    --pending    Also prints the held-back findings of pending packages.
+  odx init       Writes odx.json and odinfmt.json for a repo that has no odx.json.
+  odx --help     Prints this text.
+  odx --version  Prints the release, its rule set and the compiler it supports.
+
+Exit codes:
+  0  No findings.
+  1  At least one finding.
+  2  An error: odx can't give a trustworthy result.
+`
 
 Finding :: struct {
 	path:      string,
@@ -28,6 +52,13 @@ Error :: struct {
 	message: string,
 }
 
+// A package whose compile errors hid at least one of its findings. `held_back` says the hidden
+// findings are held back, so the line about them prints only with `--pending`.
+Hidden_Package :: struct {
+	dir:       string,
+	held_back: bool,
+}
+
 Result :: struct {
 	findings: [dynamic]Finding,
 	errors:   [dynamic]Error,
@@ -36,8 +67,22 @@ Result :: struct {
 	skipped:  int,
 	// Stderr lines, such as what was skipped and why.
 	notes:    [dynamic]string,
+	// In package order.
+	hidden:   [dynamic]Hidden_Package,
 	rule_set: int,
 	odin:     string,
+}
+
+// What the release supports, which is not what the working directory's repo pins. Allocates the
+// line with `allocator`.
+version_line :: proc(allocator: runtime.Allocator) -> string {
+	return fmt.aprintf(
+		"odx %s, rule set %d, odin %s\n",
+		RELEASE,
+		RULE_SET,
+		strings.join(SUPPORTED_COMPILERS[:], ", ", context.temp_allocator),
+		allocator = allocator,
+	)
 }
 
 // Rules order by ID, not enum position, because the ID is the contract.
@@ -124,6 +169,11 @@ render_result :: proc(out, err: ^strings.Builder, result: Result, cmd: Check_Com
 	if !failed {
 		for note in result.notes {
 			fmt.sbprintf(err, "%s\n", note)
+		}
+		for h in result.hidden {
+			if cmd.pending || !h.held_back {
+				fmt.sbprintf(err, HIDDEN_LINE, h.dir)
+			}
 		}
 		render_finding_notes(err, result.findings[:], false)
 	}

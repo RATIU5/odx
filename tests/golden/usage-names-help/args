@@ -1,0 +1,7 @@
+help
+-h
+version
+-V
+check --help
+init --version
+--help check

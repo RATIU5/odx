@@ -12,3 +12,26 @@ init: 1 strict, 0 pending, 3 vendored, 0 skipped
 		"vendor"
 	]
 }
+--- odinfmt.json
+{
+	"character_width": 100,
+	"spaces": 4,
+	"tabs": true,
+	"tabs_width": 4,
+	"brace_style": "_1TBS",
+	"newline_style": "LF",
+	"newline_limit": 1,
+	"sort_imports": true,
+	"convert_do": false,
+	"indent_cases": false,
+	"inline_single_stmt_case": false,
+	"spaces_around_colons": false,
+	"space_single_line_blocks": false,
+	"align_struct_fields": true,
+	"align_struct_values": true,
+	"align_struct_declarations": false,
+	"align_constant_definitions": false,
+	"align_comments": false,
+	"multiline_composite_literals": false,
+	"preserve_struct_blank_lines": false
+}

@@ -1,0 +1,11 @@
+--- stdout
+alpha/alpha.odin:4:2: odin: 'unused' declared but not used
+main.odin:4:2: odin: 'unused' declared but not used
+quiet/quiet.odin:4:2: odin: 'unused' declared but not used
+zeta/zeta.odin:4:2: odin: 'unused' declared but not used
+odx: 4 findings, 0 ignored, 0 pending, 0 skipped (rules 1, odx <release>, odin <odin>)
+--- stderr
+odx: .: compile errors hide this package's other findings
+odx: alpha: compile errors hide this package's other findings
+odx: zeta: compile errors hide this package's other findings
+--- exit 1
