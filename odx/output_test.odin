@@ -494,6 +494,54 @@ hidden_line_of_a_pending_package_needs_the_pending_flag :: proc(t: ^testing.T) {
 }
 
 @(test)
+not_compiled_lines_follow_the_notes_and_need_the_pending_flag_when_pending :: proc(t: ^testing.T) {
+	result := hidden_result()
+	defer destroy_hidden_result(&result)
+	append(
+		&result.not_compiled,
+		Uncompiled_Package{dir = "app", entry = "lib/x.odin"},
+		Uncompiled_Package{dir = "old", entry = "lib/x.odin", held_back = true},
+	)
+	defer delete(result.not_compiled)
+	plain := sample_result()
+	defer delete(plain.findings)
+	APP :: "odx: app: not compiled, because lib/x.odin isn't a regular file\n"
+	OLD :: "odx: old: not compiled, because lib/x.odin isn't a regular file\n"
+	NOTES :: "odx: skipped t: no file\n"
+
+	for json in ([]bool{false, true}) {
+		w, pending, without: Written
+		defer destroy_written(&w)
+		defer destroy_written(&pending)
+		defer destroy_written(&without)
+		write_to_builders(t, &w, result, {json = json})
+		write_to_builders(t, &pending, result, {json = json, pending = true})
+		write_to_builders(t, &without, plain, {json = json})
+		testing.expect_value(t, strings.to_string(w.out), strings.to_string(without.out))
+		testing.expect_value(
+			t,
+			strings.to_string(w.err),
+			NOTES + APP + HIDDEN_ROOT_LINE + "odx: format: a/b.odin formatter crashed\n",
+		)
+		got := strings.to_string(pending.err)
+		testing.expectf(
+			t,
+			strings.has_prefix(got, NOTES + APP + OLD + HIDDEN_ROOT_LINE + HIDDEN_LIB_LINE),
+			"json %v: stderr is %q",
+			json,
+			got,
+		)
+	}
+
+	append(&result.errors, Error{.Config_Invalid, "bad"})
+	defer delete(result.errors)
+	failed: Written
+	defer destroy_written(&failed)
+	write_to_builders(t, &failed, result, {pending = true})
+	testing.expect_value(t, strings.to_string(failed.err), "odx: error: config-invalid: bad\n")
+}
+
+@(test)
 hidden_lines_are_not_written_with_an_error :: proc(t: ^testing.T) {
 	result := hidden_result()
 	defer destroy_hidden_result(&result)

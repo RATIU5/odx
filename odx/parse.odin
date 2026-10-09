@@ -57,10 +57,14 @@ Parse_Error :: struct {
 	message: string,
 }
 
+NO_PACKAGE_MESSAGE :: "Expected a package declaration at the start of the file"
+
 // Parses `src` with `core:odin/parser` and returns its AST, or the error at the smallest offset
 // that the parser or its tokenizer reports. `parse_file` returns true even when it reports errors
-// (probe P5). The AST is allocated with `context.allocator`, which suits a scratch arena, and the
-// error's message with `allocator`.
+// (probe P5), and reports none for a 0-byte file, which has the error of a file without a package
+// clause here. The parser recurses once per level of nesting and has no limit of its own, so this
+// needs the stack of `run_on_work_stack`. The AST is allocated with `context.allocator`, which
+// suits a scratch arena, and the error's message with `allocator`.
 parse_source :: proc(
 	src: string,
 	allocator: runtime.Allocator,
@@ -84,8 +88,11 @@ parse_source :: proc(
 	context.user_ptr = &first
 	parser.parse_file(&p, file)
 	e, found := first.?
-	if !found {
-		return file, nil
+	switch {
+	case found:
+		return nil, Parse_Error{e.offset, strings.clone(e.message, allocator)}
+	case file.pkg_decl == nil:
+		return nil, Parse_Error{0, NO_PACKAGE_MESSAGE}
 	}
-	return nil, Parse_Error{e.offset, strings.clone(e.message, allocator)}
+	return file, nil
 }

@@ -190,6 +190,54 @@ take_slot :: proc(budget: ^Child_Budget, stop: ^bool, held: bool) -> bool {
 	}
 }
 
+// What is left of a child's limit after a poll that took `slice`, where `poll` is the longest a
+// poll waits. A poll is charged at most twice that. The clock that measures the slice may run
+// while the machine sleeps, as `time.tick_now` does on macOS, so a sleep costs one capped slice
+// and never its whole length.
+charge_poll :: proc(left, slice, poll: time.Duration) -> time.Duration {
+	return left - clamp(slice, 0, 2 * poll)
+}
+
+// Waits until `process` ends, until `limit` is used up per `charge_poll`, or until `killed` is set
+// when one is given. It kills the child in the last two cases and reaps it in all three. `ended` is
+// false only when `killed` ended the wait.
+wait_child :: proc(
+	process: os.Process,
+	limit: time.Duration,
+	killed: ^bool = nil,
+) -> (
+	state: os.Process_State,
+	err: os.Error,
+	timed_out: bool,
+	ended: bool,
+) {
+	left := limit
+	polled := time.tick_now()
+	for {
+		ended = killed == nil || !sync.atomic_load(killed)
+		timed_out = left <= 0
+		if !ended || timed_out {
+			_ = os.process_kill(process)
+			state, err = os.process_wait(process)
+			return
+		}
+		// The wait reaps the child, so only the waiting thread can know its pid is still the
+		// child's.
+		state, err = os.process_wait(process, min(left, KILL_POLL))
+		if err != os.General_Error.Timeout {
+			if err != nil {
+				// The child may still run, and nothing else would end it.
+				_ = os.process_kill(process)
+				_, _ = os.process_wait(process)
+			}
+			return
+		}
+		now := time.tick_now()
+		left = charge_poll(left, time.tick_diff(polled, now), KILL_POLL)
+		polled = now
+	}
+}
+
 // `ended` is false when `kill_pool` ended the child, which then has no `end` to read. The captured
 // stream goes to a named file, because `os.create_temp_file` captured nothing in the reader probe
 // (Appendix C).
@@ -243,30 +291,9 @@ run_child :: proc(
 		}
 		peak = seen
 	}
-	started := time.tick_now()
 	state: os.Process_State
 	wait_err: os.Error
-	for {
-		left := pool.timeout - time.tick_since(started)
-		ended = !sync.atomic_load(&pool.killed)
-		end.timed_out = left <= 0
-		if !ended || end.timed_out {
-			_ = os.process_kill(process)
-			state, wait_err = os.process_wait(process)
-			break
-		}
-		// The wait reaps the child, so only the waiting thread can know its pid is still the
-		// child's.
-		state, wait_err = os.process_wait(process, min(left, KILL_POLL))
-		if wait_err != os.General_Error.Timeout {
-			if wait_err != nil {
-				// The child may still run, and nothing else would end it.
-				_ = os.process_kill(process)
-				_, _ = os.process_wait(process)
-			}
-			break
-		}
-	}
+	state, wait_err, end.timed_out, ended = wait_child(process, pool.timeout, &pool.killed)
 	sync.atomic_sub(&pool.budget.live, 1)
 	if !ended {
 		return

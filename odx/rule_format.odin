@@ -12,6 +12,7 @@ import "core:slice"
 import "core:strconv"
 import "core:strings"
 import "core:sys/posix"
+import "core:thread"
 import "core:time"
 
 import printer "ols_printer"
@@ -28,6 +29,9 @@ FORMAT_TIMEOUT :: 120 * time.Second
 // How long after the timeout a `__format` child ends itself, which is what stops it when odx was
 // killed and can't.
 FORMAT_ALARM_MARGIN :: 2 * time.Second
+
+// How often a `__format` child counts down its own limit.
+FORMAT_ALARM_POLL :: 250 * time.Millisecond
 
 FORMAT_DIFFERS_MESSAGE :: "the file differs from the formatter's output"
 FORMAT_REFUSED_MESSAGE :: "the formatter can't read the file"
@@ -189,24 +193,78 @@ print_source :: proc(src: string) -> (out: string, ok: bool) {
 	return out, !prnt.errored_out
 }
 
+// Reads the file at `path` and prints it with `print`. Allocates with `context.allocator`, which
+// suits an arena.
+format_file :: proc(path: string, print: Print_Proc) -> Print_Result {
+	if disk_kind(path) == .Special {
+		return Unreadable{NOT_REGULAR_REASON}
+	}
+	data, err := os.read_entire_file(path, context.allocator)
+	if err != nil {
+		return Unreadable{os.error_string(err)}
+	}
+	return print_result(string(data), print)
+}
+
+// How much address space a `__format` child may add to what it has when it starts. The printer's
+// memory doubles with each `proc() ->` in a row in a type: 0.7 GB for 18 and 2.9 GB for 20, in a
+// file the compiler accepts. The largest file probed, 2 MB of generated tables, needs 0.2 GB.
+FORMAT_MEMORY_GROWTH :: 2 << 30
+
+// Makes every allocation fail once the process has grown by `growth` bytes of address space, which
+// ends a print that would otherwise take the machine's memory. `RLIMIT_AS` bounds the whole
+// address space, and the kernel rejects a limit below what the process already has, which on macOS
+// is hundreds of gigabytes that are reserved and never used. So the limit is the smallest one the
+// kernel accepts, found by bisection, plus `growth`. A kernel that accepts any limit, as Linux
+// does, gets `growth` as the whole. Without a limit to read, there is no cap.
+limit_own_growth :: proc(growth: uint) {
+	limit: posix.rlimit
+	if posix.getrlimit(.AS, &limit) != .OK {
+		return
+	}
+	rejected, accepted := uint(0), uint(1) << 47
+	for accepted - rejected > 1 << 20 {
+		middle := rejected + (accepted - rejected) / 2
+		limit.rlim_cur = posix.rlim_t(middle)
+		if posix.setrlimit(.AS, &limit) == .OK {
+			accepted = middle
+		} else {
+			rejected = middle
+		}
+	}
+	limit.rlim_cur = posix.rlim_t(accepted + growth)
+	posix.setrlimit(.AS, &limit)
+}
+
 // Exits 0 when it wrote the file's result line.
 run_format :: proc(cmd: Format_Child_Command) -> int {
-	// SIGALRM's default action ends the process. `alarm` counts whole seconds.
+	growth := uint(FORMAT_MEMORY_GROWTH)
+	// A golden case reaches the cap without taking 2 GB, by naming megabytes.
+	if mb, ok := strconv.parse_uint(debug_env("ODX_FORMAT_MEMORY_MB"), 10); ok && mb > 0 {
+		growth = mb << 20
+	}
+	limit_own_growth(growth)
+	// A thread counts the limit down as `wait_child` does, where `alarm` would leave it to the
+	// platform whether a sleep counts. SIGALRM's default action ends the process.
 	limit := debug_timeout("ODX_FORMAT_TIMEOUT_MS", FORMAT_TIMEOUT) + FORMAT_ALARM_MARGIN
-	posix.alarm(u32((limit + time.Second - 1) / time.Second))
+	thread.create_and_start_with_poly_data(limit, proc(limit: time.Duration) {
+			left := limit
+			polled := time.tick_now()
+			for left > 0 {
+				time.sleep(min(left, FORMAT_ALARM_POLL))
+				now := time.tick_now()
+				left = charge_poll(left, time.tick_diff(polled, now), FORMAT_ALARM_POLL)
+				polled = now
+			}
+			posix.kill(posix.getpid(), .SIGALRM)
+		}, self_cleanup = true)
 
 	arena: virtual.Arena
 	ensure(virtual.arena_init_growing(&arena) == nil, "out of memory")
 	context.allocator = virtual.arena_allocator(&arena)
 
-	result: Print_Result
-	if data, read_err := os.read_entire_file(cmd.file, context.allocator); read_err != nil {
-		result = Unreadable{os.error_string(read_err)}
-	} else {
-		result = print_result(string(data), format_printer())
-	}
 	b := strings.builder_make()
-	write_print_result(&b, result)
+	write_print_result(&b, format_file(cmd.file, format_printer()))
 	if _, write_err := os.write_string(os.stdout, strings.to_string(b)); write_err != nil {
 		return 2
 	}
@@ -379,8 +437,10 @@ destroy_format :: proc(jobs: ^Format_Jobs) {
 }
 
 // A whole result line decides the outcome however the child then ended (Appendix E.7). Without one,
-// a child that ended in any way is `Crashed`. A crash doesn't stop new prints. The outcomes that
-// leave the run without a result do. The outcome may borrow from `end`.
+// a child that ended in any way is `Crashed`, except that one its own limit ended timed out: under
+// load odx charges a slow poll less than it took, so the child's limit can run out first. A crash
+// doesn't stop new prints. The outcomes that leave the run without a result do. The outcome may
+// borrow from `end`.
 read_format_end :: proc(
 	end: Child_End,
 	allocator: runtime.Allocator,
@@ -401,7 +461,7 @@ read_format_end :: proc(
 	case Unreadable:
 		return result, true
 	}
-	if end.timed_out {
+	if end.timed_out || end.exit_code == posix.SIGALRM {
 		return Timed_Out{}, true
 	}
 	return Crashed{}, false

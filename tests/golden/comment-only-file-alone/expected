@@ -1,0 +1,8 @@
+--- stdout
+lib/lib.odin:3:1: name-case: constant 'bad_Name' isn't SCREAMING_CASE
+notes/notes.odin:2:1: odin: Syntax Error: Expected a package declaration at the beginning of the file
+notes/notes.odin:2:1: parse-unsupported: odx can't parse this file: Expected a package declaration at the start of the file
+odx: 3 findings, 0 ignored, 0 pending, 0 skipped (rules 1, odx <release>, odin <odin>)
+--- stderr
+odx: no odx.json, so rule set 1, the running compiler and every package strict
+--- exit 1

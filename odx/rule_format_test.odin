@@ -165,6 +165,7 @@ read_format_end_takes_a_whole_result_line_however_the_child_ended :: proc(t: ^te
 		{"a child that SIGKILL ended", {exit_code = 9}, Crashed{}, false},
 		{"a child that wrote half a line", {captured = "differs 1"}, Crashed{}, false},
 		{"a child that outran the timeout", {timed_out = true, exit_code = 9}, Timed_Out{}, true},
+		{"a child that its own limit ended", {exit_code = 14}, Timed_Out{}, true},
 		{"a whole result line", {captured = "differs 3\n"}, Differs{3}, false},
 		{
 			"a whole result line, then a failing exit",

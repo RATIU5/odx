@@ -178,8 +178,8 @@ Path_Resolver :: struct {
 }
 
 // Adds `import-escape` and `path-case` per Appendix E.5 to the findings of each file that names an
-// escaping or miscased path. `repo_root` and `odin_root` need not be real paths. Allocates what it
-// adds with `allocator`.
+// escaping or miscased path, and each import's dir inside the repo to its package's `imports`.
+// `repo_root` and `odin_root` need not be real paths. Allocates what it adds with `allocator`.
 check_paths :: proc(
 	packages: []Package,
 	repo_root, odin_root: string,
@@ -226,6 +226,11 @@ check_paths :: proc(
 					ref,
 					source_dir if info.in_source else pkg_dir,
 				)
+				if real, named := real.?; named && ref.kind == .Import {
+					if dir, inside := dir_in_repo(real, r.roots.repo); inside {
+						append(&pkg.imports, strings.clone(dir, allocator))
+					}
+				}
 				if real, named := real.?; named && escapes(ref.kind, real, r.roots) {
 					reach := odin_code_reach if info.allows_odin_code else "the repo"
 					message := fmt.aprintf(
@@ -269,6 +274,18 @@ check_paths :: proc(
 			}
 		}
 	}
+}
+
+// The real path `real` as `Package.dir` spells it.
+@(private = "file")
+dir_in_repo :: proc(real, repo: string) -> (dir: string, inside: bool) {
+	switch {
+	case real == repo:
+		return ".", true
+	case is_within(real, repo):
+		return strings.trim_left(real[len(repo):], "/"), true
+	}
+	return "", false
 }
 
 @(private = "file")
@@ -380,10 +397,7 @@ push_in_pop_order :: proc(steps: ^[dynamic]Step, path: string, spelled: bool) {
 find_entry :: proc(r: ^Path_Resolver, dir, name: string) -> (entry: os.File_Info, found: bool) {
 	entries, cached := r.listings[dir]
 	if !cached {
-		if read, err := os.read_directory_by_path(dir, -1, r.allocator); err == nil {
-			slice.sort_by(read, proc(a, b: os.File_Info) -> bool {return a.name < b.name})
-			entries = read
-		}
+		entries, _ = list_dir(dir, r.allocator)
 		r.listings[strings.clone(dir, r.allocator)] = entries
 	}
 	for e in entries {

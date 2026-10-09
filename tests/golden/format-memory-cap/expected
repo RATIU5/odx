@@ -1,0 +1,7 @@
+--- stdout
+deep/results.odin:1:1: format: the formatter crashed, so odx can't check this file's format
+odx: 1 findings, 1 ignored, 0 pending, 0 skipped (rules 1, odx <release>, odin <odin>)
+--- stderr
+odx: no odx.json, so rule set 1, the running compiler and every package strict
+odx: format: deep/results.odin formatter crashed
+--- exit 1

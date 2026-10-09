@@ -1,0 +1,4 @@
+--- stdout
+--- stderr
+odx: error: compiler-output: '<tests>/fake-odin/hang/odin version' timed out after 500 ms
+--- exit 2

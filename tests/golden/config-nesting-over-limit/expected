@@ -1,0 +1,4 @@
+--- stdout
+--- stderr
+odx: error: config-invalid: odx.json:1:43: nests deeper than 16
+--- exit 2

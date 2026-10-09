@@ -5,6 +5,7 @@ import "core:fmt"
 import "core:os"
 import "core:slice"
 import "core:sync"
+import "core:sys/posix"
 import "core:testing"
 import "core:thread"
 import "core:time"
@@ -154,4 +155,65 @@ a_started_pool_holds_its_slots_before_a_later_pool_starts :: proc(t: ^testing.T)
 
 	testing.expect(t, !slot_was_free, "a slot was free after the pool started")
 	testing.expect_value(t, fmt.tprint(pool.runs), "[0, 0]")
+}
+
+@(test)
+charge_poll_caps_what_one_poll_costs :: proc(t: ^testing.T) {
+	LIMIT :: 120 * time.Second
+	cases := []struct {
+		name:              string,
+		left, slice, want: time.Duration,
+	} {
+		{"a poll that took its length", LIMIT, KILL_POLL, LIMIT - KILL_POLL},
+		{
+			"a poll the scheduler held a little",
+			LIMIT,
+			KILL_POLL + 5 * time.Millisecond,
+			LIMIT - KILL_POLL - 5 * time.Millisecond,
+		},
+		{
+			"a poll the machine slept through for ten minutes",
+			LIMIT,
+			600 * time.Second,
+			LIMIT - 2 * KILL_POLL,
+		},
+		{"the last poll", KILL_POLL, KILL_POLL, 0},
+		{"a clock that went back", time.Second, -time.Second, time.Second},
+	}
+	for c in cases {
+		got := charge_poll(c.left, c.slice, KILL_POLL)
+		testing.expectf(t, got == c.want, "%s: got %v, want %v", c.name, got, c.want)
+	}
+}
+
+@(test)
+wait_child_kills_and_reaps_a_child_that_outruns_its_limit :: proc(t: ^testing.T) {
+	process, err := os.process_start({command = {"/bin/sleep", "30"}})
+	testing.expect_value(t, err, nil)
+	started := time.tick_now()
+	state, wait_err, timed_out, ended := wait_child(process, 200 * time.Millisecond)
+	took := time.tick_since(started)
+
+	testing.expect_value(t, wait_err, nil)
+	testing.expect(t, timed_out, "the child didn't time out")
+	testing.expect(t, ended, "the wait reports a kill that nobody asked for")
+	testing.expect_value(t, state.exit_code, posix.SIGKILL)
+	testing.expectf(
+		t,
+		200 * time.Millisecond <= took && took < 2 * time.Second,
+		"the wait took %v",
+		took,
+	)
+}
+
+@(test)
+wait_child_returns_how_a_child_within_its_limit_ended :: proc(t: ^testing.T) {
+	process, err := os.process_start({command = {"/bin/sh", "-c", "exit 3"}})
+	testing.expect_value(t, err, nil)
+	state, wait_err, timed_out, ended := wait_child(process, 10 * time.Second)
+
+	testing.expect_value(t, wait_err, nil)
+	testing.expect(t, !timed_out, "the child timed out")
+	testing.expect(t, ended, "the wait reports a kill that nobody asked for")
+	testing.expect_value(t, state.exit_code, 3)
 }

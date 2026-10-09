@@ -1,0 +1,5 @@
+--- stdout
+--- stderr
+odx: no odx.json, so rule set 1, the running compiler and every package strict
+odx: error: compiler-output: '<tests>/fake-odin/hang/odin root' timed out after 500 ms
+--- exit 2

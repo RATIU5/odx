@@ -1,0 +1,4 @@
+--- stdout
+--- stderr
+odx: error: init-exists: odinfmt.json already exists and odx can't read it (it isn't a regular file), so odx init wrote nothing
+--- exit 2

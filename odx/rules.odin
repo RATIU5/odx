@@ -153,6 +153,19 @@ note_hidden :: proc(packages: []Package, result: ^Result) {
 	}
 }
 
+// Lists the packages a `Special_Entry` left without a compile, in the order of `packages`. The list
+// borrows the packages' strings.
+note_not_compiled :: proc(packages: []Package, result: ^Result) {
+	for p in packages {
+		if special, stopped := p.compile.(Special_Entry); stopped {
+			append(
+				&result.not_compiled,
+				Uncompiled_Package{p.dir, special.path, p.status == .Pending},
+			)
+		}
+	}
+}
+
 // The added findings borrow their strings from `packages`.
 add_file_findings :: proc(packages: []Package, result: ^Result) {
 	for &pkg in packages {

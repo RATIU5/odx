@@ -14,7 +14,7 @@ import "core:strings"
 import "../../odx"
 
 main :: proc() {
-	os.exit(run())
+	os.exit(odx.run_on_work_stack(run))
 }
 
 run :: proc() -> int {

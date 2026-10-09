@@ -52,8 +52,9 @@ start_compile :: proc(
 
 	jobs := make([dynamic]Check_Job, scratch)
 	for p, i in packages {
+		compiled, _ := p.compile.(Compiled)
 		for t in Target {
-			if t in p.check_targets {
+			if t in compiled.targets {
 				if p.status == .Pending {
 					append(&jobs, Check_Job{pkg = i, target = t, strict = false})
 				}
@@ -191,7 +192,7 @@ reports_name_conflict :: proc(entry: Compiler_Entry, placed: Placed, packages: [
 	}
 	dir := package_dir(placed.path)
 	for p in packages {
-		if p.name_conflict && p.dir == dir {
+		if _, conflict := p.compile.(Name_Conflict); conflict && p.dir == dir {
 			return true
 		}
 	}
@@ -199,7 +200,7 @@ reports_name_conflict :: proc(entry: Compiler_Entry, placed: Placed, packages: [
 }
 
 // Appendix E.4's command line. The package-scoped flags take the package's name, never its
-// directory (probe R-C). Allocates with `allocator`.
+// directory (probe R-C), and are left out for a package no file names. Allocates with `allocator`.
 check_command :: proc(
 	odin, dir: string,
 	pkg: Package,
@@ -231,14 +232,15 @@ check_command :: proc(
 		append(&args, fmt.aprintf("-define:%s=%s", d.name, d.value))
 	}
 	if strict {
-		append(
-			&args,
-			"-vet",
-			"-vet-cast",
-			"-strict-style",
-			fmt.aprintf("-vet-packages:%s", pkg.name),
-			fmt.aprintf("-strict-style-packages:%s", pkg.name),
-		)
+		append(&args, "-vet", "-vet-cast", "-strict-style")
+		// The compiler rejects either flag with an empty name before it reads a file.
+		if pkg.name != "" {
+			append(
+				&args,
+				fmt.aprintf("-vet-packages:%s", pkg.name),
+				fmt.aprintf("-strict-style-packages:%s", pkg.name),
+			)
+		}
 	} else {
 		append(&args, "-ignore-warnings")
 	}
@@ -341,6 +343,9 @@ clashes_with_foreign_procedure :: proc(
 @(private = "file")
 foreign_procedure_names :: proc(path: string, allocator: runtime.Allocator) -> []Position {
 	context.allocator = allocator
+	if disk_kind(path) == .Special {
+		return nil
+	}
 	data, err := os.read_entire_file(path, allocator)
 	if err != nil {
 		return nil

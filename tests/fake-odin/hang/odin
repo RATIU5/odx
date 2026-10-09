@@ -1,5 +1,11 @@
 #!/bin/sh
-# On `check`, becomes one childless process that sleeps forever. The `fake-odin-hang` argument
-# keeps it visible to `pgrep -f fake-odin` until odx kills it.
-. "$(dirname "$0")/../pass-through.sh"
+# On `check`, or on the subcommand that `FAKE_ODIN_HANGS_ON` names instead, becomes one childless
+# process that sleeps forever. The `fake-odin-hang` argument keeps it visible to
+# `pgrep -f fake-odin` until odx kills it.
+hangs_on=${FAKE_ODIN_HANGS_ON-check}
+if [ "${1-}" != "$hangs_on" ]; then
+	. "$(dirname "$0")/../pass-through.sh"
+	echo "fake-odin: only '$hangs_on' was expected to get past the probes" >&2
+	exit 1
+fi
 exec perl -e sleep fake-odin-hang

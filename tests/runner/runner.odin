@@ -5,8 +5,9 @@
 // directory read-only while the commands run, the optional `unreadable` file names one
 // `repo/`-relative directory per line whose permissions are cleared while the commands run, and
 // `expected` holds the output as `run_case` renders it. An `env` value expands `${NAME}` from the
-// inherited environment, and `${ODX_TESTS}` is the absolute `tests` dir. The rendering ends with
-// `odx.json` and then `odinfmt.json`, each only when the commands created or changed it.
+// inherited environment, and `${ODX_TESTS}` is the absolute `tests` dir, which the rendering shows
+// as `<tests>`. The rendering ends with `odx.json` and then `odinfmt.json`, each only when the
+// commands created or changed it.
 package runner
 
 import "core:fmt"
@@ -31,6 +32,7 @@ Snapshot :: struct {
 Placeholders :: struct {
 	odin_version: string,
 	today:        string,
+	tests_dir:    string,
 }
 
 Dir_Mode :: struct {
@@ -69,8 +71,6 @@ run :: proc() -> int {
 		fmt.eprintln("runner: could not read 'date +%F'")
 		return 2
 	}
-	placeholders := Placeholders{odin_version, today}
-
 	golden := os.args[2]
 	golden_abs, golden_err := os.get_absolute_path(golden, context.allocator)
 	if golden_err != nil {
@@ -78,6 +78,7 @@ run :: proc() -> int {
 		return 2
 	}
 	tests_dir := os.dir(golden_abs)
+	placeholders := Placeholders{odin_version, today, tests_dir}
 	entries, read_err := os.read_directory_by_path(golden, -1, context.allocator)
 	if read_err != nil {
 		fmt.eprintfln("runner: %s: %v", golden, read_err)
@@ -301,14 +302,11 @@ run_command :: proc(
 	if start_err != nil {
 		return {}, fmt.tprintf("start odx: %v", start_err)
 	}
-	state, wait_err := os.process_wait(process, CASE_TIMEOUT)
-	if wait_err == os.General_Error.Timeout {
-		_ = os.process_kill(process)
-		state, _ = os.process_wait(process)
-		outcome.timed_out = true
-	} else if wait_err != nil {
+	state, wait_err, timed_out, _ := odx.wait_child(process, CASE_TIMEOUT)
+	if wait_err != nil {
 		return {}, fmt.tprintf("wait for odx: %v", wait_err)
 	}
+	outcome.timed_out = timed_out
 	outcome.exit_code = state.exit_code
 
 	stdout, _ := os.read_entire_file(out_path, ta)
@@ -378,6 +376,7 @@ write_stream :: proc(b: ^strings.Builder, name, raw: string, placeholders: Place
 	text, _ := strings.replace_all(raw, placeholders.odin_version, "<odin>", ta)
 	text, _ = strings.replace_all(text, odx.RELEASE, "<release>", ta)
 	text, _ = strings.replace_all(text, placeholders.today, "<date>", ta)
+	text, _ = strings.replace_all(text, placeholders.tests_dir, "<tests>", ta)
 	fmt.sbprintf(b, "--- %s\n%s", name, text)
 	if text != "" && !strings.has_suffix(text, "\n") {
 		strings.write_string(b, "\n\\ no newline at end\n")

@@ -250,3 +250,31 @@ note_hidden_lists_each_package_with_a_hidden_finding_in_package_order :: proc(t:
 		}
 	}
 }
+
+@(test)
+note_not_compiled_lists_each_package_a_special_entry_stops_in_package_order :: proc(
+	t: ^testing.T,
+) {
+	packages := []Package {
+		{dir = ".", compile = Special_Entry{"lib/x.odin"}},
+		{dir = "a", compile = Compiled{{.Darwin_Arm64}}},
+		{dir = "b", compile = Special_Entry{"lib/x.odin"}, status = .Pending},
+		{dir = "c", compile = Skipped{}},
+		{dir = "d", compile = Name_Conflict{}},
+		{dir = "lib", compile = Special_Entry{"lib/x.odin"}},
+	}
+	result: Result
+	defer delete(result.not_compiled)
+	note_not_compiled(packages, &result)
+	want := []Uncompiled_Package {
+		{dir = ".", entry = "lib/x.odin"},
+		{dir = "b", entry = "lib/x.odin", held_back = true},
+		{dir = "lib", entry = "lib/x.odin"},
+	}
+	testing.expect_value(t, len(result.not_compiled), len(want))
+	for w, i in want {
+		if i < len(result.not_compiled) {
+			testing.expect_value(t, result.not_compiled[i], w)
+		}
+	}
+}

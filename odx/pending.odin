@@ -6,6 +6,9 @@ import "core:os"
 import "core:slice"
 import "core:strings"
 
+@(private = "file")
+NOT_A_DIRECTORY :: bit_set[Disk_Kind]{.File, .Special}
+
 // Returns a `pending-stale` finding for each entry that Appendix E.7 calls stale. An entry's
 // findings are those whose `owner_dir` is its package, so a finding located in a package it imports
 // never counts toward it. The caller owns the returned slice and its messages, both allocated with
@@ -43,7 +46,7 @@ stale_pending :: proc(
 				entries[earlier].dir,
 				allocator = allocator,
 			)
-		case os.is_file(fmt.tprintf("%s/%s", repo_root, dir)):
+		case disk_kind(fmt.tprintf("%s/%s", repo_root, dir)) in NOT_A_DIRECTORY:
 			message = fmt.aprintf(
 				"'%s' is a file, not a directory",
 				entry.dir,
@@ -62,6 +65,9 @@ stale_pending :: proc(
 				on_disk,
 				allocator = allocator,
 			)
+		case awaits_compile(packages, dir):
+			// Its findings as strict aren't known until the compiler runs on it.
+			continue
 		case !owners[dir]:
 			message = fmt.aprintf(
 				"'%s' has no findings as strict",
@@ -83,6 +89,17 @@ stale_pending :: proc(
 		)
 	}
 	return stale[:]
+}
+
+@(private = "file")
+awaits_compile :: proc(packages: []Package, dir: string) -> bool {
+	for p in packages {
+		if p.dir == dir {
+			_, special := p.compile.(Special_Entry)
+			return special
+		}
+	}
+	return false
 }
 
 @(private = "file")

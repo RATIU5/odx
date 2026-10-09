@@ -105,9 +105,14 @@ load_config :: proc(
 	config: Config,
 	errors: [dynamic]Error,
 ) {
-	data, err := os.read_entire_file(fmt.tprintf("%s/%s", root, CONFIG_FILE), allocator)
+	path := fmt.tprintf("%s/%s", root, CONFIG_FILE)
+	errors = make([dynamic]Error, allocator)
+	if kind := disk_kind(path); kind == .Dir || kind == .Special {
+		append(&errors, invalid(allocator, "%s isn't a regular file", CONFIG_FILE))
+		return
+	}
+	data, err := os.read_entire_file(path, allocator)
 	if err != nil {
-		errors = make([dynamic]Error, allocator)
 		append(&errors, invalid(allocator, "could not read %s: %v", CONFIG_FILE, err))
 		return
 	}
@@ -130,6 +135,20 @@ parse_config :: proc(
 	value, syntax := read_json(text)
 	if e, bad := syntax.?; bad {
 		line, col := text_position(text, e.offset)
+		if e.what == "" {
+			append(
+				&errors,
+				invalid(
+					allocator,
+					"%s:%d:%d: nests deeper than %d",
+					CONFIG_FILE,
+					line,
+					col,
+					MAX_CONFIG_NESTING,
+				),
+			)
+			return
+		}
 		append(
 			&errors,
 			invalid(allocator, "%s:%d:%d: not strict JSON: %s", CONFIG_FILE, line, col, e.what),
@@ -286,7 +305,7 @@ decode_collection :: proc(config: ^Config, errors: ^[dynamic]Error, entry, real_
 	full := path if os.is_absolute_path(path) else fmt.tprintf("%s/%s", real_root, path)
 	real, real_err := os.get_absolute_path(full, context.allocator)
 	switch {
-	case real_err != nil || !os.is_directory(real):
+	case real_err != nil || disk_kind(real) != .Dir:
 		append(
 			errors,
 			invalid(context.allocator, "collection '%s' path '%s' is not a directory", name, path),
@@ -407,14 +426,21 @@ Json_Member :: struct {
 @(private = "file")
 Syntax_Error :: struct {
 	offset: int,
+	// "" when the object or array at `offset` passes `MAX_CONFIG_NESTING`, which strict JSON may.
 	what:   string,
 }
+
+// How deep objects and arrays may nest in odx.json. A valid one nests 2 deep, and the reader
+// recurses per level.
+MAX_CONFIG_NESTING :: 16
 
 @(private = "file")
 Json_Reader :: struct {
 	data:      string,
 	tokenizer: json.Tokenizer,
 	token:     json.Token,
+	// How many objects and arrays are open around the token.
+	depth:     int,
 }
 
 // Reads one strict JSON document with `core:encoding/json`'s tokenizer. Its parser accepts trailing
@@ -478,9 +504,15 @@ expected :: proc(r: ^Json_Reader, what: string) -> Syntax_Error {
 read_value :: proc(r: ^Json_Reader) -> (value: Json_Value, err: Maybe(Syntax_Error)) {
 	token := r.token
 	#partial switch token.kind {
-	case .Open_Brace:
-		return read_object(r)
-	case .Open_Bracket:
+	case .Open_Brace, .Open_Bracket:
+		if r.depth == MAX_CONFIG_NESTING {
+			return nil, Syntax_Error{token.offset, ""}
+		}
+		r.depth += 1
+		defer r.depth -= 1
+		if token.kind == .Open_Brace {
+			return read_object(r)
+		}
 		return read_array(r)
 	case .Null:
 		value = Json_Null{}

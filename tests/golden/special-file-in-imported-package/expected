@@ -1,0 +1,5 @@
+--- stdout
+/dev/null:3:1: odin: Syntax Error: Failed to parse file: z.odin; invalid file extension: File must have the extension '.odin'
+odx: 1 findings, 0 ignored, 0 pending, 0 skipped (rules 1, odx <release>, odin <odin>)
+--- stderr
+--- exit 1

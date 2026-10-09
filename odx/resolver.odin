@@ -643,7 +643,7 @@ load_package :: proc(r: ^Resolver, dir: string) -> ^Loaded_Package {
 		return pkg
 	}
 	for entry in entries {
-		if dir_entry_kind(entry, arena) != .Source {
+		if dir_entry_kind(entry) != .Source {
 			continue
 		}
 		source_dir := key

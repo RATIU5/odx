@@ -10,6 +10,8 @@ JSON_VERSION :: 1
 
 HIDDEN_LINE :: "odx: %s: compile errors hide this package's other findings\n"
 
+NOT_COMPILED_LINE :: "odx: %s: not compiled, because %s isn't a regular file\n"
+
 HELP :: `odx checks Odin code against one standard.
 
 Usage:
@@ -59,18 +61,27 @@ Hidden_Package :: struct {
 	held_back: bool,
 }
 
+// A package `odin check` didn't run for because of the `.odin` entry at `entry`. `held_back` says
+// the package is pending, so the line about it prints only with `--pending`.
+Uncompiled_Package :: struct {
+	dir:       string,
+	entry:     string,
+	held_back: bool,
+}
+
 Result :: struct {
-	findings: [dynamic]Finding,
-	errors:   [dynamic]Error,
-	ignored:  int,
-	pending:  int,
-	skipped:  int,
+	findings:     [dynamic]Finding,
+	errors:       [dynamic]Error,
+	ignored:      int,
+	pending:      int,
+	skipped:      int,
 	// Stderr lines, such as what was skipped and why.
-	notes:    [dynamic]string,
-	// In package order.
-	hidden:   [dynamic]Hidden_Package,
-	rule_set: int,
-	odin:     string,
+	notes:        [dynamic]string,
+	// Both in package order.
+	not_compiled: [dynamic]Uncompiled_Package,
+	hidden:       [dynamic]Hidden_Package,
+	rule_set:     int,
+	odin:         string,
 }
 
 // What the release supports, which is not what the working directory's repo pins. Allocates the
@@ -169,6 +180,11 @@ render_result :: proc(out, err: ^strings.Builder, result: Result, cmd: Check_Com
 	if !failed {
 		for note in result.notes {
 			fmt.sbprintf(err, "%s\n", note)
+		}
+		for u in result.not_compiled {
+			if cmd.pending || !u.held_back {
+				fmt.sbprintf(err, NOT_COMPILED_LINE, u.dir, u.entry)
+			}
 		}
 		for h in result.hidden {
 			if cmd.pending || !h.held_back {

@@ -36,29 +36,49 @@ Source_File :: struct {
 	ignores:      [dynamic]Ignore,
 }
 
-Package :: struct {
-	// Repo-relative with `/`, and "." for the root.
-	dir:           string,
-	// The name of the first file in path order that compiles for a target and isn't a test file.
-	name:          string,
-	status:        Package_Status,
-	// In path order, without the files odx doesn't read.
-	files:         [dynamic]Source_File,
-	// The targets `odin check` runs for. Empty when the package is skipped or its compiled files
-	// disagree on the name.
-	check_targets: Targets,
-	// The compiled files disagree on the name, which odx reports itself.
-	name_conflict: bool,
-	// Its own check reported an error in its own files that wasn't relocated, so only the rules
-	// that run when muted apply.
-	muted:         bool,
-	// How many findings were dropped because it is muted, without those an ignore covers.
-	hidden:        int,
+// `odin check` runs for these targets.
+Compiled :: struct {
+	targets: Targets,
 }
 
-// Skipped means no non-test file compiles for either target, so the compiler never checks it.
-is_skipped :: proc(p: Package) -> bool {
-	return p.check_targets == {} && !p.name_conflict
+// No non-test file compiles for either target, so the compiler never checks it.
+Skipped :: struct {}
+
+// The compiled files disagree on the name, which odx reports itself.
+Name_Conflict :: struct {}
+
+// The `.odin` entry at the repo-relative `path` isn't a regular file, and the package holds it or
+// imports the package that does. The compiler opens every `.odin` entry of every package it reads
+// and hangs on a FIFO, so `odin check` doesn't run, and the entry's own finding fails the run.
+Special_Entry :: struct {
+	path: string,
+}
+
+// What `odin check` does for a package. Each of the last three is a reason it never runs.
+Compile :: union #no_nil {
+	Compiled,
+	Skipped,
+	Name_Conflict,
+	Special_Entry,
+}
+
+Package :: struct {
+	// Repo-relative with `/`, and "." for the root.
+	dir:     string,
+	// The name of the first file in path order that compiles for a target and isn't a test file.
+	name:    string,
+	status:  Package_Status,
+	// In path order, without the files odx doesn't read.
+	files:   [dynamic]Source_File,
+	compile: Compile,
+	// The dirs of the packages its files import, as `Package.dir` spells them. `check_paths` fills
+	// it, and it may name a dir more than once or one that isn't a package.
+	imports: [dynamic]string,
+	// Its own check reported an error in its own files that wasn't relocated, so only the rules
+	// that run when muted apply.
+	muted:   bool,
+	// How many findings were dropped because it is muted, without those an ignore covers.
+	hidden:  int,
 }
 
 @(private = "file")
@@ -129,12 +149,20 @@ Dir_Entry_Kind :: enum u8 {
 	Dir,
 	// A `.odin` file the compiler never compiles, which still makes its directory a package.
 	Hidden_Source,
-	// A `.odin` file odx reads, unless its tags say `#+build ignore`.
+	// A `.odin` file odx reads, unless its tags say `#+build ignore`. A link that doesn't resolve
+	// is one too, and reading it reports why.
 	Source,
+	// A `.odin` entry that is neither a regular file nor a link to one, such as a FIFO, a socket,
+	// a device or a link to `/dev/zero`. odx never opens it.
+	Special_Source,
 }
 
+NOT_REGULAR_REASON :: "it isn't a regular file"
+
+SPECIAL_FILE_MESSAGE :: "odx can't read this file: " + NOT_REGULAR_REASON
+
 // The entries of the directory at `abs` in name order, which is the order odx reads its files in.
-// Allocates with `allocator`.
+// A FIFO or a device at `abs` is an error and is never opened. Allocates with `allocator`.
 list_dir :: proc(
 	abs: string,
 	allocator: runtime.Allocator,
@@ -142,18 +170,24 @@ list_dir :: proc(
 	entries: []os.File_Info,
 	err: os.Error,
 ) {
+	if disk_kind(abs) == .Special {
+		return nil, .Invalid_Dir
+	}
 	entries = os.read_directory_by_path(abs, -1, allocator) or_return
 	slice.sort_by(entries, proc(a, b: os.File_Info) -> bool {return a.name < b.name})
 	return
 }
 
 // What discovery and the resolver's loader both make of a directory entry, so they read the same
-// files. It follows a link only to learn its kind, and allocates that with `allocator`.
-dir_entry_kind :: proc(entry: os.File_Info, allocator: runtime.Allocator) -> Dir_Entry_Kind {
+// files. It follows a link only to learn its kind.
+dir_entry_kind :: proc(entry: os.File_Info) -> Dir_Entry_Kind {
+	is_regular := entry.type == .Regular
 	if entry.type == .Symlink {
-		if info, err := os.stat(entry.fullpath, allocator); err == nil && info.type == .Directory {
+		target := disk_kind(entry.fullpath)
+		if target == .Dir {
 			return .Other
 		}
+		is_regular = target != .Special
 	}
 	switch {
 	case entry.type == .Directory:
@@ -162,6 +196,8 @@ dir_entry_kind :: proc(entry: os.File_Info, allocator: runtime.Allocator) -> Dir
 		return .Other
 	case is_hidden_file(entry.name):
 		return .Hidden_Source
+	case !is_regular:
+		return .Special_Source
 	}
 	return .Source
 }
@@ -183,12 +219,14 @@ walk_dir :: proc(w: ^Walker, rel, abs, project: string) {
 
 	is_package := false
 	pkg := Package {
-		dir    = strings.clone(rel, w.allocator),
-		status = .Pending if is_pending(w.config.pending[:], rel) else .Strict,
-		files  = make([dynamic]Source_File, w.allocator),
+		dir     = strings.clone(rel, w.allocator),
+		status  = .Pending if is_pending(w.config.pending[:], rel) else .Strict,
+		files   = make([dynamic]Source_File, w.allocator),
+		imports = make([dynamic]string, w.allocator),
 	}
+	special := ""
 	for entry in entries {
-		kind := dir_entry_kind(entry, w.listings)
+		kind := dir_entry_kind(entry)
 		if kind == .Other {
 			continue
 		}
@@ -207,6 +245,12 @@ walk_dir :: proc(w: ^Walker, rel, abs, project: string) {
 			walk_dir(w, child, entry.fullpath, entry.name)
 		case .Hidden_Source:
 			is_package = true
+		case .Special_Source:
+			is_package = true
+			append(&pkg.files, special_file(w, child))
+			if special == "" {
+				special = pkg.files[len(pkg.files) - 1].path
+			}
 		case .Source:
 			is_package = true
 			if file, read := read_file(w, rel, child, entry.fullpath, project); read {
@@ -229,8 +273,29 @@ walk_dir :: proc(w: ^Walker, rel, abs, project: string) {
 	if !is_package {
 		return
 	}
-	name_package(w, &pkg)
+	name_package(w, &pkg, special)
 	append(&w.packages, pkg)
+}
+
+// The entry's file, which holds only the findings odx gives without reading it.
+@(private = "file")
+special_file :: proc(w: ^Walker, path: string) -> (file: Source_File) {
+	file.path = strings.clone(path, w.allocator)
+	file.paths = make([dynamic]Path_Ref, w.allocator)
+	file.findings = make([dynamic]Finding, w.allocator)
+	file.ignores = make([dynamic]Ignore, w.allocator)
+	check_file_name(&file.findings, file.path)
+	append(
+		&file.findings,
+		Finding {
+			path = file.path,
+			line = 1,
+			col = 1,
+			rule = .Parse_Unsupported,
+			message = SPECIAL_FILE_MESSAGE,
+		},
+	)
+	return
 }
 
 // `read` is false for a file odx doesn't read.
@@ -315,9 +380,11 @@ read_file :: proc(w: ^Walker, dir, path, abs, project: string) -> (file: Source_
 
 // Names the package, reports the first compiled file whose name differs, and decides which targets
 // `odin check` runs for. The compiler blames whichever file it happens to read later, so odx goes
-// by path order to give the same finding on every filesystem.
+// by path order to give the same finding on every filesystem. `special` is the path of the
+// package's first entry that isn't a regular file, or "". Such a package is never skipped, which
+// would count it and not fail it.
 @(private = "file")
-name_package :: proc(w: ^Walker, pkg: ^Package) {
+name_package :: proc(w: ^Walker, pkg: ^Package, special: string) {
 	compiled: Targets
 	for file in pkg.files {
 		if file.is_test || file.targets == {} {
@@ -328,7 +395,11 @@ name_package :: proc(w: ^Walker, pkg: ^Package) {
 			pkg.name = file.name
 		}
 	}
-	if compiled == {} {
+	pkg.compile = Compiled{compiled}
+	if special != "" {
+		pkg.compile = Special_Entry{special}
+	} else if compiled == {} {
+		pkg.compile = Skipped{}
 		w.result.skipped += 1
 		note := fmt.aprintf("odx: skipped %s: %s", pkg.dir, SKIP_REASON, allocator = w.allocator)
 		append(&w.result.notes, note)
@@ -352,10 +423,47 @@ name_package :: proc(w: ^Walker, pkg: ^Package) {
 			message = message,
 		}
 		append(&file.findings, finding)
-		pkg.name_conflict = true
+		if special == "" {
+			pkg.compile = Name_Conflict{}
+		}
 		return
 	}
-	pkg.check_targets = compiled
+}
+
+// Leaves every package that reaches a `Special_Entry` package through imports without a compile,
+// because the compiler reads the packages a package imports. It follows the imports of every file,
+// whatever its targets, and through every package, whatever its own compile. A package that
+// reaches several takes the entry whose path sorts first.
+spread_special_entries :: proc(packages: []Package) {
+	by_dir := make(map[string]int, len(packages), context.temp_allocator)
+	// The first entry each package reaches so far, or "".
+	reached := make([]string, len(packages), context.temp_allocator)
+	any_special := false
+	for p, i in packages {
+		by_dir[p.dir] = i
+		if own, special := p.compile.(Special_Entry); special {
+			reached[i] = own.path
+			any_special = true
+		}
+	}
+	for changed := any_special; changed; {
+		changed = false
+		for p, i in packages {
+			for dir in p.imports {
+				imported, is_package := by_dir[dir]
+				entry := reached[imported] if is_package else ""
+				if entry != "" && (reached[i] == "" || entry < reached[i]) {
+					reached[i] = entry
+					changed = true
+				}
+			}
+		}
+	}
+	for &p, i in packages {
+		if _, compiled := p.compile.(Compiled); compiled && reached[i] != "" {
+			p.compile = Special_Entry{reached[i]}
+		}
+	}
 }
 
 // odx.json's dirs may carry `./` or a trailing `/`.

@@ -3,6 +3,7 @@ package odx
 import "core:fmt"
 import "core:mem/virtual"
 import "core:os"
+import "core:strings"
 import "core:testing"
 
 PIN :: "dev-2026-09-nightly:a2fb372"
@@ -65,6 +66,63 @@ parse_config_rejects_json_that_is_not_strict :: proc(t: ^testing.T) {
 				c.message,
 			)
 		}
+	}
+}
+
+@(test)
+parse_config_stops_at_the_bracket_that_nests_too_deep :: proc(t: ^testing.T) {
+	arena: virtual.Arena
+	testing.expect(t, virtual.arena_init_growing(&arena) == nil)
+	defer virtual.arena_destroy(&arena)
+	allocator := virtual.arena_allocator(&arena)
+	context.allocator = allocator
+
+	HEAD :: `{"version": `
+	OBJECT :: `{"a": `
+	// `inner` values nest inside the outer object.
+	nested :: proc(open, close: string, inner: int) -> string {
+		return strings.concatenate(
+			{HEAD, strings.repeat(open, inner), "1", strings.repeat(close, inner), "}"},
+		)
+	}
+	too_deep :: proc(col: int) -> string {
+		return fmt.aprintf("odx.json:1:%d: nests deeper than %d", col, MAX_CONFIG_NESTING)
+	}
+	at_limit := MAX_CONFIG_NESTING - 1
+	cases := []struct {
+		name, text, message: string,
+	} {
+		{"arrays at the limit", nested("[", "]", at_limit), ""},
+		{"objects at the limit", nested(OBJECT, "}", at_limit), ""},
+		{
+			"arrays one past the limit",
+			nested("[", "]", at_limit + 1),
+			too_deep(len(HEAD) + at_limit + 1),
+		},
+		{
+			"objects one past the limit",
+			nested(OBJECT, "}", at_limit + 1),
+			too_deep(len(HEAD) + at_limit * len(OBJECT) + 1),
+		},
+		{
+			"a million open arrays",
+			strings.repeat("[", 1_000_000),
+			too_deep(MAX_CONFIG_NESTING + 1),
+		},
+	}
+	for c in cases {
+		_, errors := parse_config(c.text, ".", allocator)
+		if !testing.expectf(t, len(errors) > 0, "%s: no error", c.name) {
+			continue
+		}
+		got := errors[0].message
+		if c.message == "" {
+			nests := strings.contains(got, "nests deeper")
+			testing.expectf(t, !nests, "%s: got %q, want a schema error", c.name, got)
+		} else {
+			testing.expectf(t, got == c.message, "%s: got %q, want %q", c.name, got, c.message)
+		}
+		testing.expect_value(t, errors[0].code, Error_Code.Config_Invalid)
 	}
 }
 

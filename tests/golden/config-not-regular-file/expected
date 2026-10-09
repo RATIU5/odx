@@ -1,0 +1,4 @@
+--- stdout
+--- stderr
+odx: error: config-invalid: odx.json isn't a regular file
+--- exit 2

@@ -1,13 +1,54 @@
 package odx
 
+import "base:runtime"
 import "core:fmt"
 import "core:os"
 import "core:strings"
+import "core:sys/posix"
 
 NO_CONFIG_NOTE :: "odx: no odx.json, so rule set 1, the running compiler and every package strict\n"
 
 main :: proc() {
-	os.exit(run())
+	os.exit(run_on_work_stack(run))
+}
+
+// The stack of the thread that does odx's work. `core:odin/parser`, odx's walk, the resolver and
+// the printer each recurse once per level of nesting in a source file, and none has a limit. With
+// this much, the compiler's own stack ends at less than half the depth odx's does, for every shape
+// of nesting probed, so a file that ends odx has ended the compiler first. The pages are committed
+// only when touched.
+WORK_STACK_SIZE :: 1 << 30
+
+// Runs `work` on a new thread with `WORK_STACK_SIZE` of stack and returns its result. It runs
+// `work` on the calling thread when no such thread starts. `core:thread` can't do this: it sizes a
+// stack from the soft `RLIMIT_STACK`, which can't pass the hard limit, 64 MB on macOS.
+run_on_work_stack :: proc(work: proc() -> int) -> int {
+	Call :: struct {
+		work:   proc() -> int,
+		result: int,
+	}
+	call := Call {
+		work = work,
+	}
+	attributes: posix.pthread_attr_t
+	if posix.pthread_attr_init(&attributes) != .NONE {
+		return work()
+	}
+	defer posix.pthread_attr_destroy(&attributes)
+	thread: posix.pthread_t
+	started :=
+		posix.pthread_attr_setstacksize(&attributes, WORK_STACK_SIZE) == .NONE &&
+		posix.pthread_create(&thread, &attributes, proc "c" (arg: rawptr) -> rawptr {
+				context = runtime.default_context()
+				call := (^Call)(arg)
+				call.result = call.work()
+				return nil
+			}, &call) == .NONE
+	if !started {
+		return work()
+	}
+	posix.pthread_join(thread)
+	return call.result
 }
 
 run :: proc() -> int {
@@ -114,6 +155,10 @@ check :: proc(
 			return
 		}
 		defer os.remove_all(temp_dir)
+		// The compiler reads the packages a package imports, so the imports are resolved before
+		// any check starts.
+		check_paths(packages, root, odin_root.path, config.collections[:], context.allocator)
+		spread_special_entries(packages)
 		budget: Child_Budget
 		init_child_budget(&budget, worker_count())
 		// The checks start first, because a compile error must not wait for a slot that a print
@@ -138,9 +183,9 @@ check :: proc(
 		if len(result.errors) > 0 {
 			return
 		}
-		check_paths(packages, root, odin_root.path, config.collections[:], context.allocator)
 		add_file_findings(packages, result)
 		apply_ignores(packages, result)
+		note_not_compiled(packages, result)
 		note_hidden(packages, result)
 	}
 }
@@ -185,47 +230,41 @@ load :: proc(repo: Repo, result: ^Result) -> (config: Config, odin: string) {
 	return
 }
 
-// Returns the compiler's path and the text after `odin version `. Both live in one
-// `context.allocator` allocation that stays alive for the process, so callers free neither.
+// Returns the compiler's path and the text after `odin version `. Both are allocated with
+// `context.allocator` and stay alive for the process, so callers free neither.
 read_odin_version :: proc() -> (odin: string, version: string, failure: Maybe(Error)) {
 	found: bool
-	odin, found = find_on_path("odin")
+	odin, found = find_on_path(os.get_env("PATH", context.temp_allocator), "odin")
 	if !found {
 		return "", "", Error{.Odin_Missing, "'odin' is not on PATH"}
 	}
-	state, stdout, stderr, err := os.process_exec({command = {odin, "version"}}, context.allocator)
-	delete(stderr)
-	if err != nil {
-		delete(stdout)
-		return "", "", Error {
-			.Compiler_Output,
-			fmt.aprintf("could not run '%s version': %v", odin, err),
-		}
+	probe := probe_odin(odin, "version", context.allocator)
+	if probe.error != "" {
+		return "", "", Error{.Compiler_Output, probe.error}
 	}
 	// The compiler names itself by its argv[0], which here is the full path.
 	prefix := fmt.tprintf("%s version ", odin)
-	text := strings.trim_right_space(string(stdout))
-	if !state.success || state.exit_code != 0 || !strings.has_prefix(text, prefix) {
-		delete(stdout)
+	text := strings.trim_right_space(probe.stdout)
+	if probe.exit_code != 0 || !strings.has_prefix(text, prefix) {
 		return "", "", Error {
 			.Compiler_Output,
-			fmt.aprintf("'%s version' exited %d with unexpected output", odin, state.exit_code),
+			fmt.aprintf("'%s version' exited %d with unexpected output", odin, probe.exit_code),
 		}
 	}
 	return odin, text[len(prefix):], nil
 }
 
-// Searches only `PATH`'s non-empty entries, so a file named `name` in the working directory never
-// runs. Allocates the returned path with `context.allocator`.
-find_on_path :: proc(name: string) -> (path: string, found: bool) {
-	dirs := strings.split(os.get_env("PATH", context.temp_allocator), ":", context.temp_allocator)
-	for dir in dirs {
+// Searches only the non-empty entries of `dirs`, which is `PATH`'s value, so a file named `name` in
+// the working directory never runs. Allocates the returned path with `context.allocator`.
+find_on_path :: proc(dirs, name: string) -> (path: string, found: bool) {
+	for dir in strings.split(dirs, ":", context.temp_allocator) {
 		if dir == "" {
 			continue
 		}
 		candidate := strings.concatenate({dir, "/", name})
-		info, err := os.stat(candidate, context.temp_allocator)
-		if err == nil && info.type == .Regular && info.mode & os.Permissions_Execute_All != {} {
+		// `access` asks whether this user may execute it, as a shell does, and opens nothing.
+		c_candidate := strings.clone_to_cstring(candidate, context.temp_allocator)
+		if disk_kind(candidate) == .File && posix.access(c_candidate, {.X_OK}) == .OK {
 			return candidate, true
 		}
 		delete(candidate)

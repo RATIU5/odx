@@ -13,6 +13,8 @@ INIT_EXISTS :: "%s already exists, so odx init wrote nothing"
 INIT_ODINFMT_DIFFERS ::
 	ODINFMT_FILE +
 	" already exists and differs from the one odx init writes, so odx init wrote nothing"
+INIT_ODINFMT_UNREADABLE ::
+	ODINFMT_FILE + " already exists and odx can't read it (%s), so odx init wrote nothing"
 
 @(rodata)
 VENDORED_NAMES := [?]string{"vendor", "third_party", "external"}
@@ -60,6 +62,9 @@ run_init :: proc() -> int {
 	notes := strings.builder_make()
 	for note in result.notes {
 		fmt.sbprintf(&notes, "%s\n", note)
+	}
+	for u in result.not_compiled {
+		fmt.sbprintf(&notes, NOT_COMPILED_LINE, u.dir, u.entry)
 	}
 	out := strings.builder_make()
 	for dir in report.not_compiling {
@@ -173,7 +178,7 @@ plan_init :: proc(result: ^Result) -> (root: string, report: Init_Report) {
 		switch {
 		case .Held_Back in facts[p.dir]:
 			append(&pending, p.dir)
-		case is_skipped(p):
+		case p.compile == Skipped{}:
 			report.skipped += 1
 		case:
 			report.strict += 1
@@ -285,16 +290,17 @@ write_json_string :: proc(b: ^strings.Builder, s: string) {
 // read. The message is allocated with `context.allocator`.
 needs_odinfmt :: proc(root: string, result: ^Result) -> bool {
 	path := fmt.tprintf("%s/%s", root, ODINFMT_FILE)
+	if disk_kind(path) in (bit_set[Disk_Kind]{.Dir, .Special}) {
+		message := fmt.aprintf(INIT_ODINFMT_UNREADABLE, NOT_REGULAR_REASON)
+		append(&result.errors, Error{.Init_Exists, message})
+		return false
+	}
 	data, err := os.read_entire_file(path, context.temp_allocator)
 	switch {
 	case err == os.General_Error.Not_Exist:
 		return true
 	case err != nil:
-		message := fmt.aprintf(
-			"%s already exists and odx can't read it (%s), so odx init wrote nothing",
-			ODINFMT_FILE,
-			os.error_string(err),
-		)
+		message := fmt.aprintf(INIT_ODINFMT_UNREADABLE, os.error_string(err))
 		append(&result.errors, Error{.Init_Exists, message})
 	case string(data) != ODINFMT_JSON:
 		append(&result.errors, Error{.Init_Exists, strings.clone(INIT_ODINFMT_DIFFERS)})

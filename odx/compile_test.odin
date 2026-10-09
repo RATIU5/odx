@@ -110,6 +110,42 @@ check_command_scopes_strict_flags_by_package_name :: proc(t: ^testing.T) {
 	}
 }
 
+// The compiler answers an empty name with `Flag missing for 'vet-packages'` and reads no file.
+@(test)
+check_command_leaves_out_the_package_flags_for_a_package_without_a_name :: proc(t: ^testing.T) {
+	defer free_all(context.temp_allocator)
+	got := check_command(
+		"/bin/odin",
+		"/repo/foo",
+		Package{dir = "foo", status = .Strict},
+		.Darwin_Arm64,
+		true,
+		{},
+		context.temp_allocator,
+	)
+	want := []string {
+		"/bin/odin",
+		"check",
+		"/repo/foo",
+		"-json-errors",
+		"-max-error-count:1000000",
+		"-thread-count:1",
+		"-ignore-unused-defineables",
+		"-target:darwin_arm64",
+		"-no-entry-point",
+		"-vet",
+		"-vet-cast",
+		"-strict-style",
+	}
+	testing.expectf(
+		t,
+		slice.equal(got, want),
+		"got  %s\nwant %s",
+		strings.join(got, " ", context.temp_allocator),
+		strings.join(want, " ", context.temp_allocator),
+	)
+}
+
 @(test)
 link_name_clash_drops_only_a_foreign_procedure_at_the_other_position :: proc(t: ^testing.T) {
 	arena: virtual.Arena
