@@ -103,6 +103,10 @@ All rules belong to rule set 1. A rule that can be ignored takes an ignore with 
 | `import-alias` | no | An import alias equal to the name the import has without one. |
 | `import-order` | no | Imports out of group order or spaced wrongly. Groups run `base:` and `core:`, then `vendor:`, then other collections, then relative paths, with one blank line between groups. |
 
+## Packages for one platform
+
+odx checks every package for `darwin_arm64` and `linux_amd64`. A package written for one platform says so with a build tag, such as `#+build darwin` at the top of each file, or with a file suffix such as `_darwin.odin`. odx then checks it for that target only. An `#assert(ODIN_OS == .Darwin)` alone fails on the other target, because the compiler still selects the file.
+
 ## Files odx can't read
 
 Each case below is the finding `parse-unsupported`, which no ignore covers. The rules that need the file's syntax tree, `format` among them, don't run on that file. The rest of its package is checked as usual, except in the first case.
