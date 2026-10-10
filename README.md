@@ -55,6 +55,38 @@ odx: app: compile errors hide this package's other findings
 
 Fix the compile errors and run `odx check` again to see the rest. For a pending package the line prints only with `--pending`.
 
+`odin check` leaves out a file tagged `#+test`. Only `odin test` compiles such a file, and odx can't run `odin test`, because it links. So a compile error in a `#+test` file doesn't fail the run. odx's own rules still run on the file, and stderr names each package that holds one, with the number of files:
+
+```text
+odx: lib: the compiler doesn't check 2 files tagged #+test
+```
+
+Stdout, `--json` and the exit code stay the same. For a pending package the line prints only with `--pending`. A file named `_test.odin` without the tag is compiled and checked like any other file.
+
+The pinned compiler sometimes dies by a signal, such as a segmentation fault, on code it checks without trouble the next time. odx runs such a check once more. When the second run ends normally, the result is the second run's, and one stderr line counts the reruns:
+
+```text
+odx: the compiler died by a signal 2 times, and odx ran it again each time
+```
+
+On a run that ends in an error, the count covers only the compiles that ran before odx stopped, so it can differ between runs.
+
+The line doesn't change stdout, `--json` or the exit code. It also prints when the run ends in an error, after the error lines, so a run with exit 2 still shows how often the compiler crashed. When the second run also dies by a signal, the run ends with the error `compiler-output`, and the message names the package, the target and the signal, as in `checking 'app' for darwin_arm64 died by SIGSEGV twice`. odx names `SIGSEGV`, `SIGBUS`, `SIGABRT`, `SIGILL`, `SIGTRAP`, `SIGFPE`, `SIGKILL` and `SIGTERM`, and writes any other signal as `signal` and its number. odx reruns nothing else: a check that times out or exits with an unexpected code is `compiler-output` at once.
+
+odx reads what the compiler and the formatter write through pipes, and writes no temp files. A stream that odx can't read is never taken for an empty one. It is the error `compiler-output` for the compiler and `format-failed` for the formatter, with a message that says so:
+
+```text
+odx: error: compiler-output: checking 'app' for darwin_arm64 started, but odx couldn't read its output: Input/output error
+```
+
+odx reads at most 512 MB from one stream of a compiler or formatter process. It kills a process that writes more, and the run ends with the same error:
+
+```text
+odx: error: compiler-output: checking 'app' for darwin_arm64 wrote more than 512 MB to its stderr, the most odx reads from one stream
+```
+
+An error message that quotes a compiler's stderr shows its last 40 lines, and at most the last 8 KB of them. The message says how many lines or bytes the stderr has when it shows fewer.
+
 ## `odx.json`
 
 Without `odx.json`, odx uses rule set 1 and the running compiler, treats every package as strict, and says so on stderr. An unknown key, a duplicate key or a wrong type is the error `config-invalid`.
@@ -105,7 +137,7 @@ All rules belong to rule set 1. A rule that can be ignored takes an ignore with 
 
 ## Packages for one platform
 
-odx checks every package for `darwin_arm64` and `linux_amd64`. A package written for one platform says so with a build tag, such as `#+build darwin` at the top of each file, or with a file suffix such as `_darwin.odin`. odx then checks it for that target only. An `#assert(ODIN_OS == .Darwin)` alone fails on the other target, because the compiler still selects the file.
+odx checks every package for `darwin_arm64` and `linux_amd64`. A package written for one platform says so with a build tag, such as `#+build darwin` at the top of each file, or with a file suffix such as `_darwin.odin`. odx then checks it for that target only. An `#assert(ODIN_OS == .Darwin)` alone fails on the other target, because the compiler still selects the file. A finding doesn't say which target it comes from, so a finding in a `_linux.odin` file or in a `when ODIN_OS == .Linux` branch reads like any other.
 
 ## Files odx can't read
 
@@ -126,7 +158,7 @@ Stdout and `--json` stay the same. For a pending package the line prints only wi
 
 odx opens no other path that the repo names unless it is a regular file or a directory. An `odx.json` that is anything else is the error `config-invalid`. An `odinfmt.json` that is a FIFO or a device is the error `init-exists`. A `collections` path, a `pending` entry or an import that names one is treated as a file, not a directory.
 
-odx sets no nesting limit of its own. It parses 1,000 nested parentheses as it parses 10, and it reads at least twice as deep as the compiler does. The compiler's stack ends first, near 3,000 nested parentheses, and a compiler that crashes is the error `compiler-output`.
+odx sets no nesting limit of its own. It parses 1,000 nested parentheses as it parses 10, and it reads at least twice as deep as the compiler does. The compiler's stack ends first, near 3,000 nested parentheses. odx runs the crashed check once more, and a compiler that crashes both times is the error `compiler-output`.
 
 The formatter runs in its own process for each file, and that process ends when it has taken 2 GB more memory than it started with. The file then gets the `format` finding `the formatter crashed, so odx can't check this file's format`, and stderr names it. A type with 20 `proc() ->` in a row does this. The largest file measured, 2 MB of generated tables, takes 0.2 GB.
 
