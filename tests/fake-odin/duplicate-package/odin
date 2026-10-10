@@ -1,0 +1,34 @@
+#!/bin/sh
+# On `check` of a directory named `app`, reports the duplicate package name of `a/util` and
+# `b/util` beside it the way the compiler does, at `b/util` for darwin_arm64 and at `a/util` for
+# linux_amd64, which are the two orders the compiler gives under load. Any other check is clean.
+. "$(dirname "$0")/../pass-through.sh"
+case $2 in */app) ;; *) exit 0 ;; esac
+root=${2%/app}
+at=a named=b
+case " $* " in *" -target:darwin_arm64 "*) at=b named=a ;; esac
+cat >&2 <<JSON
+{
+	"error_count": 1,
+	"errors": [
+		{
+			"type": "error",
+			"pos": {
+				"file": "$root/$at/util/util.odin",
+				"offset": 0,
+				"line": 1,
+				"column": 1,
+				"end_column": 13
+			},
+			"msgs": [
+				"Duplicate declaration of 'package util'",
+				"\tA package name must be unique",
+				"\tThere is no relation between a package name and the directory that contains it, so they can be completely different",
+				"\tA package name is required for link name prefixing to have a consistent ABI",
+				"$root/$named/util/util.odin(1:1) found at previous location"
+			]
+		}
+	]
+}
+JSON
+exit 1

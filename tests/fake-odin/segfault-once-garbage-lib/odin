@@ -1,0 +1,10 @@
+#!/bin/sh
+# On `check` of a directory named `lib`, writes stderr that isn't JSON and exits 1. Any other check
+# goes to `segfault-once`, which dies by SIGSEGV the first time and is clean after that.
+. "$(dirname "$0")/../pass-through.sh"
+case $2 in */lib)
+	echo 'this is not json' >&2
+	exit 1
+	;;
+esac
+exec "$(dirname "$0")/../segfault-once/odin" "$@"

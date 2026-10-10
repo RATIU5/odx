@@ -1,0 +1,6 @@
+--- stdout
+--- stderr
+odx: no odx.json, so rule set 1, the running compiler and every package strict
+odx: error: compiler-output: checking 'lib' for darwin_arm64 died by SIGSEGV twice; stderr was empty
+odx: the compiler died by a signal 1 times, and odx ran it again each time
+--- exit 2

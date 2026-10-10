@@ -145,16 +145,6 @@ check :: proc(
 			append(&result.errors, Error{.Compiler_Output, odin_root.failure})
 			return
 		}
-		temp_dir, temp_err := os.make_directory_temp("", "odx-check-*", context.allocator)
-		if temp_err != nil {
-			message := fmt.aprintf(
-				"could not make a temp dir for compiler output: %s",
-				os.error_string(temp_err),
-			)
-			append(&result.errors, Error{.Compiler_Output, message})
-			return
-		}
-		defer os.remove_all(temp_dir)
 		// The compiler reads the packages a package imports, so the imports are resolved before
 		// any check starts.
 		check_paths(packages, root, odin_root.path, config.collections[:], context.allocator)
@@ -167,13 +157,12 @@ check :: proc(
 			odin,
 			odin_root.path,
 			root,
-			temp_dir,
 			config,
 			packages,
 			&budget,
 			context.allocator,
 		)
-		format := start_format(root, temp_dir, packages, &budget, context.allocator)
+		format := start_format(root, packages, &budget, context.allocator)
 		finish_compile(checks, packages, result, context.allocator)
 		if len(result.errors) > 0 {
 			abandon_format(format)
@@ -186,6 +175,7 @@ check :: proc(
 		add_file_findings(packages, result)
 		apply_ignores(packages, result)
 		note_not_compiled(packages, result)
+		note_test_tagged(packages, result)
 		note_hidden(packages, result)
 	}
 }
@@ -245,10 +235,20 @@ read_odin_version :: proc() -> (odin: string, version: string, failure: Maybe(Er
 	// The compiler names itself by its argv[0], which here is the full path.
 	prefix := fmt.tprintf("%s version ", odin)
 	text := strings.trim_right_space(probe.stdout)
-	if probe.exit_code != 0 || !strings.has_prefix(text, prefix) {
-		return "", "", Error {
-			.Compiler_Output,
-			fmt.aprintf("'%s version' exited %d with unexpected output", odin, probe.exit_code),
+	switch status in probe.status {
+	case Signaled:
+		message := fmt.aprintf(
+			"'%s version' died by %s",
+			odin,
+			signal_text(status.signal, context.allocator),
+		)
+		return "", "", Error{.Compiler_Output, message}
+	case Exited:
+		if status.code != 0 || !strings.has_prefix(text, prefix) {
+			return "", "", Error {
+				.Compiler_Output,
+				fmt.aprintf("'%s version' exited %d with unexpected output", odin, status.code),
+			}
 		}
 	}
 	return odin, text[len(prefix):], nil

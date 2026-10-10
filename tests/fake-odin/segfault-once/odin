@@ -1,0 +1,14 @@
+#!/bin/sh
+# On `check`, dies by SIGSEGV the first time it checks a package for a target, and every time after
+# exits 0 with an empty stderr, like a clean check. The mark that tells the two apart lies in the
+# package directory, which is the case's own copy of its repo.
+. "$(dirname "$0")/../pass-through.sh"
+for arg in "$@"; do
+	case $arg in -target:*) target=${arg#-target:} ;; esac
+done
+mark=$2/.fake-odin-ran-$target
+if [ -e "$mark" ]; then
+	exit 0
+fi
+: >"$mark"
+kill -SEGV $$

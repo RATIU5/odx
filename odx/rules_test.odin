@@ -252,6 +252,39 @@ note_hidden_lists_each_package_with_a_hidden_finding_in_package_order :: proc(t:
 }
 
 @(test)
+note_test_tagged_counts_each_package_s_test_tagged_files_in_package_order :: proc(t: ^testing.T) {
+	files :: proc(tagged: ..bool) -> [dynamic]Source_File {
+		list := make([dynamic]Source_File, context.temp_allocator)
+		for is_test in tagged {
+			append(&list, Source_File{is_test = is_test, targets = ALL_TARGETS})
+		}
+		return list
+	}
+	defer free_all(context.temp_allocator)
+	packages := []Package {
+		{dir = ".", files = files(false, true)},
+		{dir = "a", files = files(false, false)},
+		{dir = "b", files = files(true, true, false, true), status = .Pending},
+		{dir = "c", files = files(true), compile = Skipped{}},
+		{dir = "d", files = files()},
+	}
+	result: Result
+	defer delete(result.test_tagged)
+	note_test_tagged(packages, &result)
+	want := []Test_Tagged_Package {
+		{dir = ".", files = 1},
+		{dir = "b", files = 3, held_back = true},
+		{dir = "c", files = 1},
+	}
+	testing.expect_value(t, len(result.test_tagged), len(want))
+	for w, i in want {
+		if i < len(result.test_tagged) {
+			testing.expect_value(t, result.test_tagged[i], w)
+		}
+	}
+}
+
+@(test)
 note_not_compiled_lists_each_package_a_special_entry_stops_in_package_order :: proc(
 	t: ^testing.T,
 ) {

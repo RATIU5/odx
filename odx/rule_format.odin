@@ -289,10 +289,10 @@ Format_Jobs :: struct {
 
 // Starts one `__format` child per parsed file of `packages`, largest file first, and returns
 // without waiting. A print that crashes or hangs then ends its child and never odx. `finish_format`
-// or `abandon_format` must follow. `root` is the repo root, where the children run within `budget`,
-// and their stdout goes to files in `temp_dir`. Allocates the jobs with `allocator`.
+// or `abandon_format` must follow. `root` is the repo root, where the children run within `budget`.
+// Allocates the jobs with `allocator`.
 start_format :: proc(
-	root, temp_dir: string,
+	root: string,
 	packages: []Package,
 	budget: ^Child_Budget,
 	allocator: runtime.Allocator,
@@ -337,7 +337,6 @@ start_format :: proc(
 		working_dir = root,
 		captured    = .Stdout,
 		read        = read_format_end,
-		temp_dir    = temp_dir,
 		timeout     = debug_timeout("ODX_FORMAT_TIMEOUT_MS", FORMAT_TIMEOUT),
 		budget      = budget,
 	}
@@ -451,7 +450,7 @@ read_format_end :: proc(
 	if end.failure != "" {
 		return Run_Failed{end.failure}, true
 	}
-	switch result in read_print_result(end.captured) {
+	switch result in read_print_result(end.captured[.Stdout]) {
 	case Formatted:
 		return result, false
 	case Differs:
@@ -461,7 +460,7 @@ read_format_end :: proc(
 	case Unreadable:
 		return result, true
 	}
-	if end.timed_out || end.exit_code == posix.SIGALRM {
+	if end.timed_out || end.status == (Signaled{int(posix.SIGALRM)}) {
 		return Timed_Out{}, true
 	}
 	return Crashed{}, false

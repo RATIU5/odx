@@ -29,10 +29,12 @@ Diagnostics :: struct {
 	entries: []Compiler_Entry,
 }
 
-// `reason` completes "checking <package> for <target> ...".
+// `reason` completes "checking <package> for <target> ...". `unread` says odx has no stderr to
+// show, because it couldn't run the check or read what the check wrote.
 Untrusted :: struct {
 	reason: string,
 	stderr: string,
+	unread: bool,
 }
 
 // The caller attaches the package and the target.
@@ -42,28 +44,52 @@ Check_Outcome :: union {
 	Untrusted,
 }
 
-// Decides one check's outcome from its exit code and stderr alone, per the table in Appendix E.4.
+// Decides one check's outcome from how it ended and its stderr alone, per the table in Appendix
+// E.4. `stderr` is all the check wrote, so an empty one with exit code 0 is a clean check.
+// `retried` says this is the check's second run, which the pool gives a check that a signal ended.
 // The outcome borrows `stderr` and allocates the rest with `allocator`.
 read_check :: proc(
-	exit_code: int,
+	status: Child_Status,
 	timed_out: bool,
+	retried: bool,
 	stderr: string,
 	allocator: runtime.Allocator,
 ) -> Check_Outcome {
 	context.allocator = allocator
+	exit_code: int
+	switch s in status {
+	case Signaled:
+		if timed_out {
+			return Untrusted{reason = "timed out", stderr = stderr}
+		}
+		reason := fmt.aprintf(
+			"died by %s%s",
+			signal_text(s.signal, allocator),
+			" twice" if retried else "",
+		)
+		return Untrusted{reason = reason, stderr = stderr}
+	case Exited:
+		exit_code = s.code
+	}
 	switch {
 	case timed_out:
-		return Untrusted{"timed out", stderr}
+		return Untrusted{reason = "timed out", stderr = stderr}
 	case exit_code != 0 && exit_code != 1:
-		return Untrusted{fmt.aprintf("ended with exit code %d", exit_code), stderr}
+		return Untrusted {
+			reason = fmt.aprintf("ended with exit code %d", exit_code),
+			stderr = stderr,
+		}
 	case stderr == "" && exit_code == 0:
 		return Clean{}
 	}
 	entries, error_count, readable := read_document(stderr)
 	if !readable {
 		return Untrusted {
-			fmt.aprintf("exited %d without one compiler JSON document on stderr", exit_code),
-			stderr,
+			reason = fmt.aprintf(
+				"exited %d without one compiler JSON document on stderr",
+				exit_code,
+			),
+			stderr = stderr,
 		}
 	}
 	errors := 0
@@ -74,16 +100,19 @@ read_check :: proc(
 	}
 	switch {
 	case exit_code == 0 && errors > 0:
-		return Untrusted{fmt.aprintf("exited 0 but reported %d errors", errors), stderr}
+		return Untrusted {
+			reason = fmt.aprintf("exited 0 but reported %d errors", errors),
+			stderr = stderr,
+		}
 	case exit_code == 1 && errors == 0:
-		return Untrusted{"exited 1 but reported no error", stderr}
+		return Untrusted{reason = "exited 1 but reported no error", stderr = stderr}
 	case exit_code == 1 && error_count != len(entries):
 		reason := fmt.aprintf(
 			"exited 1 with error_count %d for %d entries",
 			error_count,
 			len(entries),
 		)
-		return Untrusted{reason, stderr}
+		return Untrusted{reason = reason, stderr = stderr}
 	}
 	return Diagnostics{entries}
 }
@@ -219,7 +248,7 @@ normalize :: proc(
 		}
 	}
 
-	if in_odin_root_or_vendored(placed.path, code) {
+	if code_home(placed.path, code) != .Repo {
 		if caller, found := last_owned_caller(entry.msgs, code); found {
 			message = fmt.aprintf(
 				"%s (reported at %s:%d:%d)",
@@ -342,17 +371,26 @@ replace_root :: proc(text, root, with: string) -> string {
 	return strings.to_string(b)
 }
 
+// Whose code a path is, in the order a group of sites is reported in: the team's own first.
 @(private = "file")
-in_odin_root_or_vendored :: proc(path: string, code: Code_Map) -> bool {
+Code_Home :: enum u8 {
+	Repo,
+	Vendored,
+	Odin_Root,
+}
+
+// `path` is a location as `rewrite_roots` leaves it.
+@(private = "file")
+code_home :: proc(path: string, code: Code_Map) -> Code_Home {
 	if strings.has_prefix(path, ODIN_ROOT_PREFIX) {
-		return true
+		return .Odin_Root
 	}
 	for dir in code.vendored {
 		if strings.has_prefix(path, dir) && len(path) > len(dir) && path[len(dir)] == '/' {
-			return true
+			return .Vendored
 		}
 	}
-	return false
+	return .Repo
 }
 
 Located :: struct {
@@ -480,68 +518,25 @@ read_redeclaration :: proc(
 // message. Allocates with `allocator`.
 settle_redeclarations :: proc(records: []Redeclaration, allocator: runtime.Allocator) -> []Placed {
 	context.allocator = allocator
-	Groups :: struct {
-		ids:       map[string]int,
-		positions: [dynamic]Located,
-		parent:    [dynamic]int,
-	}
-	node :: proc(g: ^Groups, c: Located) -> int {
-		key := fmt.tprintf("%s:%d:%d", c.path, c.line, c.col)
-		if i, found := g.ids[key]; found {
-			return i
-		}
-		i := len(g.positions)
-		g.ids[strings.clone(key)] = i
-		append(&g.positions, c)
-		append(&g.parent, i)
-		return i
-	}
-	root :: proc(g: ^Groups, i: int) -> int {
-		r := i
-		for g.parent[r] != r {
-			r = g.parent[r]
-		}
-		return r
-	}
-
-	g: Groups
-	own := make([]int, len(records))
+	at := make([]Located, len(records))
+	others := make([][]Located, len(records))
 	for r, i in records {
-		own[i] = node(&g, {r.placed.path, r.placed.line, r.placed.col})
-		for o in r.others {
-			b := root(&g, node(&g, o))
-			g.parent[b] = root(&g, own[i])
-		}
+		at[i], others[i] = {r.placed.path, r.placed.line, r.placed.col}, r.others
 	}
-	members := make(map[int][dynamic]Located)
-	for c, i in g.positions {
-		r := root(&g, i)
-		if r not_in members {
-			members[r] = make([dynamic]Located)
-		}
-		append(&members[r], c)
-	}
+	groups, of := group_sites(at, others)
 
 	settled := make([dynamic]Placed)
 	for r, i in records {
-		group := members[root(&g, own[i])]
-		if len(group) == 1 {
+		if len(groups[of[i]]) == 1 {
 			append(&settled, r.placed)
 		}
 	}
-	for _, group in members {
+	for group, g in groups {
 		if len(group) == 1 {
 			continue
 		}
-		slice.sort_by(group[:], located_less)
 		first := group[0]
-		name: string
-		for r, i in records {
-			if root(&g, own[i]) == root(&g, node(&g, first)) {
-				name = r.name
-				break
-			}
-		}
+		name := records[slice.linear_search(of, g) or_else 0].name
 		for c in group[1:] {
 			message := fmt.aprintf(
 				"Redeclaration of '%s' in this scope at %s(%d:%d)",
@@ -557,6 +552,153 @@ settle_redeclarations :: proc(records: []Redeclaration, allocator: runtime.Alloc
 		return located_less({a.path, a.line, a.col}, {b.path, b.line, b.col})
 	})
 	return settled[:]
+}
+
+// One `Duplicate declaration of 'package N'` entry. The compiler found the name at `placed` after
+// it had read a package of that name at `other`. `text` is the message without the line that names
+// `other`.
+Duplicate_Package :: struct {
+	text:   string,
+	placed: Placed,
+	other:  Located,
+}
+
+// Returns false for any other entry. Allocates with `allocator`.
+read_duplicate_package :: proc(
+	entry: Compiler_Entry,
+	placed: Placed,
+	code: Code_Map,
+	allocator: runtime.Allocator,
+) -> (
+	d: Duplicate_Package,
+	ok: bool,
+) {
+	PREVIOUS :: " found at previous location"
+	context.allocator = allocator
+	last := len(entry.msgs) - 1
+	if last < 1 || !strings.has_prefix(entry.msgs[0], "Duplicate declaration of 'package ") {
+		return
+	}
+	line := strings.trim_space(entry.msgs[last])
+	located := strings.trim_suffix(line, PREVIOUS)
+	if len(located) == len(line) {
+		return
+	}
+	d.other = read_located(located, code) or_return
+	d.text = rewrite_roots(delete_ids(join_msgs(entry.msgs[:last])), code)
+	d.placed = placed
+	return d, true
+}
+
+// The compiler reports a package name that two packages share at the one it read second, naming
+// the first, and the order it reads them in varies under load. So an importer's checks for the two
+// targets can blame either site, and odx then showed one finding or two. The sites link into one
+// group per clash, as `settle_redeclarations` links declarations, and odx reports each group once,
+// at the site that sorts first, naming the others in the same order: the repo's own sites, then
+// those in vendored trees, then the Odin root's, each in path order. So the finding lies in code
+// the team can change whenever a site does. `of` gives each record's index in `settled`. Allocates
+// with `allocator`.
+settle_duplicate_packages :: proc(
+	records: []Duplicate_Package,
+	code: Code_Map,
+	allocator: runtime.Allocator,
+) -> (
+	settled: []Placed,
+	of: []int,
+) {
+	context.allocator = allocator
+	at := make([]Located, len(records))
+	others := make([][]Located, len(records))
+	for &r, i in records {
+		at[i], others[i] =
+			{r.placed.path, r.placed.line, r.placed.col}, slice.from_ptr(&r.other, 1)
+	}
+	groups: [][]Located
+	groups, of = group_sites(at, others)
+
+	settled = make([]Placed, len(groups))
+	for group, g in groups {
+		ordered := make([dynamic]Located, 0, len(group))
+		for home in Code_Home {
+			for c in group {
+				if code_home(c.path, code) == home {
+					append(&ordered, c)
+				}
+			}
+		}
+		b := strings.builder_make()
+		strings.write_string(&b, records[slice.linear_search(of, g) or_else 0].text)
+		for c in ordered[1:] {
+			fmt.sbprintf(&b, " %s(%d:%d) found at previous location", c.path, c.line, c.col)
+		}
+		first := ordered[0]
+		settled[g] = Placed {
+			path    = first.path,
+			line    = first.line,
+			col     = first.col,
+			message = strings.to_string(b),
+		}
+	}
+	return
+}
+
+// Links each `at[i]` with the positions in `others[i]`. Returns every set of linked positions, each
+// in path order, and the set each `at[i]` is in. Allocates with `context.allocator`.
+@(private = "file")
+group_sites :: proc(at: []Located, others: [][]Located) -> (groups: [][]Located, of: []int) {
+	Links :: struct {
+		ids:       map[string]int,
+		positions: [dynamic]Located,
+		parent:    [dynamic]int,
+	}
+	node :: proc(l: ^Links, c: Located) -> int {
+		key := fmt.tprintf("%s:%d:%d", c.path, c.line, c.col)
+		if i, found := l.ids[key]; found {
+			return i
+		}
+		i := len(l.positions)
+		l.ids[strings.clone(key)] = i
+		append(&l.positions, c)
+		append(&l.parent, i)
+		return i
+	}
+	root :: proc(l: ^Links, i: int) -> int {
+		r := i
+		for l.parent[r] != r {
+			r = l.parent[r]
+		}
+		return r
+	}
+
+	l: Links
+	own := make([]int, len(at))
+	for c, i in at {
+		own[i] = node(&l, c)
+		for o in others[i] {
+			b := root(&l, node(&l, o))
+			l.parent[b] = root(&l, own[i])
+		}
+	}
+	group_of_root := make(map[int]int)
+	members := make([dynamic][dynamic]Located)
+	for c, i in l.positions {
+		r := root(&l, i)
+		if r not_in group_of_root {
+			group_of_root[r] = len(members)
+			append(&members, make([dynamic]Located))
+		}
+		append(&members[group_of_root[r]], c)
+	}
+	groups = make([][]Located, len(members))
+	for group, g in members {
+		slice.sort_by(group[:], located_less)
+		groups[g] = group[:]
+	}
+	of = make([]int, len(at))
+	for &g, i in of {
+		g = group_of_root[root(&l, own[i])]
+	}
+	return
 }
 
 @(private = "file")

@@ -12,6 +12,10 @@ HIDDEN_LINE :: "odx: %s: compile errors hide this package's other findings\n"
 
 NOT_COMPILED_LINE :: "odx: %s: not compiled, because %s isn't a regular file\n"
 
+TEST_TAGGED_LINE :: "odx: %s: the compiler doesn't check %d files tagged #+test\n"
+
+RETRIES_LINE :: "odx: the compiler died by a signal %d times, and odx ran it again each time\n"
+
 HELP :: `odx checks Odin code against one standard.
 
 Usage:
@@ -69,19 +73,31 @@ Uncompiled_Package :: struct {
 	held_back: bool,
 }
 
+// A package with files tagged `#+test`. `odin check` leaves such a file out, and only `odin test`
+// compiles it, which odx can't run (ADR 0005). `held_back` says the package is pending, so the line
+// about it prints only with `--pending`.
+Test_Tagged_Package :: struct {
+	dir:       string,
+	files:     int,
+	held_back: bool,
+}
+
 Result :: struct {
-	findings:     [dynamic]Finding,
-	errors:       [dynamic]Error,
-	ignored:      int,
-	pending:      int,
-	skipped:      int,
+	findings:         [dynamic]Finding,
+	errors:           [dynamic]Error,
+	ignored:          int,
+	pending:          int,
+	skipped:          int,
 	// Stderr lines, such as what was skipped and why.
-	notes:        [dynamic]string,
-	// Both in package order.
-	not_compiled: [dynamic]Uncompiled_Package,
-	hidden:       [dynamic]Hidden_Package,
-	rule_set:     int,
-	odin:         string,
+	notes:            [dynamic]string,
+	// All three in package order.
+	not_compiled:     [dynamic]Uncompiled_Package,
+	test_tagged:      [dynamic]Test_Tagged_Package,
+	hidden:           [dynamic]Hidden_Package,
+	// How many times a signal ended the compiler and odx ran it again.
+	compiler_retries: int,
+	rule_set:         int,
+	odin:             string,
 }
 
 // What the release supports, which is not what the working directory's repo pins. Allocates the
@@ -186,11 +202,22 @@ render_result :: proc(out, err: ^strings.Builder, result: Result, cmd: Check_Com
 				fmt.sbprintf(err, NOT_COMPILED_LINE, u.dir, u.entry)
 			}
 		}
+		for p in result.test_tagged {
+			if cmd.pending || !p.held_back {
+				fmt.sbprintf(err, TEST_TAGGED_LINE, p.dir, p.files)
+			}
+		}
 		for h in result.hidden {
 			if cmd.pending || !h.held_back {
 				fmt.sbprintf(err, HIDDEN_LINE, h.dir)
 			}
 		}
+	}
+	// A run that ends in an error still says how often the compiler crashed.
+	if result.compiler_retries > 0 {
+		fmt.sbprintf(err, RETRIES_LINE, result.compiler_retries)
+	}
+	if !failed {
 		render_finding_notes(err, result.findings[:], false)
 	}
 	if cmd.json {

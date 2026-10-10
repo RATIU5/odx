@@ -43,7 +43,7 @@ Dir_Mode :: struct {
 Outcome :: struct {
 	stdout:    string,
 	stderr:    string,
-	exit_code: int,
+	status:    odx.Child_Status,
 	timed_out: bool,
 }
 
@@ -99,7 +99,7 @@ run :: proc() -> int {
 		actual, run_err := run_case(odx_bin, dir, tests_dir, placeholders)
 		if expected_err == nil && run_err == "" && should_rerun(string(expected), actual) {
 			rerun += 1
-			fmt.printfln("RERUN %s (compiler exit 11)", entry.name)
+			fmt.printfln("RERUN %s (compiler signal)", entry.name)
 			actual, run_err = run_case(odx_bin, dir, tests_dir, placeholders)
 		}
 		if expected_err != nil || run_err != "" {
@@ -128,17 +128,19 @@ run :: proc() -> int {
 	return 0
 }
 
-// The pinned compiler sometimes segfaults under load, and odx reports that without retrying. So the
-// runner reruns a case once when odx reports that crash and the case doesn't expect one.
+// The pinned compiler sometimes dies by a signal under load. odx then runs it again and says so on
+// stderr, or reports the second death. So the runner reruns a case once when its output has a line
+// about a signal death that the case doesn't expect.
 should_rerun :: proc(expected, actual: string) -> bool {
-	return reports_compiler_crash(actual) && !reports_compiler_crash(expected)
+	return reports_compiler_signal(actual) && !reports_compiler_signal(expected)
 }
 
-reports_compiler_crash :: proc(rendered: string) -> bool {
+reports_compiler_signal :: proc(rendered: string) -> bool {
 	rest := rendered
 	for line in strings.split_lines_iterator(&rest) {
-		if strings.has_prefix(line, "odx: error: compiler-output: ") &&
-		   strings.has_suffix(line, " ended with exit code 11; stderr was empty") {
+		if strings.has_prefix(line, "odx: the compiler died by a signal ") ||
+		   (strings.has_prefix(line, "odx: error: compiler-output: checking ") &&
+				   strings.contains(line, " died by ")) {
 			return true
 		}
 	}
@@ -245,7 +247,7 @@ run_case :: proc(
 		command := make([dynamic]string, ta)
 		append(&command, odx_bin)
 		append(&command, ..strings.fields(line, ta))
-		outcome, run_err := run_command(command[:], working_dir, env, tmp)
+		outcome, run_err := run_command(command[:], working_dir, env)
 		if run_err != "" {
 			return "", run_err
 		}
@@ -272,47 +274,21 @@ run_command :: proc(
 	command: []string,
 	working_dir: string,
 	env: []string,
-	tmp: string,
 ) -> (
 	outcome: Outcome,
 	failure: string,
 ) {
-	ta := context.temp_allocator
-	out_path, err_path := fmt.tprintf("%s/stdout", tmp), fmt.tprintf("%s/stderr", tmp)
-	out_file, out_err := os.create(out_path)
-	if out_err != nil {
-		return {}, fmt.tprintf("create %s: %v", out_path, out_err)
-	}
-	err_file, err_err := os.create(err_path)
-	if err_err != nil {
-		os.close(out_file)
-		return {}, fmt.tprintf("create %s: %v", err_path, err_err)
-	}
-	process, start_err := os.process_start(
-		{
-			working_dir = working_dir,
-			command = command[:],
-			env = env,
-			stdout = out_file,
-			stderr = err_file,
-		},
+	end, _ := odx.run_captured(
+		{working_dir = working_dir, command = command, env = env},
+		{.Stdout, .Stderr},
+		CASE_TIMEOUT,
+		nil,
+		context.temp_allocator,
 	)
-	os.close(out_file)
-	os.close(err_file)
-	if start_err != nil {
-		return {}, fmt.tprintf("start odx: %v", start_err)
+	if end.failure != "" {
+		return {}, fmt.tprintf("odx %s", end.failure)
 	}
-	state, wait_err, timed_out, _ := odx.wait_child(process, CASE_TIMEOUT)
-	if wait_err != nil {
-		return {}, fmt.tprintf("wait for odx: %v", wait_err)
-	}
-	outcome.timed_out = timed_out
-	outcome.exit_code = state.exit_code
-
-	stdout, _ := os.read_entire_file(out_path, ta)
-	stderr, _ := os.read_entire_file(err_path, ta)
-	outcome.stdout, outcome.stderr = string(stdout), string(stderr)
-	return outcome, ""
+	return {end.captured[.Stdout], end.captured[.Stderr], end.status, end.timed_out}, ""
 }
 
 // Recreates symlinks as symlinks, dangling ones included, where `os.copy_directory_all` follows
@@ -364,10 +340,15 @@ apply_env :: proc(env: []string, text, tests_dir: string) -> []string {
 render :: proc(b: ^strings.Builder, outcome: Outcome, placeholders: Placeholders) {
 	write_stream(b, "stdout", outcome.stdout, placeholders)
 	write_stream(b, "stderr", outcome.stderr, placeholders)
-	if outcome.timed_out {
-		fmt.sbprintf(b, "--- timed out after %v\n", CASE_TIMEOUT)
-	} else {
-		fmt.sbprintf(b, "--- exit %d\n", outcome.exit_code)
+	switch status in outcome.status {
+	case odx.Signaled:
+		if outcome.timed_out {
+			fmt.sbprintf(b, "--- timed out after %v\n", CASE_TIMEOUT)
+		} else {
+			fmt.sbprintf(b, "--- signal %d\n", status.signal)
+		}
+	case odx.Exited:
+		fmt.sbprintf(b, "--- exit %d\n", status.code)
 	}
 }
 

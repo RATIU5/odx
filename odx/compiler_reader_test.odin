@@ -64,7 +64,13 @@ expect_read_cases :: proc(t: ^testing.T, cases: []Read_Case) {
 	testing.expect(t, virtual.arena_init_growing(&arena) == nil)
 	defer virtual.arena_destroy(&arena)
 	for c in cases {
-		outcome := read_check(c.exit_code, c.timed_out, c.stderr, virtual.arena_allocator(&arena))
+		outcome := read_check(
+			Exited{c.exit_code},
+			c.timed_out,
+			false,
+			c.stderr,
+			virtual.arena_allocator(&arena),
+		)
 		got := outcome_name(outcome)
 		testing.expectf(t, got == c.want, "%s: got %s, want %s", c.name, got, c.want)
 		if d, ok := outcome.(Diagnostics); ok {
@@ -189,6 +195,66 @@ read_check_distrusts_every_other_run :: proc(t: ^testing.T) {
 }
 
 @(test)
+read_check_calls_a_signal_a_signal_and_an_exit_code_an_exit_code :: proc(t: ^testing.T) {
+	arena: virtual.Arena
+	testing.expect(t, virtual.arena_init_growing(&arena) == nil)
+	defer virtual.arena_destroy(&arena)
+	defer free_all(context.temp_allocator)
+	one_error := document(1, ERROR_ENTRY)
+	cases := []struct {
+		name:      string,
+		status:    Child_Status,
+		timed_out: bool,
+		retried:   bool,
+		stderr:    string,
+		reason:    string,
+	} {
+		{"SIGSEGV on the second run", Signaled{11}, false, true, "", "died by SIGSEGV twice"},
+		{"SIGSEGV on a run nobody retries", Signaled{11}, false, false, "", "died by SIGSEGV"},
+		{"a signal no crash sends", Signaled{1}, false, true, "", "died by signal 1 twice"},
+		{"exit code 11", Exited{11}, false, false, "", "ended with exit code 11"},
+		{"exit code 11 on the second run", Exited{11}, false, true, "", "ended with exit code 11"},
+		{"SIGTRAP after a document", Signaled{5}, false, true, one_error, "died by SIGTRAP twice"},
+		{"odx's own kill at the limit", Signaled{9}, true, false, "", "timed out"},
+		{"the limit on the second run", Signaled{9}, true, true, "", "timed out"},
+	}
+	for c in cases {
+		outcome := read_check(
+			c.status,
+			c.timed_out,
+			c.retried,
+			c.stderr,
+			virtual.arena_allocator(&arena),
+		)
+		u, untrusted := outcome.(Untrusted)
+		testing.expectf(t, untrusted, "%s: got %s", c.name, outcome_name(outcome))
+		testing.expectf(
+			t,
+			u.reason == c.reason,
+			"%s: reason %q, want %q",
+			c.name,
+			u.reason,
+			c.reason,
+		)
+		testing.expectf(t, u.stderr == c.stderr, "%s: kept stderr %q", c.name, u.stderr)
+	}
+}
+
+@(test)
+read_check_reads_a_second_run_like_a_first :: proc(t: ^testing.T) {
+	arena: virtual.Arena
+	testing.expect(t, virtual.arena_init_growing(&arena) == nil)
+	defer virtual.arena_destroy(&arena)
+	defer free_all(context.temp_allocator)
+	allocator := virtual.arena_allocator(&arena)
+
+	_, clean := read_check(Exited{0}, false, true, "", allocator).(Clean)
+	testing.expect(t, clean, "a clean second run isn't clean")
+	d, has := read_check(Exited{1}, false, true, document(1, ERROR_ENTRY), allocator).(Diagnostics)
+	testing.expect(t, has && len(d.entries) == 1, "a second run lost its entries")
+}
+
+@(test)
 read_check_types_each_entry_and_keeps_its_position :: proc(t: ^testing.T) {
 	arena: virtual.Arena
 	testing.expect(t, virtual.arena_init_growing(&arena) == nil)
@@ -196,7 +262,7 @@ read_check_types_each_entry_and_keeps_its_position :: proc(t: ^testing.T) {
 	defer free_all(context.temp_allocator)
 
 	stderr := document(3, ERROR_ENTRY, WARNING_ENTRY, SYNTAX_ENTRY)
-	outcome := read_check(1, false, stderr, virtual.arena_allocator(&arena))
+	outcome := read_check(Exited{1}, false, false, stderr, virtual.arena_allocator(&arena))
 	d, ok := outcome.(Diagnostics)
 	testing.expectf(t, ok, "got %s", outcome_name(outcome))
 	if !ok || len(d.entries) != 3 {
@@ -663,4 +729,240 @@ settle_redeclarations_gives_one_report_whatever_order_the_compiler_used :: proc(
 	other := Compiler_Entry{.Error, "/repo/tools/a.odin", 3, 1, {"Cannot convert"}}
 	_, ok = read_redeclaration(other, normalize(other, code, checked, allocator), code, allocator)
 	testing.expect(t, !ok)
+}
+
+@(test)
+settle_duplicate_packages_gives_one_finding_at_the_first_site_whatever_the_order :: proc(
+	t: ^testing.T,
+) {
+	arena: virtual.Arena
+	testing.expect(t, virtual.arena_init_growing(&arena) == nil)
+	defer virtual.arena_destroy(&arena)
+	defer free_all(context.temp_allocator)
+	allocator := virtual.arena_allocator(&arena)
+
+	packages := make(map[string]Package_Status, context.temp_allocator)
+	packages["app"] = .Strict
+	code := test_code_map(packages)
+	checked := test_package("app", Source_File{path = "app/a.odin"})
+	// The compiler's entry for a `util` at `at` that it read after the one at `named`.
+	duplicate :: proc(at, named: string) -> Compiler_Entry {
+		msgs := make([]string, 4, context.temp_allocator)
+		msgs[0] = "Duplicate declaration of 'package util'"
+		msgs[1] = "\tA package name must be unique"
+		msgs[2] = "\tA package name is required for link name prefixing to have a consistent ABI"
+		msgs[3] = fmt.tprintf("/repo/%s/util/f0.odin(1:1) found at previous location", named)
+		return {.Error, fmt.tprintf("/repo/%s/util/f0.odin", at), 1, 1, msgs}
+	}
+	TEXT ::
+		"Duplicate declaration of 'package util' A package name must be unique " +
+		"A package name is required for link name prefixing to have a consistent ABI"
+	PAIR :: TEXT + " b/util/f0.odin(1:1) found at previous location"
+	TRIPLE :: PAIR + " c/util/f0.odin(1:1) found at previous location"
+	OTHER_PAIR :: TEXT + " y/util/f0.odin(1:1) found at previous location"
+	cases := []struct {
+		name:    string,
+		entries: []Compiler_Entry,
+		want:    []Placed,
+	} {
+		{
+			"a pair, reported at the second in path order",
+			{duplicate("b", "a")},
+			{{path = "a/util/f0.odin", line = 1, col = 1, message = PAIR}},
+		},
+		{
+			"a pair, reported at the first in path order",
+			{duplicate("a", "b")},
+			{{path = "a/util/f0.odin", line = 1, col = 1, message = PAIR}},
+		},
+		{
+			"a pair that two checks reported in both orders",
+			{duplicate("a", "b"), duplicate("b", "a"), duplicate("b", "a")},
+			{{path = "a/util/f0.odin", line = 1, col = 1, message = PAIR}},
+		},
+		{
+			"a triple, each later one naming the first",
+			{duplicate("b", "a"), duplicate("c", "a")},
+			{{path = "a/util/f0.odin", line = 1, col = 1, message = TRIPLE}},
+		},
+		{
+			"a triple the compiler read last to first",
+			{duplicate("b", "c"), duplicate("a", "c")},
+			{{path = "a/util/f0.odin", line = 1, col = 1, message = TRIPLE}},
+		},
+		{
+			"a triple, each naming the one before it",
+			{duplicate("c", "b"), duplicate("b", "a")},
+			{{path = "a/util/f0.odin", line = 1, col = 1, message = TRIPLE}},
+		},
+		{
+			"two pairs that share no site",
+			{duplicate("y", "x"), duplicate("a", "b")},
+			{
+				{path = "x/util/f0.odin", line = 1, col = 1, message = OTHER_PAIR},
+				{path = "a/util/f0.odin", line = 1, col = 1, message = PAIR},
+			},
+		},
+		{"no entry", {}, {}},
+	}
+	for c in cases {
+		records := make([dynamic]Duplicate_Package, context.temp_allocator)
+		for e in c.entries {
+			d, ok := read_duplicate_package(
+				e,
+				normalize(e, code, checked, allocator),
+				code,
+				allocator,
+			)
+			testing.expectf(t, ok, "%s: not read as a duplicate package: %v", c.name, e.msgs)
+			append(&records, d)
+		}
+		got, of := settle_duplicate_packages(records[:], code, allocator)
+		testing.expectf(t, slice.equal(got, c.want), "%s: got %v", c.name, got)
+		testing.expectf(
+			t,
+			len(of) == len(records),
+			"%s: %d records in %v",
+			c.name,
+			len(records),
+			of,
+		)
+		for g, i in of {
+			site := records[i].placed.path
+			linked := site == got[g].path || strings.contains(got[g].message, site)
+			testing.expectf(t, linked, "%s: record %d at %s is in finding %d", c.name, i, site, g)
+		}
+	}
+}
+
+// `third_party/dep` is vendored. By path alone, `$ODIN_ROOT/...` sorts before it, and it sorts
+// before `util`.
+@(test)
+settle_duplicate_packages_reports_in_checked_code_then_vendored_then_the_odin_root :: proc(
+	t: ^testing.T,
+) {
+	defer free_all(context.temp_allocator)
+	allocator := context.temp_allocator
+	packages := make(map[string]Package_Status, context.temp_allocator)
+	packages["util"] = .Strict
+	packages["app"] = .Strict
+	code := test_code_map(packages)
+	checked := test_package("app", Source_File{path = "app/a.odin"})
+	CHECKED :: "util/u.odin"
+	LATER_CHECKED :: "zlib/z.odin"
+	VENDORED :: "third_party/dep/util/u.odin"
+	LATER_VENDORED :: "third_party/dep/zlib/z.odin"
+	ROOT :: "$ODIN_ROOT/core/util/u.odin"
+	LATER_ROOT :: "$ODIN_ROOT/vendor/util/u.odin"
+	cases := []struct {
+		name:  string,
+		// In the order the finding names them, the first being where it lies.
+		sites: []string,
+	} {
+		{"checked and vendored", {CHECKED, VENDORED}},
+		{"checked and the Odin root", {CHECKED, ROOT}},
+		{"vendored and the Odin root", {VENDORED, ROOT}},
+		{"one of each", {CHECKED, VENDORED, ROOT}},
+		{"two of each", {CHECKED, LATER_CHECKED, VENDORED, LATER_VENDORED, ROOT, LATER_ROOT}},
+		{"every site vendored", {VENDORED, LATER_VENDORED}},
+		{"every site under the Odin root", {ROOT, LATER_ROOT}},
+	}
+	absolute :: proc(site: string) -> string {
+		if strings.has_prefix(site, ODIN_ROOT_PREFIX) {
+			return fmt.tprintf("/odin/%s", site[len(ODIN_ROOT_PREFIX):])
+		}
+		return fmt.tprintf("/repo/%s", site)
+	}
+	for c in cases {
+		want := strings.builder_make(context.temp_allocator)
+		strings.write_string(&want, "Duplicate declaration of 'package util'")
+		for site in c.sites[1:] {
+			fmt.sbprintf(&want, " %s(1:1) found at previous location", site)
+		}
+		// Each site but one is reported once, naming the one before it or the one after it, so
+		// every order the compiler can read the packages in gives the same links.
+		for forward in ([]bool{true, false}) {
+			records := make([dynamic]Duplicate_Package, context.temp_allocator)
+			for i in 1 ..< len(c.sites) {
+				at, named := c.sites[i], c.sites[i - 1]
+				if !forward {
+					at, named = named, at
+				}
+				msgs := make([]string, 2, context.temp_allocator)
+				msgs[0] = "Duplicate declaration of 'package util'"
+				msgs[1] = fmt.tprintf("%s(1:1) found at previous location", absolute(named))
+				e := Compiler_Entry{.Error, absolute(at), 1, 1, msgs}
+				d, ok := read_duplicate_package(
+					e,
+					normalize(e, code, checked, allocator),
+					code,
+					allocator,
+				)
+				testing.expectf(t, ok, "%s: not read as a duplicate package", c.name)
+				append(&records, d)
+			}
+			got, _ := settle_duplicate_packages(records[:], code, allocator)
+			if !testing.expectf(t, len(got) == 1, "%s: %d findings", c.name, len(got)) {
+				continue
+			}
+			testing.expectf(
+				t,
+				got[0].path == c.sites[0],
+				"%s, forward %v: reported at %s",
+				c.name,
+				forward,
+				got[0].path,
+			)
+			testing.expectf(
+				t,
+				got[0].message == strings.to_string(want),
+				"%s, forward %v: message %q",
+				c.name,
+				forward,
+				got[0].message,
+			)
+		}
+	}
+}
+
+@(test)
+read_duplicate_package_takes_only_the_compilers_duplicate_package_entry :: proc(t: ^testing.T) {
+	defer free_all(context.temp_allocator)
+	allocator := context.temp_allocator
+	packages := make(map[string]Package_Status, context.temp_allocator)
+	packages["app"] = .Strict
+	code := test_code_map(packages)
+	checked := test_package("app", Source_File{path = "app/a.odin"})
+	cases := []struct {
+		name: string,
+		msgs: []string,
+	} {
+		{
+			"a redeclared name",
+			{"Redeclaration of 'main' in this scope", "\tat /repo/app/b.odin(2:1)"},
+		},
+		{"the message alone", {"Duplicate declaration of 'package util'"}},
+		{
+			"a last line that names no position",
+			{"Duplicate declaration of 'package util'", "\tA package name must be unique"},
+		},
+		{
+			"a position odx can't read",
+			{"Duplicate declaration of 'package util'", "somewhere found at previous location"},
+		},
+		{
+			"a duplicate of something that isn't a package",
+			{"Duplicate declaration of 'x'", "/repo/app/b.odin(2:1) found at previous location"},
+		},
+	}
+	for c in cases {
+		entry := Compiler_Entry{.Error, "/repo/app/a.odin", 1, 1, c.msgs}
+		_, ok := read_duplicate_package(
+			entry,
+			normalize(entry, code, checked, allocator),
+			code,
+			allocator,
+		)
+		testing.expectf(t, !ok, "%s: read as a duplicate package", c.name)
+	}
 }

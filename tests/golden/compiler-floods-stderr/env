@@ -1,0 +1,2 @@
+PATH=${ODX_TESTS}/fake-odin/flood:${PATH}
+ODX_CHECK_TIMEOUT_MS=3000

@@ -166,6 +166,21 @@ note_not_compiled :: proc(packages: []Package, result: ^Result) {
 	}
 }
 
+// Lists the packages that hold a file tagged `#+test`, in the order of `packages`, with how many.
+// It counts the files odx reads, so one that is also tagged `#+build ignore` doesn't count. The
+// list borrows the packages' dirs.
+note_test_tagged :: proc(packages: []Package, result: ^Result) {
+	for p in packages {
+		files := 0
+		for file in p.files {
+			files += int(file.is_test)
+		}
+		if files > 0 {
+			append(&result.test_tagged, Test_Tagged_Package{p.dir, files, p.status == .Pending})
+		}
+	}
+}
+
 // The added findings borrow their strings from `packages`.
 add_file_findings :: proc(packages: []Package, result: ^Result) {
 	for &pkg in packages {

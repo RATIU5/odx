@@ -1,0 +1,4 @@
+--- stdout
+--- stderr
+odx: error: compiler-output: '<tests>/fake-odin/garbage/odin version' started, but odx couldn't read its output: Input/output error
+--- exit 2

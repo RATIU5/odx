@@ -1,0 +1,2 @@
+ODX_LOSE_STREAM=version
+PATH=${ODX_TESTS}/fake-odin/garbage:${PATH}

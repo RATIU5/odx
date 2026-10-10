@@ -3,48 +3,53 @@ package runner
 import "core:testing"
 
 @(test)
-rerun_only_for_an_unexpected_compiler_crash :: proc(t: ^testing.T) {
-	CRASH ::
+rerun_only_for_an_unexpected_compiler_signal :: proc(t: ^testing.T) {
+	TWICE ::
 		"--- stderr\n" +
 		"odx: error: compiler-output: checking 'lib' for darwin_arm64 " +
-		"ended with exit code 11; stderr was empty\n" +
+		"died by SIGSEGV twice; stderr was empty\n" +
+		"--- exit 2\n"
+	UNNAMED_TWICE ::
+		"--- stderr\n" +
+		"odx: error: compiler-output: checking 'lib' for darwin_arm64 " +
+		"died by signal 1 twice; stderr was empty\n" +
 		"--- exit 2\n"
 	CLEAN :: "--- stdout\nodx: 1 package checked\n--- stderr\n--- exit 0\n"
+	RETRIED ::
+		"--- stdout\nodx: 1 package checked\n--- stderr\n" +
+		"odx: the compiler died by a signal 1 times, and odx ran it again each time\n" +
+		"--- exit 0\n"
 	cases := []struct {
 		name:     string,
 		expected: string,
 		actual:   string,
 		rerun:    bool,
 	} {
-		{"crash where a pass was expected", CLEAN, CRASH, true},
-		{"crash where a crash was expected", CRASH, CRASH, false},
-		{
-			"crash where a crash in another package was expected",
-			"odx: error: compiler-output: checking 'app' for darwin_arm64 " +
-			"ended with exit code 11; stderr was empty\n",
-			CRASH,
-			false,
-		},
+		{"a second death where a pass was expected", CLEAN, TWICE, true},
+		{"a second death by a signal odx doesn't name", CLEAN, UNNAMED_TWICE, true},
+		{"a retry where a pass was expected", CLEAN, RETRIED, true},
+		{"a second death where one was expected", TWICE, TWICE, false},
+		{"a retry where one was expected", RETRIED, RETRIED, false},
+		{"a retry where a second death was expected", TWICE, RETRIED, false},
 		{"plain mismatch", CLEAN, "--- stdout\n--- stderr\n--- exit 1\n", false},
-		{"pass where a crash was expected", CRASH, CLEAN, false},
+		{"pass where a second death was expected", TWICE, CLEAN, false},
 		{
-			"another exit code",
+			"an exit code, which is no signal",
 			CLEAN,
 			"odx: error: compiler-output: checking 'lib' for darwin_arm64 " +
-			"ended with exit code 5; stderr was empty\n",
+			"ended with exit code 11; stderr was empty\n",
 			false,
 		},
 		{
-			"exit 11 with stderr",
+			"the signal text under another error code",
 			CLEAN,
-			"odx: error: compiler-output: checking 'lib' for darwin_arm64 " +
-			"ended with exit code 11; stderr:\n\tboom\n",
+			"odx: error: dir-unreadable: died by SIGSEGV twice; stderr was empty\n",
 			false,
 		},
 		{
-			"the crash text under another error code",
+			"the retry line as a finding's message",
 			CLEAN,
-			"odx: error: dir-unreadable: ended with exit code 11; stderr was empty\n",
+			"a.odin:1:1: odin: odx: the compiler died by a signal 1 times\n",
 			false,
 		},
 	}

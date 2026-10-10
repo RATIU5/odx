@@ -542,6 +542,88 @@ not_compiled_lines_follow_the_notes_and_need_the_pending_flag_when_pending :: pr
 }
 
 @(test)
+test_tagged_and_retry_lines_print_between_the_package_lines_and_the_finding_notes :: proc(
+	t: ^testing.T,
+) {
+	result := hidden_result()
+	defer destroy_hidden_result(&result)
+	append(&result.not_compiled, Uncompiled_Package{dir = "app", entry = "lib/x.odin"})
+	defer delete(result.not_compiled)
+	append(
+		&result.test_tagged,
+		Test_Tagged_Package{dir = "app", files = 2},
+		Test_Tagged_Package{dir = "old", files = 1, held_back = true},
+	)
+	defer delete(result.test_tagged)
+	result.compiler_retries = 3
+	plain := sample_result()
+	defer delete(plain.findings)
+	APP :: "odx: app: the compiler doesn't check 2 files tagged #+test\n"
+	OLD :: "odx: old: the compiler doesn't check 1 files tagged #+test\n"
+	RETRIES :: "odx: the compiler died by a signal 3 times, and odx ran it again each time\n"
+	BEFORE ::
+		"odx: skipped t: no file\n" +
+		"odx: app: not compiled, because lib/x.odin isn't a regular file\n"
+	NOTE :: "odx: format: a/b.odin formatter crashed\n"
+
+	for json in ([]bool{false, true}) {
+		w, pending, without: Written
+		defer destroy_written(&w)
+		defer destroy_written(&pending)
+		defer destroy_written(&without)
+		write_to_builders(t, &w, result, {json = json})
+		write_to_builders(t, &pending, result, {json = json, pending = true})
+		write_to_builders(t, &without, plain, {json = json})
+		testing.expect_value(t, strings.to_string(w.out), strings.to_string(without.out))
+		testing.expect_value(
+			t,
+			strings.to_string(w.err),
+			BEFORE + APP + HIDDEN_ROOT_LINE + RETRIES + NOTE,
+		)
+		got := strings.to_string(pending.err)
+		testing.expectf(
+			t,
+			strings.has_prefix(
+				got,
+				BEFORE + APP + OLD + HIDDEN_ROOT_LINE + HIDDEN_LIB_LINE + RETRIES + NOTE,
+			),
+			"json %v: stderr is %q",
+			json,
+			got,
+		)
+	}
+
+	result.compiler_retries = 0
+	none: Written
+	defer destroy_written(&none)
+	write_to_builders(t, &none, result, {})
+	testing.expect_value(t, strings.to_string(none.err), BEFORE + APP + HIDDEN_ROOT_LINE + NOTE)
+
+	// An error leaves the retry line as the only other stderr line, after the errors.
+	result.compiler_retries = 3
+	append(&result.errors, Error{.Compiler_Output, "first"}, Error{.Config_Invalid, "bad"})
+	defer delete(result.errors)
+	ERRORS :: "odx: error: compiler-output: first\nodx: error: config-invalid: bad\n"
+	for json in ([]bool{false, true}) {
+		failed, quiet: Written
+		defer destroy_written(&failed)
+		defer destroy_written(&quiet)
+		write_to_builders(t, &failed, result, {json = json, pending = true})
+		testing.expect_value(t, strings.to_string(failed.err), ERRORS + RETRIES)
+		testing.expect(
+			t,
+			!strings.contains(strings.to_string(failed.out), "died by a signal"),
+			"the retry line is on stdout",
+		)
+		no_retries := result
+		no_retries.compiler_retries = 0
+		write_to_builders(t, &quiet, no_retries, {json = json, pending = true})
+		testing.expect_value(t, strings.to_string(quiet.err), ERRORS)
+		testing.expect_value(t, strings.to_string(failed.out), strings.to_string(quiet.out))
+	}
+}
+
+@(test)
 hidden_lines_are_not_written_with_an_error :: proc(t: ^testing.T) {
 	result := hidden_result()
 	defer destroy_hidden_result(&result)

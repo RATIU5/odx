@@ -1,7 +1,7 @@
 --- stdout
 --- stderr
 odx: no odx.json, so rule set 1, the running compiler and every package strict
-odx: error: compiler-output: checking 'lib' for darwin_arm64 ended with exit code 5; stderr:
+odx: error: compiler-output: checking 'lib' for darwin_arm64 died by SIGTRAP twice; stderr:
 	{
 		"error_count": 1,
 		"errors": [
@@ -22,4 +22,5 @@ odx: error: compiler-output: checking 'lib' for darwin_arm64 ended with exit cod
 	}
 	src/check_expr.cpp(5933): Assertion Failure: `entity->type != nullptr` x (Constant)
 	This is a compiler error. Please report this.
+odx: the compiler died by a signal 1 times, and odx ran it again each time
 --- exit 2

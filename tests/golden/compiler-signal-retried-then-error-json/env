@@ -1,0 +1,1 @@
+PATH=${ODX_TESTS}/fake-odin/segfault-once-garbage-lib:${PATH}

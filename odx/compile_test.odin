@@ -6,6 +6,7 @@ import "core:os"
 import "core:slice"
 import "core:strings"
 import "core:testing"
+import "core:unicode/utf8"
 
 @(test)
 check_command_scopes_strict_flags_by_package_name :: proc(t: ^testing.T) {
@@ -217,4 +218,76 @@ defined :: proc "c" () {}
 	}
 	testing.expect(t, !clashes_with_foreign_procedure(other, &foreign_decls, allocator))
 	free_all(context.temp_allocator)
+}
+
+@(test)
+write_stderr_tail_quotes_a_bounded_end_of_what_the_child_wrote :: proc(t: ^testing.T) {
+	defer free_all(context.temp_allocator)
+	quote :: proc(stderr: string) -> string {
+		b := strings.builder_make(context.temp_allocator)
+		write_stderr_tail(&b, stderr)
+		return strings.to_string(b)
+	}
+	numbered :: proc(count: int) -> string {
+		b := strings.builder_make(context.temp_allocator)
+		for i in 1 ..= count {
+			fmt.sbprintf(&b, "line %d\n", i)
+		}
+		return strings.to_string(b)
+	}
+	testing.expect_value(t, quote(""), "; stderr was empty")
+	testing.expect_value(t, quote("\r\n\n"), "; stderr was empty")
+	testing.expect_value(t, quote("a\nb\n"), "; stderr:\n\ta\n\tb")
+	testing.expect_value(
+		t,
+		len(strings.split_lines(quote(numbered(40)), context.temp_allocator)),
+		41,
+	)
+	testing.expect(t, strings.has_prefix(quote(numbered(40)), "; stderr:\n\tline 1\n"))
+
+	many := quote(numbered(41))
+	testing.expect(
+		t,
+		strings.has_prefix(many, "; the last 40 of its 41 stderr lines:\n\tline 2\n\tline 3\n"),
+		many[:min(len(many), 80)],
+	)
+	testing.expect(t, strings.has_suffix(many, "\n\tline 41"), "the last line is missing")
+
+	// One line of 150 MB reached the error message whole.
+	one_line := strings.concatenate(
+		{strings.repeat("x", 1 << 20, context.temp_allocator), "end\n"},
+		context.temp_allocator,
+	)
+	HEADER :: "; the last 8 KB of its 1048579 stderr bytes:\n\t"
+	got := quote(one_line)
+	testing.expect(t, strings.has_prefix(got, HEADER), got[:min(len(got), 80)])
+	testing.expect_value(t, len(got), len(HEADER) + STDERR_BYTES_SHOWN)
+	testing.expect(t, strings.has_suffix(got, "xxend"), "the stream's end is missing")
+
+	long_lines := strings.repeat(
+		strings.concatenate(
+			{strings.repeat("y", 999, context.temp_allocator), "\n"},
+			context.temp_allocator,
+		),
+		100,
+		context.temp_allocator,
+	)
+	got = quote(long_lines)
+	testing.expect(
+		t,
+		strings.has_prefix(got, "; the last 8 KB of its 99999 stderr bytes:\n\t"),
+		got[:min(len(got), 80)],
+	)
+	testing.expectf(t, len(got) < STDERR_BYTES_SHOWN + 100, "the quote has %d bytes", len(got))
+
+	// The cut falls inside a two-byte rune, and the quote starts at the next one.
+	runes := strings.concatenate(
+		{strings.repeat("é", 5000, context.temp_allocator), "z"},
+		context.temp_allocator,
+	)
+	got = quote(runes)
+	RUNES_HEADER :: "; the last 8 KB of its 10001 stderr bytes:\n\t"
+	testing.expect(t, strings.has_prefix(got, RUNES_HEADER), got[:min(len(got), 80)])
+	testing.expect_value(t, len(got), len(RUNES_HEADER) + STDERR_BYTES_SHOWN - 1)
+	testing.expect(t, utf8.valid_string(got), "the quote starts inside a rune")
 }

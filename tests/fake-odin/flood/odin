@@ -1,0 +1,4 @@
+#!/bin/sh
+# On `check`, becomes one process that writes to stderr without end, until odx kills it.
+. "$(dirname "$0")/../pass-through.sh"
+exec yes 'a line that a compiler stuck in a loop writes without end' >&2

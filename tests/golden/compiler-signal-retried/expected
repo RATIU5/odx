@@ -1,0 +1,6 @@
+--- stdout
+odx: 0 findings, 0 ignored, 0 pending, 0 skipped (rules 1, odx <release>, odin <odin>)
+--- stderr
+odx: no odx.json, so rule set 1, the running compiler and every package strict
+odx: the compiler died by a signal 4 times, and odx ran it again each time
+--- exit 0

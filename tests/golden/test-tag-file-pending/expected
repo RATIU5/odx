@@ -1,0 +1,21 @@
+=== odx check
+--- stdout
+odx: 0 findings, 0 ignored, 1 pending, 0 skipped (rules 1, odx <release>, odin <odin>)
+--- stderr
+odx: app: the compiler doesn't check 1 files tagged #+test
+--- exit 0
+=== odx check --pending
+--- stdout
+old/old.odin:9:9: odin: old_greet is deprecated: use greet
+odx: 0 findings, 0 ignored, 1 pending, 0 skipped (rules 1, odx <release>, odin <odin>)
+--- stderr
+odx: app: the compiler doesn't check 1 files tagged #+test
+odx: old: the compiler doesn't check 1 files tagged #+test
+odx: pending findings:
+--- exit 0
+=== odx check --json
+--- stdout
+{"version":1,"findings":[],"errors":[],"summary":{"findings":0,"ignored":0,"pending":1,"skipped":0,"rules":1,"release":"<release>","odin":"<odin>"}}
+--- stderr
+odx: app: the compiler doesn't check 1 files tagged #+test
+--- exit 0

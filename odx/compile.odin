@@ -9,10 +9,14 @@ import "core:odin/tokenizer"
 import "core:os"
 import "core:strings"
 import "core:time"
+import "core:unicode/utf8"
 
 CHECK_TIMEOUT :: 120 * time.Second
 
+// A message that quotes a child's stderr shows at most this much of its end, where a crash leaves
+// its assertion. The byte bound is for a stderr with few line ends, such as one line of 150 MB.
 STDERR_LINES_SHOWN :: 40
+STDERR_BYTES_SHOWN :: 8 << 10
 
 @(private = "file")
 Check_Job :: struct {
@@ -25,6 +29,7 @@ Check_Job :: struct {
 Check_Run :: struct {
 	outcome:   Check_Outcome,
 	timed_out: bool,
+	retried:   bool,
 }
 
 // Every check child of one `odx check`. The jobs, the code map and the pool's lists live in `work`.
@@ -37,10 +42,11 @@ Check_Jobs :: struct {
 
 // Starts `odin check` per package and target per Appendix E.4, twice for a pending package per
 // Appendix E.7, and returns without waiting. `finish_compile` must follow. `odin` is the compiler's
-// path, `odin_root` what `odin root` printed and `root` the repo root. The checks' stderr goes to
-// files in `temp_dir`, and they run within `budget`. Allocates the jobs with `allocator`.
+// path, `odin_root` what `odin root` printed and `root` the repo root. The checks run within
+// `budget`, and a check that the compiler's own crash ended runs once more. Allocates the jobs with
+// `allocator`.
 start_compile :: proc(
-	odin, odin_root, root, temp_dir: string,
+	odin, odin_root, root: string,
 	config: Config,
 	packages: []Package,
 	budget: ^Child_Budget,
@@ -71,12 +77,12 @@ start_compile :: proc(
 	checks.code = code
 
 	pool_config := Pool_Config(Check_Run) {
-		commands = make([][]string, len(jobs), scratch),
-		captured = .Stderr,
-		read     = read_check_end,
-		temp_dir = temp_dir,
-		timeout  = debug_timeout("ODX_CHECK_TIMEOUT_MS", CHECK_TIMEOUT),
-		budget   = budget,
+		commands       = make([][]string, len(jobs), scratch),
+		captured       = .Stderr,
+		retry_signaled = true,
+		read           = read_check_end,
+		timeout        = debug_timeout("ODX_CHECK_TIMEOUT_MS", CHECK_TIMEOUT),
+		budget         = budget,
 	}
 	for job, i in jobs {
 		dir := code.repo_root
@@ -97,9 +103,9 @@ start_compile :: proc(
 	return checks
 }
 
-// Waits for the checks, then adds the `odin` findings to `result` and marks muted packages. An
-// untrusted check adds `compiler-output` instead. `packages` is the slice `start_compile` took.
-// Allocates what it adds with `allocator`.
+// Waits for the checks, then adds the `odin` findings to `result`, counts the checks that ran
+// twice and marks muted packages. An untrusted check adds `compiler-output` instead. `packages` is
+// the slice `start_compile` took. Allocates what it adds with `allocator`.
 finish_compile :: proc(
 	checks: ^Check_Jobs,
 	packages: []Package,
@@ -114,6 +120,10 @@ finish_compile :: proc(
 	jobs, code, pool := checks.jobs, checks.code, &checks.pool
 	scratch := virtual.arena_allocator(&checks.work)
 
+	// An untrusted check ends the run, and the runs before it still count.
+	for run in pool.runs {
+		result.compiler_retries += int(run.retried)
+	}
 	for run, i in pool.runs {
 		if u, untrusted := run.outcome.(Untrusted); untrusted {
 			job := jobs[i]
@@ -132,6 +142,9 @@ finish_compile :: proc(
 
 	foreign_decls := make(map[string][]Position, 0, scratch)
 	redeclarations := make([dynamic]Redeclaration, scratch)
+	duplicates := make([dynamic]Duplicate_Package, scratch)
+	// The package whose check gave each of `duplicates`.
+	duplicate_checks := make([dynamic]int, scratch)
 	for run, i in pool.runs {
 		diagnostics, has := run.outcome.(Diagnostics)
 		if !has {
@@ -145,6 +158,11 @@ finish_compile :: proc(
 			}
 			placed := normalize(entry, code, checked^, scratch)
 			if reports_name_conflict(entry, placed, packages) {
+				continue
+			}
+			if d, ok := read_duplicate_package(entry, placed, code, scratch); ok {
+				append(&duplicates, d)
+				append(&duplicate_checks, jobs[i].pkg)
 				continue
 			}
 			if mutes(entry.kind, placed, checked^) {
@@ -169,6 +187,17 @@ finish_compile :: proc(
 	for placed in settle_redeclarations(redeclarations[:], scratch) {
 		owner, _ := owner_of(.Error, placed.path, code)
 		add_rule_finding(result, owner, odin_finding(placed, allocator), false)
+	}
+	settled, settled_of := settle_duplicate_packages(duplicates[:], code, scratch)
+	for placed in settled {
+		owner, _ := owner_of(.Error, placed.path, code)
+		add_rule_finding(result, owner, odin_finding(placed, allocator), false)
+	}
+	// A check mutes its package by the site odx reports, not the one the compiler happened to.
+	for pkg, i in duplicate_checks {
+		if mutes(.Error, settled[settled_of[i]], packages[pkg]) {
+			packages[pkg].muted = true
+		}
 	}
 }
 
@@ -255,18 +284,27 @@ read_check_end :: proc(
 	run: Check_Run,
 	stop: bool,
 ) {
-	run.timed_out = end.timed_out
+	run.timed_out, run.retried = end.timed_out, end.retried
 	if end.failure != "" {
-		run.outcome = Untrusted{end.failure, ""}
+		run.outcome = Untrusted {
+			reason = end.failure,
+			unread = true,
+		}
 	} else {
-		run.outcome = read_check(end.exit_code, end.timed_out, end.captured, allocator)
+		run.outcome = read_check(
+			end.status,
+			end.timed_out,
+			end.retried,
+			end.captured[.Stderr],
+			allocator,
+		)
 	}
 	_, stop = run.outcome.(Untrusted)
 	return
 }
 
-// Names the package, the target and the exit code or the timeout, then the last lines of stderr,
-// where a crash leaves its assertion.
+// Names the package, the target and the exit code, the signal or the timeout, then the last lines
+// of stderr, where a crash leaves its assertion.
 @(private = "file")
 compiler_output_message :: proc(
 	dir: string,
@@ -283,22 +321,55 @@ compiler_output_message :: proc(
 	} else {
 		strings.write_string(&b, u.reason)
 	}
-	text := strings.trim_right(u.stderr, "\r\n")
-	if text == "" {
-		strings.write_string(&b, "; stderr was empty")
-		return strings.to_string(b)
-	}
-	lines := strings.split_lines(text, context.temp_allocator)
-	if len(lines) > STDERR_LINES_SHOWN {
-		fmt.sbprintf(&b, "; the last %d of its %d stderr lines:", STDERR_LINES_SHOWN, len(lines))
-		lines = lines[len(lines) - STDERR_LINES_SHOWN:]
-	} else {
-		strings.write_string(&b, "; stderr:")
-	}
-	for line in lines {
-		fmt.sbprintf(&b, "\n\t%s", line)
+	if !u.unread {
+		write_stderr_tail(&b, u.stderr)
 	}
 	return strings.to_string(b)
+}
+
+// Writes the end of what a child wrote to stderr, within `STDERR_LINES_SHOWN` and
+// `STDERR_BYTES_SHOWN`, after a header that says how much came before it. This is the one place a
+// message quotes a child's stream.
+write_stderr_tail :: proc(b: ^strings.Builder, stderr: string) {
+	text := strings.trim_right(stderr, "\r\n")
+	if text == "" {
+		strings.write_string(b, "; stderr was empty")
+		return
+	}
+	start, line_count := 0, 1
+	for i := len(text) - 1; i >= 0; i -= 1 {
+		if text[i] == '\n' {
+			if line_count == STDERR_LINES_SHOWN && start == 0 {
+				start = i + 1
+			}
+			line_count += 1
+		}
+	}
+	tail := text[start:]
+	switch {
+	case len(tail) > STDERR_BYTES_SHOWN:
+		cut := len(tail) - STDERR_BYTES_SHOWN
+		for _ in 0 ..< utf8.UTF_MAX - 1 {
+			if utf8.rune_start(tail[cut]) {
+				break
+			}
+			cut += 1
+		}
+		tail = tail[cut:]
+		fmt.sbprintf(
+			b,
+			"; the last %d KB of its %d stderr bytes:",
+			STDERR_BYTES_SHOWN >> 10,
+			len(text),
+		)
+	case start > 0:
+		fmt.sbprintf(b, "; the last %d of its %d stderr lines:", STDERR_LINES_SHOWN, line_count)
+	case:
+		strings.write_string(b, "; stderr:")
+	}
+	for line in strings.split_lines(tail, context.temp_allocator) {
+		fmt.sbprintf(b, "\n\t%s", line)
+	}
 }
 
 Position :: struct {
