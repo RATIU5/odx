@@ -98,6 +98,7 @@ find_repo :: proc(cwd: string, allocator: runtime.Allocator) -> Repo {
 }
 
 // Allocates the config and the errors with `allocator`, which suits an arena.
+@(require_results)
 load_config :: proc(
 	root: string,
 	allocator: runtime.Allocator,
@@ -123,6 +124,7 @@ load_config :: proc(
 // Reports every schema problem in source order, or only the first syntax error. Collection paths
 // resolve against `root`. Allocates the config and the errors with `allocator`, which suits an
 // arena.
+@(require_results)
 parse_config :: proc(
 	text, root: string,
 	allocator: runtime.Allocator,
@@ -232,7 +234,7 @@ decode_key :: proc(
 	return true
 }
 
-@(private = "file")
+@(private = "file", require_results)
 decode_strings :: proc(value: Json_Value) -> (strs: [dynamic]string, ok: bool) {
 	array := value.(Json_Array) or_return
 	for element in array {
@@ -293,7 +295,7 @@ decode_define :: proc(config: ^Config, errors: ^[dynamic]Error, entry: string) {
 }
 
 // Splits at the first `=`, as the compiler does, and fails when either side is empty.
-@(private = "file")
+@(private = "file", require_results)
 split_entry :: proc(entry: string) -> (left, right: string, ok: bool) {
 	i := strings.index_byte(entry, '=')
 	if i <= 0 || i == len(entry) - 1 {
@@ -387,7 +389,7 @@ Json_Reader :: struct {
 // Reads one strict JSON document with `core:encoding/json`'s tokenizer. Its parser accepts trailing
 // commas, trailing text and tokens the tokenizer flagged, even under `.JSON`. Allocates with
 // `context.allocator`.
-@(private = "file")
+@(private = "file", require_results)
 read_json :: proc(data: string) -> (value: Json_Value, err: Maybe(Syntax_Error)) {
 	// The tokenizer skips these as whitespace, and JSON doesn't allow them.
 	if i := strings.index_any(data, "\v\f"); i >= 0 {
@@ -405,7 +407,7 @@ read_json :: proc(data: string) -> (value: Json_Value, err: Maybe(Syntax_Error))
 	return
 }
 
-@(private = "file")
+@(private = "file", require_results)
 advance :: proc(r: ^Json_Reader) -> Maybe(Syntax_Error) {
 	token, err := json.get_token(&r.tokenizer)
 	r.token = token
@@ -441,7 +443,7 @@ expected :: proc(r: ^Json_Reader, what: string) -> Syntax_Error {
 	return {r.token.offset, what}
 }
 
-@(private = "file")
+@(private = "file", require_results)
 read_value :: proc(r: ^Json_Reader) -> (value: Json_Value, err: Maybe(Syntax_Error)) {
 	token := r.token
 	#partial switch token.kind {
@@ -474,7 +476,7 @@ read_value :: proc(r: ^Json_Reader) -> (value: Json_Value, err: Maybe(Syntax_Err
 	return
 }
 
-@(private = "file")
+@(private = "file", require_results)
 read_object :: proc(r: ^Json_Reader) -> (value: Json_Value, err: Maybe(Syntax_Error)) {
 	object := make(Json_Object)
 	advance(r) or_return
@@ -518,7 +520,7 @@ read_object :: proc(r: ^Json_Reader) -> (value: Json_Value, err: Maybe(Syntax_Er
 	}
 }
 
-@(private = "file")
+@(private = "file", require_results)
 read_array :: proc(r: ^Json_Reader) -> (value: Json_Value, err: Maybe(Syntax_Error)) {
 	array := make(Json_Array)
 	advance(r) or_return

@@ -1,7 +1,6 @@
 package odx
 
 import "core:fmt"
-import "core:mem/virtual"
 import "core:os"
 import "core:testing"
 
@@ -9,10 +8,7 @@ PIN :: "dev-2026-09-nightly:a2fb372"
 
 @(test)
 parse_config_rejects_json_that_is_not_strict :: proc(t: ^testing.T) {
-	arena: virtual.Arena
-	testing.expect(t, virtual.arena_init_growing(&arena) == nil)
-	defer virtual.arena_destroy(&arena)
-	allocator := virtual.arena_allocator(&arena)
+	allocator := context.temp_allocator
 
 	cases := []struct {
 		text, message: string,
@@ -70,10 +66,7 @@ parse_config_rejects_json_that_is_not_strict :: proc(t: ^testing.T) {
 
 @(test)
 parse_config_keeps_pending_keys_in_order_with_positions :: proc(t: ^testing.T) {
-	arena: virtual.Arena
-	testing.expect(t, virtual.arena_init_growing(&arena) == nil)
-	defer virtual.arena_destroy(&arena)
-	allocator := virtual.arena_allocator(&arena)
+	allocator := context.temp_allocator
 
 	text := fmt.tprintf(
 		"{{\n  \"version\": 1,\n  \"odin\": \"%s\",\n" +
@@ -99,10 +92,7 @@ parse_config_keeps_pending_keys_in_order_with_positions :: proc(t: ^testing.T) {
 
 @(test)
 parse_config_reports_every_schema_problem_in_source_order :: proc(t: ^testing.T) {
-	arena: virtual.Arena
-	testing.expect(t, virtual.arena_init_growing(&arena) == nil)
-	defer virtual.arena_destroy(&arena)
-	allocator := virtual.arena_allocator(&arena)
+	allocator := context.temp_allocator
 
 	text := `{"odin": 7, "bogus": [], "version": 0, "pending": {"lib": "  "}, "vendored": ["lib/"]}`
 	_, errors := parse_config(text, ".", allocator)
@@ -123,10 +113,7 @@ parse_config_reports_every_schema_problem_in_source_order :: proc(t: ^testing.T)
 
 @(test)
 parse_config_rejects_a_collection_symlinked_outside_the_repo :: proc(t: ^testing.T) {
-	arena: virtual.Arena
-	testing.expect(t, virtual.arena_init_growing(&arena) == nil)
-	defer virtual.arena_destroy(&arena)
-	allocator := virtual.arena_allocator(&arena)
+	allocator := context.temp_allocator
 
 	tmp, tmp_err := os.make_directory_temp("", "odx-config-*", allocator)
 	testing.expect_value(t, tmp_err, nil)
@@ -175,10 +162,7 @@ parse_config_rejects_a_collection_symlinked_outside_the_repo :: proc(t: ^testing
 
 @(test)
 find_repo_prefers_the_nearest_odx_json_then_git_then_cwd :: proc(t: ^testing.T) {
-	arena: virtual.Arena
-	testing.expect(t, virtual.arena_init_growing(&arena) == nil)
-	defer virtual.arena_destroy(&arena)
-	allocator := virtual.arena_allocator(&arena)
+	allocator := context.temp_allocator
 
 	tmp_raw, tmp_err := os.make_directory_temp("", "odx-root-*", allocator)
 	testing.expect_value(t, tmp_err, nil)

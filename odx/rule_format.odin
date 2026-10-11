@@ -166,6 +166,7 @@ read_print_result :: proc(text: string) -> Print_Result {
 // Prints `src` with the vendored printer and Appendix E.6's config, the way OLS's `format` does,
 // except that any parser or tokenizer error refuses the print and none reaches stderr. Allocates
 // the AST, the printer's state and `out` with `context.allocator`, which suits an arena.
+@(require_results)
 print_source :: proc(src: string) -> (out: string, ok: bool) {
 	pkg := ast.Package {
 		kind = .Normal,

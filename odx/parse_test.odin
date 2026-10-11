@@ -79,10 +79,7 @@ run_on_work_stack_returns_what_the_work_returns :: proc(t: ^testing.T) {
 
 @(test)
 parse_source_reports_a_file_without_a_package_clause :: proc(t: ^testing.T) {
-	arena: virtual.Arena
-	testing.expect(t, virtual.arena_init_growing(&arena) == nil)
-	defer virtual.arena_destroy(&arena)
-	context.allocator = virtual.arena_allocator(&arena)
+	context.allocator = context.temp_allocator
 
 	cases := []struct {
 		name, src: string,

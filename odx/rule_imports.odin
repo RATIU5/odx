@@ -60,7 +60,7 @@ unaliased_import_name :: proc(path: string) -> string {
 }
 
 // An escaped path is unquoted with `context.allocator`.
-@(private = "file")
+@(private = "file", require_results)
 import_path :: proc(decl: ^ast.Import_Decl) -> (path: string, ok: bool) {
 	path, _, ok = strconv.unquote_string(decl.relpath.text)
 	return

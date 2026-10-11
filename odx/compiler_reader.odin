@@ -114,7 +114,7 @@ read_check :: proc(
 
 // `json.parse` accepts trailing data, so the document counts only when the parser reaches the end
 // of input (probe R-H).
-@(private = "file")
+@(private = "file", require_results)
 read_document :: proc(stderr: string) -> (entries: []Compiler_Entry, error_count: int, ok: bool) {
 	p := json.make_parser(stderr, .JSON, true)
 	value, err := json.parse_value(&p)
@@ -133,7 +133,7 @@ read_document :: proc(stderr: string) -> (entries: []Compiler_Entry, error_count
 
 // Syntax errors and missing imports arrive typed as warnings (probe R-A), so the first message
 // decides.
-@(private = "file")
+@(private = "file", require_results)
 read_entry :: proc(item: json.Value) -> (entry: Compiler_Entry, ok: bool) {
 	object := item.(json.Object) or_return
 	kind := object["type"].(json.String) or_return
@@ -386,7 +386,7 @@ Located :: struct {
 
 // The last `<path>(<line>:<col>) at caller location` line that lies in a strict or pending package.
 // It is read from the lines, before they are joined, so a path with spaces still parses.
-@(private = "file")
+@(private = "file", require_results)
 last_owned_caller :: proc(msgs: []string, code: Code_Map) -> (caller: Located, found: bool) {
 	#reverse for m in msgs {
 		line := strings.trim_space(m)
@@ -403,7 +403,7 @@ last_owned_caller :: proc(msgs: []string, code: Code_Map) -> (caller: Located, f
 }
 
 // Reads `<path>(<line>:<col>)` and rewrites the path like a location's.
-@(private = "file")
+@(private = "file", require_results)
 read_located :: proc(text: string, code: Code_Map) -> (located: Located, ok: bool) {
 	located = split_located(text) or_return
 	located.path = rewrite_roots(located.path, code)
@@ -411,6 +411,7 @@ read_located :: proc(text: string, code: Code_Map) -> (located: Located, ok: boo
 }
 
 // Splits `<path>(<line>:<col>)`, the compiler's way of naming a position inside a message.
+@(require_results)
 split_located :: proc(text: string) -> (located: Located, ok: bool) {
 	if !strings.has_suffix(text, ")") {
 		return
@@ -462,6 +463,7 @@ Redeclaration :: struct {
 }
 
 // Returns false for any other entry. Allocates with `allocator`.
+@(require_results)
 read_redeclaration :: proc(
 	entry: Compiler_Entry,
 	placed: Placed,
@@ -549,6 +551,7 @@ Duplicate_Package :: struct {
 }
 
 // Returns false for any other entry. Allocates with `allocator`.
+@(require_results)
 read_duplicate_package :: proc(
 	entry: Compiler_Entry,
 	placed: Placed,

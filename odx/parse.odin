@@ -65,6 +65,7 @@ NO_PACKAGE_MESSAGE :: "Expected a package declaration at the start of the file"
 // clause here. The parser recurses once per level of nesting and has no limit of its own, so this
 // needs the stack of `run_on_work_stack`. The AST is allocated with `context.allocator`, which
 // suits a scratch arena, and the error's message with `allocator`.
+@(require_results)
 parse_source :: proc(
 	src: string,
 	allocator: runtime.Allocator,

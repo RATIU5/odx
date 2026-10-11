@@ -209,6 +209,7 @@ load :: proc(repo: Repo, result: ^Result) -> (config: Config, odin: string) {
 
 // Returns the compiler's path and the text after `odin version `. Both are allocated with
 // `context.allocator` and stay alive for the process, so callers free neither.
+@(require_results)
 read_odin_version :: proc() -> (odin: string, version: string, error: Maybe(Error)) {
 	found: bool
 	odin, found = find_on_path(os.get_env("PATH", context.temp_allocator), "odin")
@@ -239,6 +240,7 @@ read_odin_version :: proc() -> (odin: string, version: string, error: Maybe(Erro
 
 // Searches only the non-empty entries of `dirs`, which is `PATH`'s value, so a file named `name` in
 // the working directory never runs. Allocates the returned path with `context.allocator`.
+@(require_results)
 find_on_path :: proc(dirs, name: string) -> (path: string, found: bool) {
 	for dir in strings.split(dirs, ":", context.temp_allocator) {
 		if dir == "" {

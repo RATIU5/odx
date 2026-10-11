@@ -6,7 +6,6 @@ import "core:testing"
 
 @(test)
 render_config_round_trips_through_the_config_parser :: proc(t: ^testing.T) {
-	defer free_all(context.temp_allocator)
 	pending := []string{"a", `we"ird\dir`}
 	vendored := []string{"third_party", "x/vendor"}
 	report := Init_Report {
@@ -33,7 +32,6 @@ render_config_round_trips_through_the_config_parser :: proc(t: ^testing.T) {
 
 @(test)
 render_config_leaves_out_empty_lists :: proc(t: ^testing.T) {
-	defer free_all(context.temp_allocator)
 	text := render_config(Init_Report{odin = "v"}, context.temp_allocator)
 	expected := fmt.tprintf("{{\n\t\"version\": %d,\n\t\"odin\": \"v\"\n}}\n", RULE_SET)
 	testing.expect_value(t, text, expected)
@@ -59,7 +57,6 @@ destroy_errors :: proc(result: ^Result) {
 
 @(test)
 write_init_files_writes_odx_json_and_the_odinfmt_json_the_binary_holds :: proc(t: ^testing.T) {
-	defer free_all(context.temp_allocator)
 	dir, err := os.make_directory_temp("", "odx-init-*", context.temp_allocator)
 	testing.expect_value(t, err, nil)
 	defer os.remove_all(dir)
@@ -77,7 +74,6 @@ write_init_files_writes_odx_json_and_the_odinfmt_json_the_binary_holds :: proc(t
 
 @(test)
 write_init_files_leaves_nothing_when_the_second_file_can_not_be_created :: proc(t: ^testing.T) {
-	defer free_all(context.temp_allocator)
 	dir, err := os.make_directory_temp("", "odx-init-*", context.temp_allocator)
 	testing.expect_value(t, err, nil)
 	defer os.remove_all(dir)
@@ -105,7 +101,6 @@ write_init_files_leaves_nothing_when_the_second_file_can_not_be_created :: proc(
 
 @(test)
 needs_odinfmt_is_false_for_the_same_bytes_and_an_error_for_others :: proc(t: ^testing.T) {
-	defer free_all(context.temp_allocator)
 	dir, err := os.make_directory_temp("", "odx-init-*", context.temp_allocator)
 	testing.expect_value(t, err, nil)
 	defer os.remove_all(dir)

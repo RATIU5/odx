@@ -265,6 +265,7 @@ END_POLL :: 50 * time.Microsecond
 // odx reads a child's stream, and `end.error` is the one answer to whether the stream can be
 // believed: a pipe that odx can't make or read is an error, never an empty stream. So is a stream
 // of more than `stream_cap` bytes, whose child odx kills. Allocates `end` with `allocator`.
+@(require_results)
 run_captured :: proc(
 	desc: os.Process_Desc,
 	captured: Streams,
@@ -378,7 +379,7 @@ run_captured :: proc(
 
 // Why odx can't believe what it read of a child's streams, as the rest of a sentence about the
 // child, or "" when it can. The text never quotes the stream. Allocates with `allocator`.
-@(private = "file")
+@(private = "file", require_results)
 capture_error :: proc(
 	read_errno, wait_errno: posix.Errno,
 	over: Maybe(Stream),
@@ -433,7 +434,7 @@ pipes_open :: proc(pipes: Pipes) -> bool {
 // Waits up to `wait` for any pipe to have text or reach its end, then reads once from each that
 // does, until one holds more than `stream_cap` bytes. `read` counts the bytes. A pipe that can't be
 // read is an `errno`, and its stream is lost.
-@(private = "file")
+@(private = "file", require_results)
 drain_pipes :: proc(
 	pipes: ^Pipes,
 	wait: time.Duration,
@@ -485,7 +486,7 @@ drain_pipes :: proc(
 
 // How the child ended, without reaping it. Without `block`, `ended` is false for a child that still
 // runs.
-@(private = "file")
+@(private = "file", require_results)
 child_ending :: proc(
 	pid: posix.pid_t,
 	block: bool,
@@ -517,7 +518,7 @@ child_ending :: proc(
 }
 
 // `ended` is false when `kill_pool` ended the child, which then has no `end` to read.
-@(private = "file")
+@(private = "file", require_results)
 run_child :: proc(
 	pool: ^Pool($Run),
 	job: int,

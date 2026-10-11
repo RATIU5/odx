@@ -138,7 +138,7 @@ is_odx_directive :: proc(comment: string) -> bool {
 
 // Returns either a valid ignore or a problem, never both. The reason or the problem is allocated
 // with `allocator` and owned by the caller. The caller fills in `line`, `col` and `covers`.
-@(private = "file")
+@(private = "file", require_results)
 parse_ignore :: proc(
 	comment: string,
 	allocator: runtime.Allocator,
@@ -189,7 +189,7 @@ parse_ignore :: proc(
 	return
 }
 
-@(private = "file")
+@(private = "file", require_results)
 parse_rules :: proc(
 	list: string,
 	allocator: runtime.Allocator,
@@ -219,7 +219,7 @@ parse_rules :: proc(
 	return
 }
 
-@(private = "file")
+@(private = "file", require_results)
 rule_by_id :: proc(id: string) -> (rule: Rule, known: bool) {
 	for info, r in RULES {
 		if info.id == id {
@@ -310,6 +310,7 @@ record_node :: proc(v: ^ast.Visitor, node: ^ast.Node) -> ^ast.Visitor {
 	return v
 }
 
+@(require_results)
 bind :: proc(
 	b: Binder,
 	offset: int,
@@ -397,7 +398,7 @@ own_body :: proc(target: ^ast.Node) -> ^ast.Node {
 	return nil
 }
 
-@(private = "file")
+@(private = "file", require_results)
 first_child_after :: proc(b: Binder, parent, offset: int) -> (child: int, found: bool) {
 	first, last := 0, len(b.preorder) - 1
 	if parent != FILE_SCOPE {
@@ -414,7 +415,7 @@ first_child_after :: proc(b: Binder, parent, offset: int) -> (child: int, found:
 	return
 }
 
-@(private = "file")
+@(private = "file", require_results)
 body_hole :: proc(b: Binder, node: ^ast.Node) -> (hole: Line_Run, is_body: bool) {
 	open, close: int
 	#partial switch n in node.derived {

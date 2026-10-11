@@ -1,7 +1,6 @@
 package odx
 
 import "core:fmt"
-import "core:mem/virtual"
 import "core:os"
 import "core:slice"
 import "core:strings"
@@ -60,16 +59,13 @@ Read_Case :: struct {
 
 @(private = "file")
 expect_read_cases :: proc(t: ^testing.T, cases: []Read_Case) {
-	arena: virtual.Arena
-	testing.expect(t, virtual.arena_init_growing(&arena) == nil)
-	defer virtual.arena_destroy(&arena)
 	for c in cases {
 		outcome := read_check(
 			Exited{c.exit_code},
 			c.timed_out,
 			false,
 			c.stderr,
-			virtual.arena_allocator(&arena),
+			context.temp_allocator,
 		)
 		got := outcome_name(outcome)
 		testing.expectf(t, got == c.want, "%s: got %s, want %s", c.name, got, c.want)
@@ -94,7 +90,6 @@ expect_read_cases :: proc(t: ^testing.T, cases: []Read_Case) {
 
 @(test)
 read_check_trusts_a_run_whose_exit_code_fits_its_document :: proc(t: ^testing.T) {
-	defer free_all(context.temp_allocator)
 	cases := []Read_Case {
 		{"exit 0, empty stderr", 0, false, "", "clean", 0},
 		{"exit 0, only warnings", 0, false, document(1, WARNING_ENTRY), "entries", 1},
@@ -120,7 +115,6 @@ read_check_trusts_a_run_whose_exit_code_fits_its_document :: proc(t: ^testing.T)
 
 @(test)
 read_check_distrusts_every_other_run :: proc(t: ^testing.T) {
-	defer free_all(context.temp_allocator)
 	one_error := document(1, ERROR_ENTRY)
 	cases := []Read_Case {
 		{
@@ -198,10 +192,6 @@ read_check_distrusts_every_other_run :: proc(t: ^testing.T) {
 
 @(test)
 read_check_calls_a_signal_a_signal_and_an_exit_code_an_exit_code :: proc(t: ^testing.T) {
-	arena: virtual.Arena
-	testing.expect(t, virtual.arena_init_growing(&arena) == nil)
-	defer virtual.arena_destroy(&arena)
-	defer free_all(context.temp_allocator)
 	one_error := document(1, ERROR_ENTRY)
 	cases := []struct {
 		name:      string,
@@ -227,13 +217,7 @@ read_check_calls_a_signal_a_signal_and_an_exit_code_an_exit_code :: proc(t: ^tes
 		{"the limit on the second run", Signaled{9}, true, true, "", ""},
 	}
 	for c in cases {
-		outcome := read_check(
-			c.status,
-			c.timed_out,
-			c.retried,
-			c.stderr,
-			virtual.arena_allocator(&arena),
-		)
+		outcome := read_check(c.status, c.timed_out, c.retried, c.stderr, context.temp_allocator)
 		u, untrusted := outcome.(Untrusted)
 		testing.expectf(t, untrusted, "%s: got %s", c.name, outcome_name(outcome))
 		testing.expectf(
@@ -250,11 +234,7 @@ read_check_calls_a_signal_a_signal_and_an_exit_code_an_exit_code :: proc(t: ^tes
 
 @(test)
 read_check_reads_a_second_run_like_a_first :: proc(t: ^testing.T) {
-	arena: virtual.Arena
-	testing.expect(t, virtual.arena_init_growing(&arena) == nil)
-	defer virtual.arena_destroy(&arena)
-	defer free_all(context.temp_allocator)
-	allocator := virtual.arena_allocator(&arena)
+	allocator := context.temp_allocator
 
 	_, clean := read_check(Exited{0}, false, true, "", allocator).(Clean)
 	testing.expect(t, clean, "a clean second run isn't clean")
@@ -264,13 +244,8 @@ read_check_reads_a_second_run_like_a_first :: proc(t: ^testing.T) {
 
 @(test)
 read_check_types_each_entry_and_keeps_its_position :: proc(t: ^testing.T) {
-	arena: virtual.Arena
-	testing.expect(t, virtual.arena_init_growing(&arena) == nil)
-	defer virtual.arena_destroy(&arena)
-	defer free_all(context.temp_allocator)
-
 	stderr := document(3, ERROR_ENTRY, WARNING_ENTRY, SYNTAX_ENTRY)
-	outcome := read_check(Exited{1}, false, false, stderr, virtual.arena_allocator(&arena))
+	outcome := read_check(Exited{1}, false, false, stderr, context.temp_allocator)
 	d, ok := outcome.(Entries)
 	testing.expectf(t, ok, "got %s", outcome_name(outcome))
 	if !ok || len(d.entries) != 3 {
@@ -319,11 +294,6 @@ test_package :: proc(dir: string, files: ..Source_File) -> Package {
 normalize_joins_msgs_and_relocates_an_odin_root_location_to_the_repo_caller :: proc(
 	t: ^testing.T,
 ) {
-	arena: virtual.Arena
-	testing.expect(t, virtual.arena_init_growing(&arena) == nil)
-	defer virtual.arena_destroy(&arena)
-	defer free_all(context.temp_allocator)
-
 	packages := make(map[string]Package_Status, context.temp_allocator)
 	packages["core1"] = .Strict
 	entry := Compiler_Entry {
@@ -343,7 +313,7 @@ normalize_joins_msgs_and_relocates_an_odin_root_location_to_the_repo_caller :: p
 	}
 	checked := test_package("core1", Source_File{path = "core1/a.odin"})
 
-	got := normalize(entry, test_code_map(packages), checked, virtual.arena_allocator(&arena))
+	got := normalize(entry, test_code_map(packages), checked, context.temp_allocator)
 
 	MESSAGE ::
 		"'where' clause evaluated to false: intrinsics.type_is_ordered(T) " +
@@ -362,16 +332,11 @@ normalize_joins_msgs_and_relocates_an_odin_root_location_to_the_repo_caller :: p
 
 @(test)
 normalize_keeps_a_location_with_no_caller_in_a_strict_or_pending_package :: proc(t: ^testing.T) {
-	arena: virtual.Arena
-	testing.expect(t, virtual.arena_init_growing(&arena) == nil)
-	defer virtual.arena_destroy(&arena)
-	defer free_all(context.temp_allocator)
-
 	packages := make(map[string]Package_Status, context.temp_allocator)
 	packages["app"] = .Strict
 	checked := test_package("app", Source_File{path = "app/app.odin"})
 	code := test_code_map(packages)
-	allocator := virtual.arena_allocator(&arena)
+	allocator := context.temp_allocator
 
 	in_vendored := Compiler_Entry {
 		kind = .Error,
@@ -407,11 +372,6 @@ normalize_keeps_a_location_with_no_caller_in_a_strict_or_pending_package :: proc
 
 @(test)
 normalize_relocates_to_the_last_caller_in_a_strict_or_pending_package :: proc(t: ^testing.T) {
-	arena: virtual.Arena
-	testing.expect(t, virtual.arena_init_growing(&arena) == nil)
-	defer virtual.arena_destroy(&arena)
-	defer free_all(context.temp_allocator)
-
 	packages := make(map[string]Package_Status, context.temp_allocator)
 	packages["app"] = .Strict
 	packages["wrap"] = .Pending
@@ -429,7 +389,7 @@ normalize_relocates_to_the_last_caller_in_a_strict_or_pending_package :: proc(t:
 		},
 	}
 
-	got := normalize(entry, test_code_map(packages), checked, virtual.arena_allocator(&arena))
+	got := normalize(entry, test_code_map(packages), checked, context.temp_allocator)
 
 	testing.expect_value(t, got.path, "wrap/wrap.odin")
 	testing.expect_value(t, got.line, 6)
@@ -439,11 +399,6 @@ normalize_relocates_to_the_last_caller_in_a_strict_or_pending_package :: proc(t:
 
 @(test)
 normalize_deletes_internal_ids :: proc(t: ^testing.T) {
-	arena: virtual.Arena
-	testing.expect(t, virtual.arena_init_growing(&arena) == nil)
-	defer virtual.arena_destroy(&arena)
-	defer free_all(context.temp_allocator)
-
 	packages := make(map[string]Package_Status, context.temp_allocator)
 	packages["s1"] = .Strict
 	checked := test_package("s1", Source_File{path = "s1/a.odin"})
@@ -463,12 +418,7 @@ normalize_deletes_internal_ids :: proc(t: ^testing.T) {
 				"\tNote: The input parameter types differ",
 			},
 		}
-		placed := normalize(
-			entry,
-			test_code_map(packages),
-			checked,
-			virtual.arena_allocator(&arena),
-		)
+		placed := normalize(entry, test_code_map(packages), checked, context.temp_allocator)
 		messages[i] = placed.message
 	}
 	want :=
@@ -480,11 +430,6 @@ normalize_deletes_internal_ids :: proc(t: ^testing.T) {
 
 @(test)
 normalize_places_line_0_and_column_0_and_a_null_pos :: proc(t: ^testing.T) {
-	arena: virtual.Arena
-	testing.expect(t, virtual.arena_init_growing(&arena) == nil)
-	defer virtual.arena_destroy(&arena)
-	defer free_all(context.temp_allocator)
-
 	packages := make(map[string]Package_Status, context.temp_allocator)
 	packages["app"] = .Strict
 	checked := test_package(
@@ -493,7 +438,7 @@ normalize_places_line_0_and_column_0_and_a_null_pos :: proc(t: ^testing.T) {
 		Source_File{path = "app/b.odin"},
 	)
 	code := test_code_map(packages)
-	allocator := virtual.arena_allocator(&arena)
+	allocator := context.temp_allocator
 
 	line_0 := normalize(
 		Compiler_Entry{.Error, "/repo/app/b.odin", 0, 5, {"m"}},
@@ -535,11 +480,6 @@ normalize_places_line_0_and_column_0_and_a_null_pos :: proc(t: ^testing.T) {
 
 @(test)
 normalize_maps_a_real_path_back_to_the_checked_packages_link :: proc(t: ^testing.T) {
-	arena: virtual.Arena
-	testing.expect(t, virtual.arena_init_growing(&arena) == nil)
-	defer virtual.arena_destroy(&arena)
-	defer free_all(context.temp_allocator)
-
 	packages := make(map[string]Package_Status, context.temp_allocator)
 	packages["pkg"] = .Strict
 	checked := test_package(
@@ -549,7 +489,7 @@ normalize_maps_a_real_path_back_to_the_checked_packages_link :: proc(t: ^testing
 	)
 	entry := Compiler_Entry{.Error, "/repo/.src/real.odin", 4, 2, {"bad"}}
 
-	got := normalize(entry, test_code_map(packages), checked, virtual.arena_allocator(&arena))
+	got := normalize(entry, test_code_map(packages), checked, context.temp_allocator)
 
 	testing.expect_value(
 		t,
@@ -560,11 +500,7 @@ normalize_maps_a_real_path_back_to_the_checked_packages_link :: proc(t: ^testing
 
 @(test)
 code_map_realpaths_a_symlinked_repo_root :: proc(t: ^testing.T) {
-	arena: virtual.Arena
-	testing.expect(t, virtual.arena_init_growing(&arena) == nil)
-	defer virtual.arena_destroy(&arena)
-	defer free_all(context.temp_allocator)
-	allocator := virtual.arena_allocator(&arena)
+	allocator := context.temp_allocator
 
 	tmp, err := os.make_directory_temp("", "odx-code-map-*", allocator)
 	testing.expect_value(t, err, nil)
@@ -588,7 +524,6 @@ code_map_realpaths_a_symlinked_repo_root :: proc(t: ^testing.T) {
 
 @(test)
 owner_of_keeps_errors_everywhere_and_warnings_where_the_team_owns_code :: proc(t: ^testing.T) {
-	defer free_all(context.temp_allocator)
 	packages := make(map[string]Package_Status, context.temp_allocator)
 	packages["app"] = .Strict
 	packages["lib"] = .Pending
@@ -629,7 +564,6 @@ owner_of_keeps_errors_everywhere_and_warnings_where_the_team_owns_code :: proc(t
 
 @(test)
 mutes_only_on_an_unrelocated_error_in_the_checked_packages_own_files :: proc(t: ^testing.T) {
-	defer free_all(context.temp_allocator)
 	checked := test_package("app", Source_File{path = "app/a.odin"})
 	own := Placed {
 		path = "app/a.odin",
@@ -649,11 +583,7 @@ mutes_only_on_an_unrelocated_error_in_the_checked_packages_own_files :: proc(t: 
 
 @(test)
 settle_redeclarations_gives_one_report_whatever_order_the_compiler_used :: proc(t: ^testing.T) {
-	arena: virtual.Arena
-	testing.expect(t, virtual.arena_init_growing(&arena) == nil)
-	defer virtual.arena_destroy(&arena)
-	defer free_all(context.temp_allocator)
-	allocator := virtual.arena_allocator(&arena)
+	allocator := context.temp_allocator
 
 	packages := make(map[string]Package_Status, context.temp_allocator)
 	packages["tools"] = .Strict
@@ -743,11 +673,7 @@ settle_redeclarations_gives_one_report_whatever_order_the_compiler_used :: proc(
 settle_duplicate_packages_gives_one_finding_at_the_first_site_whatever_the_order :: proc(
 	t: ^testing.T,
 ) {
-	arena: virtual.Arena
-	testing.expect(t, virtual.arena_init_growing(&arena) == nil)
-	defer virtual.arena_destroy(&arena)
-	defer free_all(context.temp_allocator)
-	allocator := virtual.arena_allocator(&arena)
+	allocator := context.temp_allocator
 
 	packages := make(map[string]Package_Status, context.temp_allocator)
 	packages["app"] = .Strict
@@ -846,7 +772,6 @@ settle_duplicate_packages_gives_one_finding_at_the_first_site_whatever_the_order
 // By path alone, `$ODIN_ROOT/...` sorts before `util`.
 @(test)
 settle_duplicate_packages_reports_in_the_repo_then_the_odin_root :: proc(t: ^testing.T) {
-	defer free_all(context.temp_allocator)
 	allocator := context.temp_allocator
 	packages := make(map[string]Package_Status, context.temp_allocator)
 	packages["util"] = .Strict
@@ -926,7 +851,6 @@ settle_duplicate_packages_reports_in_the_repo_then_the_odin_root :: proc(t: ^tes
 
 @(test)
 read_duplicate_package_takes_only_the_compilers_duplicate_package_entry :: proc(t: ^testing.T) {
-	defer free_all(context.temp_allocator)
 	allocator := context.temp_allocator
 	packages := make(map[string]Package_Status, context.temp_allocator)
 	packages["app"] = .Strict

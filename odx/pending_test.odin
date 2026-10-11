@@ -4,7 +4,6 @@ import "core:testing"
 
 @(test)
 stale_pending_flags_entries_with_no_package_or_no_owned_findings :: proc(t: ^testing.T) {
-	defer free_all(context.temp_allocator)
 	entries := []Pending_Entry {
 		{"lib", "r", 2, 3},
 		{"./clean/", "r", 3, 3},

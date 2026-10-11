@@ -1,17 +1,13 @@
 package odx
 
 import "core:fmt"
-import "core:mem/virtual"
 import "core:os"
 import "core:strings"
 import "core:testing"
 
 @(test)
 binding_covers_the_lines_each_fixture_expects :: proc(t: ^testing.T) {
-	arena: virtual.Arena
-	ensure(virtual.arena_init_growing(&arena) == nil, "out of memory")
-	defer virtual.arena_destroy(&arena)
-	context.allocator = virtual.arena_allocator(&arena)
+	context.allocator = context.temp_allocator
 
 	for name in ([]string{"fx.odin", "fx2.odin", "fx3.odin"}) {
 		path := fmt.aprintf("tests/fixtures/ignore-binding/%s", name)

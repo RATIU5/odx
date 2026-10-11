@@ -1,15 +1,11 @@
 package odx
 
-import "core:mem/virtual"
 import "core:odin/ast"
 import "core:testing"
 
 @(test)
 code_line_prefix_sums_counts_only_lines_that_hold_code :: proc(t: ^testing.T) {
-	arena: virtual.Arena
-	testing.expect(t, virtual.arena_init_growing(&arena) == nil)
-	defer virtual.arena_destroy(&arena)
-	context.allocator = virtual.arena_allocator(&arena)
+	context.allocator = context.temp_allocator
 	cases := []struct {
 		name:     string,
 		src:      string,
@@ -57,10 +53,7 @@ code_line_prefix_sums_counts_only_lines_that_hold_code :: proc(t: ^testing.T) {
 
 @(test)
 open_proc_reports_a_literal_with_no_parent_at_its_proc_token :: proc(t: ^testing.T) {
-	arena: virtual.Arena
-	testing.expect(t, virtual.arena_init_growing(&arena) == nil)
-	defer virtual.arena_destroy(&arena)
-	context.allocator = virtual.arena_allocator(&arena)
+	context.allocator = context.temp_allocator
 	SRC :: "package a\nf :: proc() {\n}\n"
 	file, _ := parse_source(SRC, context.allocator)
 	decl := file.decls[0].derived.(^ast.Value_Decl)

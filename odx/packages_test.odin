@@ -1,7 +1,6 @@
 package odx
 
 import "core:fmt"
-import "core:mem/virtual"
 import "core:os"
 import "core:strings"
 import "core:sys/posix"
@@ -12,10 +11,7 @@ import "core:time"
 @(test)
 discovery_never_opens_a_fifo :: proc(t: ^testing.T) {
 	testing.set_fail_timeout(t, 20 * time.Second)
-	arena: virtual.Arena
-	testing.expect(t, virtual.arena_init_growing(&arena) == nil)
-	defer virtual.arena_destroy(&arena)
-	context.allocator = virtual.arena_allocator(&arena)
+	context.allocator = context.temp_allocator
 
 	root, err := os.make_directory_temp("", "odx-special-*", context.allocator)
 	testing.expect_value(t, err, nil)
@@ -75,10 +71,7 @@ discovery_never_opens_a_fifo :: proc(t: ^testing.T) {
 
 @(test)
 dir_entry_kind_follows_a_link_only_to_learn_its_kind :: proc(t: ^testing.T) {
-	arena: virtual.Arena
-	testing.expect(t, virtual.arena_init_growing(&arena) == nil)
-	defer virtual.arena_destroy(&arena)
-	context.allocator = virtual.arena_allocator(&arena)
+	context.allocator = context.temp_allocator
 
 	root, err := os.make_directory_temp("", "odx-kinds-*", context.allocator)
 	testing.expect_value(t, err, nil)

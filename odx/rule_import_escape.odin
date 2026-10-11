@@ -279,7 +279,7 @@ MAX_LINKS :: 40
 // directory entry it names. `dir` is the real path of the directory it resolves from. A missing
 // part is taken as written, so a link or path into a tree that isn't there escapes on every machine
 // alike.
-@(private = "file")
+@(private = "file", require_results)
 resolve_path :: proc(
 	r: ^Path_Resolver,
 	ref: Path_Ref,
@@ -376,7 +376,7 @@ push_in_pop_order :: proc(steps: ^[dynamic]Step, path: string, spelled: bool) {
 
 // Matches the exact name first, so a case-sensitive filesystem holding both spellings resolves the
 // way the compiler does there.
-@(private = "file")
+@(private = "file", require_results)
 find_entry :: proc(r: ^Path_Resolver, dir, name: string) -> (entry: os.File_Info, found: bool) {
 	entries, cached := r.listings[dir]
 	if !cached {

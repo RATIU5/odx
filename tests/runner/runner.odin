@@ -142,6 +142,7 @@ reports_compiler_signal :: proc(rendered: string) -> bool {
 }
 
 // The runner reads the version itself, so a wrong version in odx's output never normalizes away.
+@(require_results)
 read_odin_version :: proc() -> (version: string, ok: bool) {
 	state, stdout, stderr, err := os.process_exec(
 		{command = {"odin", "version"}},
@@ -157,6 +158,7 @@ read_odin_version :: proc() -> (version: string, ok: bool) {
 
 // Runs the case's commands in order on one copy of its repo and returns their rendered output, or a
 // non-empty reason when the case couldn't be run.
+@(require_results)
 run_case :: proc(
 	odx_bin, dir, tests_dir: string,
 	placeholders: Placeholders,
@@ -254,6 +256,7 @@ snapshot :: proc(repo, name: string) -> Snapshot {
 	return {string(data), err == nil}
 }
 
+@(require_results)
 run_command :: proc(
 	command: []string,
 	working_dir: string,
@@ -277,6 +280,7 @@ run_command :: proc(
 
 // Recreates symlinks as symlinks, dangling ones included, where `os.copy_directory_all` follows
 // them and fails on a dangling one.
+@(require_results)
 copy_tree :: proc(dst, src: string) -> os.Error {
 	ta := context.temp_allocator
 	os.make_directory(dst) or_return

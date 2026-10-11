@@ -52,7 +52,8 @@ run_init :: proc() -> int {
 		write_init_files(root, text, report.writes_odinfmt, &result)
 	}
 	if len(result.errors) > 0 {
-		write_result(os.to_writer(os.stdout), os.to_writer(os.stderr), result, {})
+		// The errors already make the exit code 2, so a failed write changes nothing.
+		_ = write_result(os.to_writer(os.stdout), os.to_writer(os.stderr), result, {})
 		return 2
 	}
 

@@ -152,6 +152,7 @@ SPECIAL_FILE_MESSAGE :: "odx can't read this file: " + NOT_REGULAR_REASON
 
 // The entries of the directory at `abs` in name order, which is the order odx reads its files in.
 // A FIFO or a device at `abs` is an error and is never opened. Allocates with `allocator`.
+@(require_results)
 list_dir :: proc(
 	abs: string,
 	allocator: runtime.Allocator,
@@ -284,7 +285,7 @@ special_file :: proc(w: ^Walker, path: string) -> (file: Source_File) {
 }
 
 // `read` is false for a file odx doesn't read.
-@(private = "file")
+@(private = "file", require_results)
 read_file :: proc(w: ^Walker, dir, path, abs, project: string) -> (file: Source_File, read: bool) {
 	defer virtual.arena_free_all(w.scratch)
 	scratch := virtual.arena_allocator(w.scratch)

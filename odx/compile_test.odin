@@ -1,7 +1,6 @@
 package odx
 
 import "core:fmt"
-import "core:mem/virtual"
 import "core:os"
 import "core:slice"
 import "core:strings"
@@ -9,7 +8,6 @@ import "core:testing"
 
 @(test)
 check_command_scopes_strict_flags_by_package_name :: proc(t: ^testing.T) {
-	defer free_all(context.temp_allocator)
 	config: Config
 	config.collections = make([dynamic]Collection, context.temp_allocator)
 	config.defines = make([dynamic]Define, context.temp_allocator)
@@ -113,7 +111,6 @@ check_command_scopes_strict_flags_by_package_name :: proc(t: ^testing.T) {
 // The compiler answers an empty name with `Flag missing for 'vet-packages'` and reads no file.
 @(test)
 check_command_leaves_out_the_package_flags_for_a_package_without_a_name :: proc(t: ^testing.T) {
-	defer free_all(context.temp_allocator)
 	got := check_command(
 		"/bin/odin",
 		"/repo/foo",
@@ -148,10 +145,7 @@ check_command_leaves_out_the_package_flags_for_a_package_without_a_name :: proc(
 
 @(test)
 link_name_clash_drops_only_a_foreign_procedure_at_the_other_position :: proc(t: ^testing.T) {
-	arena: virtual.Arena
-	testing.expect(t, virtual.arena_init_growing(&arena) == nil)
-	defer virtual.arena_destroy(&arena)
-	allocator := virtual.arena_allocator(&arena)
+	allocator := context.temp_allocator
 
 	dir, err := os.make_directory_temp("", "odx-link-name-*", allocator)
 	testing.expect_value(t, err, nil)
@@ -216,12 +210,10 @@ defined :: proc "c" () {}
 		msgs = {"Cannot convert", fmt.tprintf("\tother at %s(6:2)", path)},
 	}
 	testing.expect(t, !clashes_with_foreign_procedure(other, &foreign_decls, allocator))
-	free_all(context.temp_allocator)
 }
 
 @(test)
 write_stderr_tail_quotes_the_last_lines_of_what_the_child_wrote :: proc(t: ^testing.T) {
-	defer free_all(context.temp_allocator)
 	quote :: proc(stderr: string) -> string {
 		b := strings.builder_make(context.temp_allocator)
 		write_stderr_tail(&b, stderr)

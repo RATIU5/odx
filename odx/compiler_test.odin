@@ -1,15 +1,11 @@
 package odx
 
-import "core:mem/virtual"
 import "core:slice"
 import "core:testing"
 
 @(test)
 check_compiler_reports_a_mismatch_before_support :: proc(t: ^testing.T) {
-	arena: virtual.Arena
-	testing.expect(t, virtual.arena_init_growing(&arena) == nil)
-	defer virtual.arena_destroy(&arena)
-	allocator := virtual.arena_allocator(&arena)
+	allocator := context.temp_allocator
 
 	cases := []struct {
 		running: string,

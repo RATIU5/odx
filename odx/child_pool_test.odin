@@ -40,7 +40,6 @@ run_shell :: proc(script: string, limit := 10 * time.Second, captured := Streams
 
 @(test)
 kill_pool_ends_the_running_children_at_once :: proc(t: ^testing.T) {
-	defer free_all(context.temp_allocator)
 	budget: Child_Budget
 	init_child_budget(&budget, 2)
 	pool: Pool(int)
@@ -66,7 +65,6 @@ kill_pool_ends_the_running_children_at_once :: proc(t: ^testing.T) {
 
 @(test)
 a_stopped_worker_ends_without_a_slot :: proc(t: ^testing.T) {
-	defer free_all(context.temp_allocator)
 	budget: Child_Budget
 	init_child_budget(&budget, 1)
 	// Another pool's hung child holds the only slot.
@@ -95,7 +93,6 @@ a_stopped_worker_ends_without_a_slot :: proc(t: ^testing.T) {
 
 @(test)
 a_started_pool_holds_its_slots_before_a_later_pool_starts :: proc(t: ^testing.T) {
-	defer free_all(context.temp_allocator)
 	budget: Child_Budget
 	init_child_budget(&budget, 2)
 	pool: Pool(int)
@@ -128,7 +125,6 @@ Retry_Run :: struct {
 // Each command appends a line to its own file every time it runs, so the file counts its runs.
 @(test)
 a_pool_runs_a_command_once_more_only_when_a_signal_ended_it_on_its_own :: proc(t: ^testing.T) {
-	defer free_all(context.temp_allocator)
 	dir, err := os.make_directory_temp("", "odx-pool-*", context.temp_allocator)
 	testing.expect_value(t, err, nil)
 	defer os.remove_all(dir)
@@ -259,7 +255,6 @@ charge_poll_caps_what_one_poll_costs :: proc(t: ^testing.T) {
 
 @(test)
 run_captured_tells_a_signal_from_an_exit_code :: proc(t: ^testing.T) {
-	defer free_all(context.temp_allocator)
 	cases := []struct {
 		script: string,
 		want:   Child_Status,
@@ -288,7 +283,6 @@ run_captured_tells_a_signal_from_an_exit_code :: proc(t: ^testing.T) {
 
 @(test)
 run_captured_returns_the_captured_streams_and_drops_the_other :: proc(t: ^testing.T) {
-	defer free_all(context.temp_allocator)
 	SCRIPT :: "printf out; printf err >&2; exit 3"
 	both := run_shell(SCRIPT, captured = {.Stdout, .Stderr})
 	testing.expect_value(t, both.error, "")
@@ -324,7 +318,6 @@ run_captured_reads_a_100_mb_stream_whole :: proc(t: ^testing.T) {
 
 @(test)
 run_captured_kills_a_child_that_writes_past_the_cap :: proc(t: ^testing.T) {
-	defer free_all(context.temp_allocator)
 	CAP :: 1 << 20
 	capped :: proc(script: string, stream: Stream) -> Child_End {
 		end, ended := run_captured(
@@ -367,7 +360,6 @@ run_captured_kills_a_child_that_writes_past_the_cap :: proc(t: ^testing.T) {
 
 @(test)
 status_text_tells_a_signal_from_an_exit_code :: proc(t: ^testing.T) {
-	defer free_all(context.temp_allocator)
 	cases := []struct {
 		script: string,
 		want:   string,
@@ -387,7 +379,6 @@ status_text_tells_a_signal_from_an_exit_code :: proc(t: ^testing.T) {
 
 @(test)
 run_captured_kills_a_child_at_its_limit_and_keeps_what_it_wrote :: proc(t: ^testing.T) {
-	defer free_all(context.temp_allocator)
 	started := time.tick_now()
 	end := run_shell("echo before; exec sleep 30", 200 * time.Millisecond, {.Stdout})
 	took := time.tick_since(started)
@@ -408,7 +399,6 @@ run_captured_kills_a_child_at_its_limit_and_keeps_what_it_wrote :: proc(t: ^test
 // for it.
 @(test)
 run_captured_doesnt_wait_for_a_process_the_child_left_holding_the_pipe :: proc(t: ^testing.T) {
-	defer free_all(context.temp_allocator)
 	started := time.tick_now()
 	quiet := run_shell("sleep 3 & echo done", captured = {.Stdout})
 	took := time.tick_since(started)
@@ -428,7 +418,6 @@ run_captured_doesnt_wait_for_a_process_the_child_left_holding_the_pipe :: proc(t
 
 @(test)
 run_captured_says_why_a_child_didnt_start :: proc(t: ^testing.T) {
-	defer free_all(context.temp_allocator)
 	end, ended := run_captured(
 		{command = {"/nonexistent/odx-test-binary", "check"}},
 		{.Stderr},

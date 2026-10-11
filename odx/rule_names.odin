@@ -65,7 +65,7 @@ is_composite_literal :: proc(value: ^ast.Expr) -> bool {
 
 // `known` is false for an alias or a call, which gets no case: the declaration alone doesn't say
 // what its right side names.
-@(private = "file")
+@(private = "file", require_results)
 constant_kind :: proc(expr: ^ast.Expr, has_type: bool) -> (kind: Name_Kind, known: bool) {
 	value := unwrap_expr(expr)
 	if value == nil {

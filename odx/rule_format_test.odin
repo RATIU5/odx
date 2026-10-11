@@ -2,7 +2,6 @@ package odx
 
 import "base:runtime"
 import "core:encoding/json"
-import "core:mem/virtual"
 import "core:reflect"
 import "core:slice"
 import "core:strings"
@@ -78,10 +77,7 @@ print_result_prints_once_and_names_the_first_differing_line :: proc(t: ^testing.
 
 @(test)
 print_source_aligns_and_refuses_what_the_parser_rejects :: proc(t: ^testing.T) {
-	arena: virtual.Arena
-	ensure(virtual.arena_init_growing(&arena) == nil, "out of memory")
-	defer virtual.arena_destroy(&arena)
-	context.allocator = virtual.arena_allocator(&arena)
+	context.allocator = context.temp_allocator
 
 	out, ok := print_source("package a\n\nItem :: struct {\n\ta: int,\n\tlong_name: int,\n}\n")
 	testing.expect(t, ok)
@@ -228,10 +224,7 @@ read_format_end_takes_a_whole_result_line_however_the_child_ended :: proc(t: ^te
 
 @(test)
 finish_format_reports_the_first_error_in_path_order :: proc(t: ^testing.T) {
-	arena: virtual.Arena
-	ensure(virtual.arena_init_growing(&arena) == nil, "out of memory")
-	defer virtual.arena_destroy(&arena)
-	context.allocator = virtual.arena_allocator(&arena)
+	context.allocator = context.temp_allocator
 
 	packages := []Package{{dir = "app"}}
 	by_path := []Format_Job {
@@ -348,14 +341,12 @@ config_disagreements :: proc(
 
 @(test)
 odinfmt_json_agrees_with_the_format_config_on_every_key :: proc(t: ^testing.T) {
-	defer free_all(context.temp_allocator)
 	keys := config_disagreements(ODINFMT_JSON, FORMAT_CONFIG, context.temp_allocator)
 	testing.expectf(t, len(keys) == 0, "odinfmt.json and FORMAT_CONFIG disagree on %v", keys)
 }
 
 @(test)
 config_disagreements_names_each_key_that_differs_or_is_missing :: proc(t: ^testing.T) {
-	defer free_all(context.temp_allocator)
 	ta := context.temp_allocator
 	cases := []struct {
 		old, new: string,

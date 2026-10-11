@@ -231,7 +231,6 @@ note_muted_notes_each_package_with_a_dropped_finding_in_package_order :: proc(t:
 		{dir = "c"},
 	}
 	context.allocator = context.temp_allocator
-	defer free_all(context.temp_allocator)
 	result: Result
 	note_muted(packages, &result)
 	want := []Note {
@@ -250,7 +249,6 @@ note_test_tagged_counts_each_package_s_test_tagged_files_in_package_order :: pro
 		}
 		return list
 	}
-	defer free_all(context.temp_allocator)
 	packages := []Package {
 		{dir = ".", files = files(false, true)},
 		{dir = "a", files = files(false, false)},

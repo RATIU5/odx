@@ -156,6 +156,7 @@ exit_code :: proc(result: Result) -> int {
 
 // Any error means no result, so findings and counts are not written.
 // fmt's writer procs drop io errors, so each stream is built in memory and written once.
+@(require_results)
 write_result :: proc(out, err: io.Writer, result: Result, cmd: Check_Command) -> io.Error {
 	o := strings.builder_make()
 	defer strings.builder_destroy(&o)
