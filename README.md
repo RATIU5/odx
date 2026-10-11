@@ -5,12 +5,39 @@
 
 A strict, opinionated checker for Odin projects: format, naming and syntax rules on top of pinned compiler flags. Memory-checked tests and runs are planned. Terms: [GLOSSARY.md](GLOSSARY.md); principles: [docs/adr/0004-principles.md](docs/adr/0004-principles.md).
 
+## Install
+
+odx installs through [mise](https://mise.jdx.dev), beside the compiler a project pins. A release today carries `odx` and `odinfmt` for macOS on arm64 only, built to run on macOS 11.0 and later. A Linux CI job therefore can't install odx with mise yet, and builds it from source as the Development section shows. Add both lines to the project's `mise.toml`:
+
+```toml
+[tools]
+odin = "dev-2026-09"
+"github:RATIU5/odx" = "0.1.0"
+```
+
+`mise install` then puts `odx` and `odinfmt` on `PATH`. The `odin` line is the compiler that release supports, which `odx --version` names. The `odinfmt` is the one the Formatting section builds by hand, and the release's `VERSIONS` file states what it was built from.
+
+If the odx repository is private, mise needs a GitHub token that can read it: a fine-grained personal access token for that repository with the permission Contents set to read-only.
+
+- A developer sets it once as `MISE_GITHUB_TOKEN` in the shell's profile. `mise token github` shows whether mise finds it.
+- A CI job stores it as a secret and hands it to mise, as the `github_token` input of `jdx/mise-action` or as `MISE_GITHUB_TOKEN` on the step that runs `mise install`. The job's own `GITHUB_TOKEN` reads only the repository the job runs in.
+
+Without mise, download the release's `.tar.gz` and `.sha256` with `gh` or `curl`, check them, and unpack the archive into a directory of its own, because it has no top directory. A release isn't signed for download through a browser.
+
+```sh
+gh release download v0.1.0 --repo RATIU5/odx --pattern 'odx-0.1.0-macos-arm64.tar.gz*'
+shasum -a 256 -c odx-0.1.0-macos-arm64.tar.gz.sha256
+mkdir -p ~/.local/odx
+tar -xzf odx-0.1.0-macos-arm64.tar.gz -C ~/.local/odx
+export PATH="$HOME/.local/odx/bin:$PATH"
+```
+
 ## Workflow
 
 1. `odx check` on any repo.
 2. `odx init` pins the rule set and compiler, lists failing packages as `pending`, and writes `odx.json` and `odinfmt.json`. Commit both files.
 3. During development: format with odinfmt at OLS commit `dd0f85d`, which reads the `odinfmt.json` that `odx init` wrote (in this repo, `mise run fmt`), then fix what `odx check` reports. `odx test` and `odx run` are planned and don't exist yet.
-4. CI builds odx as the Development section says, puts `build/release/odx` on `PATH`, and runs `odx check`. `odx test` joins it when it exists.
+4. CI on macOS installs odx with mise as the Install section says, and runs `odx check`. CI on Linux builds odx as the Development section says, which no release has tested. `odx test` joins it when it exists.
 5. Remove `pending` entries as packages are fixed; `odx check --pending` shows what's left.
 6. Upgrade: bump `version` or `odin` in `odx.json` in one commit.
 
@@ -204,3 +231,5 @@ mise run e2e        # follow this README with the release build and the pinned o
 ```
 
 `mise run e2e` needs `git`, `python3`, `perl` and `timeout` on `PATH`. Its first run, and the first after a compiler or printer bump, clones OLS from GitHub and builds `odinfmt`. No other task depends on it.
+
+Releasing: `mise run dist` writes `build/dist/odx-<release>-macos-arm64.tar.gz` and its `.sha256`. The archive holds `bin/odx`, `bin/odinfmt`, `odinfmt.json`, `LICENSE-ols` and `VERSIONS`. Like `mise run e2e`, its first run clones OLS. `.github/workflows/build.yml` runs the tasks above on every pull request and every push to `main`. `.github/workflows/release.yml` runs only when someone starts it by hand on the default branch. Its `build` job, which can only read the repository, runs the same tasks and `mise run dist`, and its `draft` job, which runs none of the repository's code, creates the draft release `v<release>` with both files attached. It stops when a release or a tag of that name exists, so raise `RELEASE` in `odx/rules.odin` first. The release stays a draft until someone publishes it on GitHub, and mise can't install it before that.
