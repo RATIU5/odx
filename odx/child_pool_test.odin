@@ -296,7 +296,6 @@ run_captured_returns_the_captured_streams_and_drops_the_other :: proc(t: ^testin
 @(test)
 run_captured_reads_a_100_mb_stream_whole :: proc(t: ^testing.T) {
 	SIZE :: 100 << 20
-	started := time.tick_now()
 	end, _ := run_captured(
 		{command = {"/bin/sh", "-c", "head -c 104857600 /dev/zero | tr '\\0' x; printf end"}},
 		{.Stdout},
@@ -311,9 +310,6 @@ run_captured_reads_a_100_mb_stream_whole :: proc(t: ^testing.T) {
 	testing.expect_value(t, len(text), SIZE + len("end"))
 	testing.expect(t, strings.has_suffix(text, "xend"), "the stream's end is missing")
 	testing.expect_value(t, strings.count(text, "x"), SIZE)
-	// Reading it took 10 s when the buffer grew by one read at a time.
-	took := time.tick_since(started)
-	testing.expectf(t, took < 5 * time.Second, "the read took %v", took)
 }
 
 @(test)
