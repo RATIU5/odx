@@ -9,14 +9,12 @@ import "core:odin/tokenizer"
 import "core:os"
 import "core:strings"
 import "core:time"
-import "core:unicode/utf8"
 
 CHECK_TIMEOUT :: 120 * time.Second
 
 // A message that quotes a child's stderr shows at most this much of its end, where a crash leaves
-// its assertion. The byte bound is for a stderr with few line ends, such as one line of 150 MB.
+// its assertion.
 STDERR_LINES_SHOWN :: 40
-STDERR_BYTES_SHOWN :: 8 << 10
 
 @(private = "file")
 Check_Job :: struct {
@@ -180,18 +178,20 @@ finish_compile :: proc(
 				owner = checked
 			}
 			finding := odin_finding(placed, allocator)
-			finding.held_back = pending_strict
-			add_rule_finding(result, owner, finding, entry.kind == .Warning)
+			// Only strict checking gives a warning, and `owner_of` keeps none without an owner.
+			finding.held_back =
+				pending_strict || (entry.kind == .Warning && owner.status == .Pending)
+			add_rule_finding(result, owner, finding)
 		}
 	}
 	for placed in settle_redeclarations(redeclarations[:], scratch) {
 		owner, _ := owner_of(.Error, placed.path, code)
-		add_rule_finding(result, owner, odin_finding(placed, allocator), false)
+		add_rule_finding(result, owner, odin_finding(placed, allocator))
 	}
-	settled, settled_of := settle_duplicate_packages(duplicates[:], code, scratch)
+	settled, settled_of := settle_duplicate_packages(duplicates[:], scratch)
 	for placed in settled {
 		owner, _ := owner_of(.Error, placed.path, code)
-		add_rule_finding(result, owner, odin_finding(placed, allocator), false)
+		add_rule_finding(result, owner, odin_finding(placed, allocator))
 	}
 	// A check mutes its package by the site odx reports, not the one the compiler happened to.
 	for pkg, i in duplicate_checks {
@@ -327,9 +327,8 @@ compiler_output_message :: proc(
 	return strings.to_string(b)
 }
 
-// Writes the end of what a child wrote to stderr, within `STDERR_LINES_SHOWN` and
-// `STDERR_BYTES_SHOWN`, after a header that says how much came before it. This is the one place a
-// message quotes a child's stream.
+// Writes the end of what a child wrote to stderr, within `STDERR_LINES_SHOWN`, after a header that
+// says how much came before it. This is the one place a message quotes a child's stream.
 write_stderr_tail :: proc(b: ^strings.Builder, stderr: string) {
 	text := strings.trim_right(stderr, "\r\n")
 	if text == "" {
@@ -345,29 +344,12 @@ write_stderr_tail :: proc(b: ^strings.Builder, stderr: string) {
 			line_count += 1
 		}
 	}
-	tail := text[start:]
-	switch {
-	case len(tail) > STDERR_BYTES_SHOWN:
-		cut := len(tail) - STDERR_BYTES_SHOWN
-		for _ in 0 ..< utf8.UTF_MAX - 1 {
-			if utf8.rune_start(tail[cut]) {
-				break
-			}
-			cut += 1
-		}
-		tail = tail[cut:]
-		fmt.sbprintf(
-			b,
-			"; the last %d KB of its %d stderr bytes:",
-			STDERR_BYTES_SHOWN >> 10,
-			len(text),
-		)
-	case start > 0:
+	if start > 0 {
 		fmt.sbprintf(b, "; the last %d of its %d stderr lines:", STDERR_LINES_SHOWN, line_count)
-	case:
+	} else {
 		strings.write_string(b, "; stderr:")
 	}
-	for line in strings.split_lines(tail, context.temp_allocator) {
+	for line in strings.split_lines(text[start:], context.temp_allocator) {
 		fmt.sbprintf(b, "\n\t%s", line)
 	}
 }

@@ -84,7 +84,9 @@ expect_read_cases :: proc(t: ^testing.T, cases: []Read_Case) {
 			)
 		}
 		if u, ok := outcome.(Untrusted); ok {
-			testing.expectf(t, u.reason != "", "%s: untrusted without a reason", c.name)
+			// A timeout's message names the limit instead.
+			has_reason := u.reason != "" || c.timed_out
+			testing.expectf(t, has_reason, "%s: untrusted without a reason", c.name)
 			testing.expectf(t, u.stderr == c.stderr, "%s: kept stderr %q", c.name, u.stderr)
 		}
 	}
@@ -209,14 +211,20 @@ read_check_calls_a_signal_a_signal_and_an_exit_code_an_exit_code :: proc(t: ^tes
 		stderr:    string,
 		reason:    string,
 	} {
-		{"SIGSEGV on the second run", Signaled{11}, false, true, "", "died by SIGSEGV twice"},
-		{"SIGSEGV on a run nobody retries", Signaled{11}, false, false, "", "died by SIGSEGV"},
-		{"a signal no crash sends", Signaled{1}, false, true, "", "died by signal 1 twice"},
+		{"SIGSEGV on the second run", Signaled{11}, false, true, "", "died by signal 11 twice"},
+		{"SIGSEGV on a run nobody retries", Signaled{11}, false, false, "", "died by signal 11"},
 		{"exit code 11", Exited{11}, false, false, "", "ended with exit code 11"},
 		{"exit code 11 on the second run", Exited{11}, false, true, "", "ended with exit code 11"},
-		{"SIGTRAP after a document", Signaled{5}, false, true, one_error, "died by SIGTRAP twice"},
-		{"odx's own kill at the limit", Signaled{9}, true, false, "", "timed out"},
-		{"the limit on the second run", Signaled{9}, true, true, "", "timed out"},
+		{
+			"SIGTRAP after a document",
+			Signaled{5},
+			false,
+			true,
+			one_error,
+			"died by signal 5 twice",
+		},
+		{"odx's own kill at the limit", Signaled{9}, true, false, "", ""},
+		{"the limit on the second run", Signaled{9}, true, true, "", ""},
 	}
 	for c in cases {
 		outcome := read_check(
@@ -817,7 +825,7 @@ settle_duplicate_packages_gives_one_finding_at_the_first_site_whatever_the_order
 			testing.expectf(t, ok, "%s: not read as a duplicate package: %v", c.name, e.msgs)
 			append(&records, d)
 		}
-		got, of := settle_duplicate_packages(records[:], code, allocator)
+		got, of := settle_duplicate_packages(records[:], allocator)
 		testing.expectf(t, slice.equal(got, c.want), "%s: got %v", c.name, got)
 		testing.expectf(
 			t,
@@ -835,12 +843,9 @@ settle_duplicate_packages_gives_one_finding_at_the_first_site_whatever_the_order
 	}
 }
 
-// `third_party/dep` is vendored. By path alone, `$ODIN_ROOT/...` sorts before it, and it sorts
-// before `util`.
+// By path alone, `$ODIN_ROOT/...` sorts before `util`.
 @(test)
-settle_duplicate_packages_reports_in_checked_code_then_vendored_then_the_odin_root :: proc(
-	t: ^testing.T,
-) {
+settle_duplicate_packages_reports_in_the_repo_then_the_odin_root :: proc(t: ^testing.T) {
 	defer free_all(context.temp_allocator)
 	allocator := context.temp_allocator
 	packages := make(map[string]Package_Status, context.temp_allocator)
@@ -850,8 +855,6 @@ settle_duplicate_packages_reports_in_checked_code_then_vendored_then_the_odin_ro
 	checked := test_package("app", Source_File{path = "app/a.odin"})
 	CHECKED :: "util/u.odin"
 	LATER_CHECKED :: "zlib/z.odin"
-	VENDORED :: "third_party/dep/util/u.odin"
-	LATER_VENDORED :: "third_party/dep/zlib/z.odin"
 	ROOT :: "$ODIN_ROOT/core/util/u.odin"
 	LATER_ROOT :: "$ODIN_ROOT/vendor/util/u.odin"
 	cases := []struct {
@@ -859,12 +862,8 @@ settle_duplicate_packages_reports_in_checked_code_then_vendored_then_the_odin_ro
 		// In the order the finding names them, the first being where it lies.
 		sites: []string,
 	} {
-		{"checked and vendored", {CHECKED, VENDORED}},
 		{"checked and the Odin root", {CHECKED, ROOT}},
-		{"vendored and the Odin root", {VENDORED, ROOT}},
-		{"one of each", {CHECKED, VENDORED, ROOT}},
-		{"two of each", {CHECKED, LATER_CHECKED, VENDORED, LATER_VENDORED, ROOT, LATER_ROOT}},
-		{"every site vendored", {VENDORED, LATER_VENDORED}},
+		{"two of each", {CHECKED, LATER_CHECKED, ROOT, LATER_ROOT}},
 		{"every site under the Odin root", {ROOT, LATER_ROOT}},
 	}
 	absolute :: proc(site: string) -> string {
@@ -901,7 +900,7 @@ settle_duplicate_packages_reports_in_checked_code_then_vendored_then_the_odin_ro
 				testing.expectf(t, ok, "%s: not read as a duplicate package", c.name)
 				append(&records, d)
 			}
-			got, _ := settle_duplicate_packages(records[:], code, allocator)
+			got, _ := settle_duplicate_packages(records[:], allocator)
 			if !testing.expectf(t, len(got) == 1, "%s: %d findings", c.name, len(got)) {
 				continue
 			}

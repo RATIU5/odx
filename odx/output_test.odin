@@ -345,7 +345,7 @@ noted_result :: proc() -> Result {
 	result := sample_result()
 	result.findings[0].note = "odx: format: a/b.odin formatter crashed"
 	result.findings[1].note = "odx: format: p/q.odin formatter crashed"
-	append(&result.notes, "odx: skipped x: no file")
+	append(&result.notes, Note{text = "odx: skipped x: no file"})
 	return result
 }
 
@@ -433,11 +433,11 @@ HIDDEN_LIB_LINE :: "odx: lib: compile errors hide this package's other findings\
 
 hidden_result :: proc() -> Result {
 	result := sample_result()
-	append(&result.notes, "odx: skipped t: no file")
 	append(
-		&result.hidden,
-		Hidden_Package{dir = "."},
-		Hidden_Package{dir = "lib", held_back = true},
+		&result.notes,
+		Note{text = "odx: skipped t: no file"},
+		Note{text = "odx: .: compile errors hide this package's other findings"},
+		Note{"odx: lib: compile errors hide this package's other findings", true},
 	)
 	result.findings[0].note = "odx: format: a/b.odin formatter crashed"
 	return result
@@ -446,7 +446,6 @@ hidden_result :: proc() -> Result {
 destroy_hidden_result :: proc(result: ^Result) {
 	delete(result.findings)
 	delete(result.notes)
-	delete(result.hidden)
 }
 
 @(test)
@@ -494,76 +493,24 @@ hidden_line_of_a_pending_package_needs_the_pending_flag :: proc(t: ^testing.T) {
 }
 
 @(test)
-not_compiled_lines_follow_the_notes_and_need_the_pending_flag_when_pending :: proc(t: ^testing.T) {
-	result := hidden_result()
-	defer destroy_hidden_result(&result)
-	append(
-		&result.not_compiled,
-		Uncompiled_Package{dir = "app", entry = "lib/x.odin"},
-		Uncompiled_Package{dir = "old", entry = "lib/x.odin", held_back = true},
-	)
-	defer delete(result.not_compiled)
-	plain := sample_result()
-	defer delete(plain.findings)
-	APP :: "odx: app: not compiled, because lib/x.odin isn't a regular file\n"
-	OLD :: "odx: old: not compiled, because lib/x.odin isn't a regular file\n"
-	NOTES :: "odx: skipped t: no file\n"
-
-	for json in ([]bool{false, true}) {
-		w, pending, without: Written
-		defer destroy_written(&w)
-		defer destroy_written(&pending)
-		defer destroy_written(&without)
-		write_to_builders(t, &w, result, {json = json})
-		write_to_builders(t, &pending, result, {json = json, pending = true})
-		write_to_builders(t, &without, plain, {json = json})
-		testing.expect_value(t, strings.to_string(w.out), strings.to_string(without.out))
-		testing.expect_value(
-			t,
-			strings.to_string(w.err),
-			NOTES + APP + HIDDEN_ROOT_LINE + "odx: format: a/b.odin formatter crashed\n",
-		)
-		got := strings.to_string(pending.err)
-		testing.expectf(
-			t,
-			strings.has_prefix(got, NOTES + APP + OLD + HIDDEN_ROOT_LINE + HIDDEN_LIB_LINE),
-			"json %v: stderr is %q",
-			json,
-			got,
-		)
-	}
-
-	append(&result.errors, Error{.Config_Invalid, "bad"})
-	defer delete(result.errors)
-	failed: Written
-	defer destroy_written(&failed)
-	write_to_builders(t, &failed, result, {pending = true})
-	testing.expect_value(t, strings.to_string(failed.err), "odx: error: config-invalid: bad\n")
-}
-
-@(test)
 test_tagged_and_retry_lines_print_between_the_package_lines_and_the_finding_notes :: proc(
 	t: ^testing.T,
 ) {
 	result := hidden_result()
 	defer destroy_hidden_result(&result)
-	append(&result.not_compiled, Uncompiled_Package{dir = "app", entry = "lib/x.odin"})
-	defer delete(result.not_compiled)
-	append(
-		&result.test_tagged,
-		Test_Tagged_Package{dir = "app", files = 2},
-		Test_Tagged_Package{dir = "old", files = 1, held_back = true},
+	inject_at(
+		&result.notes,
+		1,
+		Note{text = "odx: app: the compiler doesn't check 2 files tagged #+test"},
+		Note{"odx: old: the compiler doesn't check 1 files tagged #+test", true},
 	)
-	defer delete(result.test_tagged)
 	result.compiler_retries = 3
 	plain := sample_result()
 	defer delete(plain.findings)
 	APP :: "odx: app: the compiler doesn't check 2 files tagged #+test\n"
 	OLD :: "odx: old: the compiler doesn't check 1 files tagged #+test\n"
 	RETRIES :: "odx: the compiler died by a signal 3 times, and odx ran it again each time\n"
-	BEFORE ::
-		"odx: skipped t: no file\n" +
-		"odx: app: not compiled, because lib/x.odin isn't a regular file\n"
+	BEFORE :: "odx: skipped t: no file\n"
 	NOTE :: "odx: format: a/b.odin formatter crashed\n"
 
 	for json in ([]bool{false, true}) {

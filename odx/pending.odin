@@ -65,9 +65,6 @@ stale_pending :: proc(
 				on_disk,
 				allocator = allocator,
 			)
-		case awaits_compile(packages, dir):
-			// Its findings as strict aren't known until the compiler runs on it.
-			continue
 		case !owners[dir]:
 			message = fmt.aprintf(
 				"'%s' has no findings as strict",
@@ -89,17 +86,6 @@ stale_pending :: proc(
 		)
 	}
 	return stale[:]
-}
-
-@(private = "file")
-awaits_compile :: proc(packages: []Package, dir: string) -> bool {
-	for p in packages {
-		if p.dir == dir {
-			_, special := p.compile.(Special_Entry)
-			return special
-		}
-	}
-	return false
 }
 
 @(private = "file")

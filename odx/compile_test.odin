@@ -6,7 +6,6 @@ import "core:os"
 import "core:slice"
 import "core:strings"
 import "core:testing"
-import "core:unicode/utf8"
 
 @(test)
 check_command_scopes_strict_flags_by_package_name :: proc(t: ^testing.T) {
@@ -221,7 +220,7 @@ defined :: proc "c" () {}
 }
 
 @(test)
-write_stderr_tail_quotes_a_bounded_end_of_what_the_child_wrote :: proc(t: ^testing.T) {
+write_stderr_tail_quotes_the_last_lines_of_what_the_child_wrote :: proc(t: ^testing.T) {
 	defer free_all(context.temp_allocator)
 	quote :: proc(stderr: string) -> string {
 		b := strings.builder_make(context.temp_allocator)
@@ -252,42 +251,4 @@ write_stderr_tail_quotes_a_bounded_end_of_what_the_child_wrote :: proc(t: ^testi
 		many[:min(len(many), 80)],
 	)
 	testing.expect(t, strings.has_suffix(many, "\n\tline 41"), "the last line is missing")
-
-	// One line of 150 MB reached the error message whole.
-	one_line := strings.concatenate(
-		{strings.repeat("x", 1 << 20, context.temp_allocator), "end\n"},
-		context.temp_allocator,
-	)
-	HEADER :: "; the last 8 KB of its 1048579 stderr bytes:\n\t"
-	got := quote(one_line)
-	testing.expect(t, strings.has_prefix(got, HEADER), got[:min(len(got), 80)])
-	testing.expect_value(t, len(got), len(HEADER) + STDERR_BYTES_SHOWN)
-	testing.expect(t, strings.has_suffix(got, "xxend"), "the stream's end is missing")
-
-	long_lines := strings.repeat(
-		strings.concatenate(
-			{strings.repeat("y", 999, context.temp_allocator), "\n"},
-			context.temp_allocator,
-		),
-		100,
-		context.temp_allocator,
-	)
-	got = quote(long_lines)
-	testing.expect(
-		t,
-		strings.has_prefix(got, "; the last 8 KB of its 99999 stderr bytes:\n\t"),
-		got[:min(len(got), 80)],
-	)
-	testing.expectf(t, len(got) < STDERR_BYTES_SHOWN + 100, "the quote has %d bytes", len(got))
-
-	// The cut falls inside a two-byte rune, and the quote starts at the next one.
-	runes := strings.concatenate(
-		{strings.repeat("é", 5000, context.temp_allocator), "z"},
-		context.temp_allocator,
-	)
-	got = quote(runes)
-	RUNES_HEADER :: "; the last 8 KB of its 10001 stderr bytes:\n\t"
-	testing.expect(t, strings.has_prefix(got, RUNES_HEADER), got[:min(len(got), 80)])
-	testing.expect_value(t, len(got), len(RUNES_HEADER) + STDERR_BYTES_SHOWN - 1)
-	testing.expect(t, utf8.valid_string(got), "the quote starts inside a rune")
 }

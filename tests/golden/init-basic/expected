@@ -8,7 +8,7 @@ odx: skipped tests: no non-test file compiles for darwin_arm64 or linux_amd64
 	"version": 1,
 	"odin": "<odin>",
 	"pending": {
-		"long": "odx init <date>"
+		"long": "odx init"
 	}
 }
 --- odinfmt.json

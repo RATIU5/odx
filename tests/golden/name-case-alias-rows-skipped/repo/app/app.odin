@@ -5,16 +5,16 @@ import "core:sync/chan"
 
 LIMIT :: 5
 
-My_Int :: int
+my_int :: int
 
-println :: fmt.println
+Println :: fmt.println
 
 UPDATES :: chan.Chan(int)
 
-SIZE :: size_of(int)
+Size :: size_of(int)
 
-OTHER_LIMIT :: LIMIT
+other_limit :: LIMIT
 
-PAREN_LIMIT :: (LIMIT)
+Paren_limit :: (LIMIT)
 
 typed_limit: int : LIMIT

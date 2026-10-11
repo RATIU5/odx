@@ -12,11 +12,11 @@ main :: proc() {
 	os.exit(run_on_work_stack(run))
 }
 
-// The stack of the thread that does odx's work. `core:odin/parser`, odx's walk, the resolver and
-// the printer each recurse once per level of nesting in a source file, and none has a limit. With
-// this much, the compiler's own stack ends at less than half the depth odx's does, for every shape
-// of nesting probed, so a file that ends odx has ended the compiler first. The pages are committed
-// only when touched.
+// The stack of the thread that does odx's work. `core:odin/parser`, odx's walk and the printer each
+// recurse once per level of nesting in a source file, and none has a limit. With this much, the
+// compiler's own stack ends at less than half the depth odx's does, for every shape of nesting
+// probed, so a file that ends odx has ended the compiler first. The pages are committed only when
+// touched.
 WORK_STACK_SIZE :: 1 << 30
 
 // Runs `work` on a new thread with `WORK_STACK_SIZE` of stack and returns its result. It runs
@@ -103,9 +103,7 @@ check_repo :: proc(result: ^Result) -> (note_err: os.Error) {
 		_ = os.write_string(os.stderr, NO_CONFIG_NOTE) or_return
 	}
 	odin_root := read_odin_root(odin, context.allocator)
-	resolver: Resolver
-	init_repo_resolver(&resolver, odin_root, config, result.odin)
-	packages := discover(repo.root, config, &resolver, result, context.allocator)
+	packages := discover(repo.root, config, result, context.allocator)
 	if len(result.errors) > 0 {
 		return
 	}
@@ -113,6 +111,8 @@ check_repo :: proc(result: ^Result) -> (note_err: os.Error) {
 	if len(result.errors) > 0 {
 		return
 	}
+	note_test_tagged(packages[:], result)
+	note_hidden(packages[:], result)
 	stale := stale_pending(
 		repo.root,
 		config.pending[:],
@@ -123,13 +123,6 @@ check_repo :: proc(result: ^Result) -> (note_err: os.Error) {
 	append(&result.findings, ..stale)
 	sort_and_dedupe_findings(&result.findings)
 	return
-}
-
-// The resolver borrows `config`'s collections and allocates with `context.allocator`. Without an
-// Odin root, imports of its collections stay unresolved, and `check` reports the failure.
-init_repo_resolver :: proc(r: ^Resolver, odin_root: Odin_Root, config: Config, compiler: string) {
-	universe, _ := universe_for(compiler)
-	resolver_init(r, odin_root.path, config.collections[:], universe, context.allocator)
 }
 
 check :: proc(
@@ -145,10 +138,7 @@ check :: proc(
 			append(&result.errors, Error{.Compiler_Output, odin_root.failure})
 			return
 		}
-		// The compiler reads the packages a package imports, so the imports are resolved before
-		// any check starts.
 		check_paths(packages, root, odin_root.path, config.collections[:], context.allocator)
-		spread_special_entries(packages)
 		budget: Child_Budget
 		init_child_budget(&budget, worker_count())
 		// The checks start first, because a compile error must not wait for a slot that a print
@@ -174,9 +164,6 @@ check :: proc(
 		}
 		add_file_findings(packages, result)
 		apply_ignores(packages, result)
-		note_not_compiled(packages, result)
-		note_test_tagged(packages, result)
-		note_hidden(packages, result)
 	}
 }
 
@@ -237,11 +224,7 @@ read_odin_version :: proc() -> (odin: string, version: string, failure: Maybe(Er
 	text := strings.trim_right_space(probe.stdout)
 	switch status in probe.status {
 	case Signaled:
-		message := fmt.aprintf(
-			"'%s version' died by %s",
-			odin,
-			signal_text(status.signal, context.allocator),
-		)
+		message := fmt.aprintf("'%s version' died by signal %d", odin, status.signal)
 		return "", "", Error{.Compiler_Output, message}
 	case Exited:
 		if status.code != 0 || !strings.has_prefix(text, prefix) {

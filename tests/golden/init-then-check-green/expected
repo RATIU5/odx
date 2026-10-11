@@ -22,9 +22,9 @@ odx: pending findings:
 	"version": 1,
 	"odin": "<odin>",
 	"pending": {
-		"deprecated": "odx init <date>",
-		"long": "odx init <date>",
-		"unused": "odx init <date>"
+		"deprecated": "odx init",
+		"long": "odx init",
+		"unused": "odx init"
 	}
 }
 --- odinfmt.json

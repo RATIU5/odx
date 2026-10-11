@@ -10,7 +10,7 @@ import "core:time"
 
 // git can't hold a FIFO, so no golden case can. Opening one waits for a writer that never comes.
 @(test)
-discovery_and_the_loader_never_open_a_fifo :: proc(t: ^testing.T) {
+discovery_never_opens_a_fifo :: proc(t: ^testing.T) {
 	testing.set_fail_timeout(t, 20 * time.Second)
 	arena: virtual.Arena
 	testing.expect(t, virtual.arena_init_growing(&arena) == nil)
@@ -32,15 +32,12 @@ discovery_and_the_loader_never_open_a_fifo :: proc(t: ^testing.T) {
 	}
 	testing.expect_value(t, os.symlink("../pipe", fmt.aprintf("%s/y.odin", pkg_dir)), nil)
 
-	resolver: Resolver
-	resolver_init(&resolver, "", nil, {}, context.allocator)
 	result: Result
 	started := time.tick_now()
-	packages := discover(root, {}, &resolver, &result, context.allocator)
-	symbols := package_symbols(&resolver, real_root(pkg_dir, context.allocator))
+	packages := discover(root, {}, &result, context.allocator)
 	took := time.tick_since(started)
 
-	testing.expectf(t, took < time.Second, "discovery and the loader took %v", took)
+	testing.expectf(t, took < time.Second, "discovery took %v", took)
 	testing.expect_value(t, len(result.errors), 0)
 	testing.expect_value(t, len(packages), 2)
 	if len(packages) != 2 {
@@ -50,9 +47,9 @@ discovery_and_the_loader_never_open_a_fifo :: proc(t: ^testing.T) {
 	// failed.
 	only, pkg := packages[0], packages[1]
 	testing.expect_value(t, only.dir, "only")
-	testing.expect_value(t, only.compile, Compile(Special_Entry{"only/lone.odin"}))
+	testing.expect_value(t, only.compile, Compile(Special_Entry{}))
 	testing.expect_value(t, pkg.dir, "pkg")
-	testing.expect_value(t, pkg.compile, Compile(Special_Entry{"pkg/x.odin"}))
+	testing.expect_value(t, pkg.compile, Compile(Special_Entry{}))
 	testing.expect_value(t, result.skipped, 0)
 	testing.expect_value(t, len(result.notes), 0)
 
@@ -74,49 +71,6 @@ discovery_and_the_loader_never_open_a_fifo :: proc(t: ^testing.T) {
 		"pkg/x.odin:1:1: parse-unsupported: odx can't read this file: it isn't a regular file\n" +
 		"pkg/y.odin:1:1: parse-unsupported: odx can't read this file: it isn't a regular file\n"
 	testing.expect_value(t, strings.to_string(got), want)
-	testing.expect_value(t, symbols["VALUE"], Kind.Value)
-}
-
-@(test)
-a_special_entry_spreads_to_every_package_that_reaches_it_through_imports :: proc(t: ^testing.T) {
-	defer free_all(context.temp_allocator)
-	Case :: struct {
-		dir:     string,
-		compile: Compile,
-		imports: []string,
-		want:    Compile,
-	}
-	both := Compiled{{.Darwin_Arm64, .Linux_Amd64}}
-	cases := []Case {
-		{".", both, {"app"}, Special_Entry{"lib/x.odin"}},
-		{"alone", both, {"vendor/dep", "alone"}, both},
-		{"app", both, {"mid", "alone"}, Special_Entry{"lib/x.odin"}},
-		{"conflict", Name_Conflict{}, {"lib"}, Name_Conflict{}},
-		{"lib", Special_Entry{"lib/x.odin"}, {}, Special_Entry{"lib/x.odin"}},
-		{"mid", both, {"lib", "lib"}, Special_Entry{"lib/x.odin"}},
-		{"other", Special_Entry{"other/a.odin"}, {"alone"}, Special_Entry{"other/a.odin"}},
-		{"tests", Skipped{}, {"lib"}, Skipped{}},
-		{"through", both, {"tests", "conflict"}, Special_Entry{"lib/x.odin"}},
-		{"two", both, {"other", "mid"}, Special_Entry{"lib/x.odin"}},
-		{"zcycle", both, {"zcycle2"}, Special_Entry{"other/a.odin"}},
-		{"zcycle2", both, {"zcycle", "other"}, Special_Entry{"other/a.odin"}},
-	}
-	packages := make([]Package, len(cases), context.temp_allocator)
-	for c, i in cases {
-		packages[i] = {
-			dir     = c.dir,
-			compile = c.compile,
-			imports = make([dynamic]string, context.temp_allocator),
-		}
-		append(&packages[i].imports, ..c.imports)
-	}
-
-	spread_special_entries(packages)
-
-	for c, i in cases {
-		got := packages[i].compile
-		testing.expectf(t, got == c.want, "%s: got %v, want %v", c.dir, got, c.want)
-	}
 }
 
 @(test)

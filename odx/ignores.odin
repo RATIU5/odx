@@ -529,7 +529,6 @@ apply_ignores :: proc(packages: []Package, result: ^Result) {
 							rule = .Ignore_Unused,
 							message = UNUSED,
 						},
-						false,
 					)
 				}
 			}

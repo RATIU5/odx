@@ -3,13 +3,10 @@
 lib/x.odin:1:1: parse-unsupported: odx can't read this file: it isn't a regular file
 odx: 1 findings, 0 ignored, 1 pending, 0 skipped (rules 1, odx <release>, odin <odin>)
 --- stderr
-odx: lib: not compiled, because lib/x.odin isn't a regular file
 --- exit 1
 === odx check --pending
 --- stdout
 lib/x.odin:1:1: parse-unsupported: odx can't read this file: it isn't a regular file
 odx: 1 findings, 0 ignored, 1 pending, 0 skipped (rules 1, odx <release>, odin <odin>)
 --- stderr
-odx: app: not compiled, because lib/x.odin isn't a regular file
-odx: lib: not compiled, because lib/x.odin isn't a regular file
 --- exit 1

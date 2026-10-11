@@ -46,11 +46,7 @@ check_value_decl_names :: proc(w: ^File_Walk, decl: ^ast.Value_Decl) {
 		}
 		kind := Name_Kind.Variable
 		if !decl.is_mutable {
-			known: bool
-			kind, known = constant_kind(value, decl.type != nil)
-			if !known {
-				kind = ALIAS_NAME_KINDS[alias_kind_at(w, value, ident.pos.offset)].? or_continue
-			}
+			kind = constant_kind(value, decl.type != nil) or_continue
 		} else if is_composite_literal(value) && len(w.procs) == 0 {
 			kind = .Package_Literal
 		}
@@ -67,16 +63,8 @@ is_composite_literal :: proc(value: ^ast.Expr) -> bool {
 	return is_literal
 }
 
-// The file's scope is built at its first alias declaration, since most files have none.
-@(private = "file")
-alias_kind_at :: proc(w: ^File_Walk, value: ^ast.Expr, offset: int) -> Kind {
-	if w.scope == nil {
-		w.scope = walked_file_scope(w.resolver, w.file, w.abs_path)
-	}
-	return alias_kind(w.resolver, value, w.scope, offset)
-}
-
-// `known` is false for an alias or a call, whose kind only the resolver can tell.
+// `known` is false for an alias or a call, which gets no case: the declaration alone doesn't say
+// what its right side names.
 @(private = "file")
 constant_kind :: proc(expr: ^ast.Expr, has_type: bool) -> (kind: Name_Kind, known: bool) {
 	value := unwrap_expr(expr)
@@ -102,6 +90,42 @@ constant_kind :: proc(expr: ^ast.Expr, has_type: bool) -> (kind: Name_Kind, know
 		return then_kind, then_known && else_known && then_kind == else_kind
 	}
 	return .Type if is_type_expr(value) && !has_type else .Value_Constant, true
+}
+
+// Parentheses and tags don't change what an expression is. The parser wraps a directive it has no
+// node for, such as `#row_major`, around its operand.
+unwrap_expr :: proc(expr: ^ast.Expr) -> ^ast.Expr {
+	value := ast.unparen_expr(expr)
+	for value != nil {
+		tag := value.derived.(^ast.Tag_Expr) or_break
+		value = ast.unparen_expr(tag.expr)
+	}
+	return value
+}
+
+is_type_expr :: proc(expr: ^ast.Expr) -> bool {
+	#partial switch _ in expr.derived {
+	case ^ast.Struct_Type,
+	     ^ast.Union_Type,
+	     ^ast.Enum_Type,
+	     ^ast.Bit_Set_Type,
+	     ^ast.Bit_Field_Type,
+	     ^ast.Distinct_Type,
+	     ^ast.Proc_Type,
+	     ^ast.Pointer_Type,
+	     ^ast.Multi_Pointer_Type,
+	     ^ast.Array_Type,
+	     ^ast.Dynamic_Array_Type,
+	     ^ast.Fixed_Capacity_Dynamic_Array_Type,
+	     ^ast.Map_Type,
+	     ^ast.Matrix_Type,
+	     ^ast.Typeid_Type,
+	     ^ast.Helper_Type,
+	     ^ast.Relative_Type,
+	     ^ast.Poly_Type:
+		return true
+	}
+	return false
 }
 
 // Without a kind, the list is a struct's or union's parameters, which are parametric with or

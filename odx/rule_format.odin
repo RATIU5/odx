@@ -20,8 +20,8 @@ import printer "ols_printer"
 // The printer reads `core:odin` from the compiler that builds odx, so another compiler can change
 // `format` results. `ols_printer/README.md` names the pin.
 #assert(
-	ODIN_VERSION_HASH == "a2fb372",
-	"odx's printer is pinned to odin dev-2026-09-nightly:a2fb372",
+	ODIN_VERSION + "-nightly:" + ODIN_VERSION_HASH == SUPPORTED_COMPILER,
+	"odx's printer is pinned to the compiler SUPPORTED_COMPILER names",
 )
 
 FORMAT_TIMEOUT :: 120 * time.Second
@@ -412,7 +412,7 @@ finish_format :: proc(
 			append(&result.errors, Error{.Format_Failed, message})
 			return
 		}
-		add_rule_finding(result, &packages[job.pkg], finding, false)
+		add_rule_finding(result, &packages[job.pkg], finding)
 	}
 }
 

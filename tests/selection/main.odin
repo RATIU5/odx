@@ -15,9 +15,7 @@ main :: proc() {
 		os.exit(2)
 	}
 	result: odx.Result
-	resolver: odx.Resolver
-	odx.resolver_init(&resolver, "", nil, {}, context.allocator)
-	packages := odx.discover(os.args[1], {}, &resolver, &result, context.allocator)
+	packages := odx.discover(os.args[1], {}, &result, context.allocator)
 	for pkg in packages {
 		for t in odx.Target {
 			names := make([dynamic]string, context.temp_allocator)

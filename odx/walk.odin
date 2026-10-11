@@ -13,44 +13,28 @@ Ancestor :: struct {
 
 File_Walk :: struct {
 	path:           string,
-	// Absolute, for the resolver.
-	abs_path:       string,
-	file:           ^ast.File,
 	src:            string,
 	findings:       ^[dynamic]Finding,
 	layout:         ^Layout,
 	ancestors:      [dynamic]Ancestor,
 	procs:          [dynamic]Proc_Frame,
 	code_line_sums: []int,
-	resolver:       ^Resolver,
-	// Nil until an alias declaration needs it.
-	scope:          ^File_Scope,
 }
 
 // Runs every rule that reads the AST on `file`, and records in `layout` what `line-length` needs
-// from the parse. The findings it appends borrow `path`. `name-case` asks `resolver` for the kind
-// of each alias, which reads the package at `abs_path` and the packages it imports. The working
-// lists are allocated with `context.allocator`, and `layout` grows with its lists' own allocator.
-// The caller sets the first to its scratch arena, where the `delete`s here do nothing and the
-// caller's `arena_free_all` reclaims the lists.
-walk_file :: proc(
-	file: ^ast.File,
-	path, abs_path: string,
-	findings: ^[dynamic]Finding,
-	layout: ^Layout,
-	resolver: ^Resolver,
-) {
+// from the parse. The findings it appends borrow `path`. The working lists are allocated with
+// `context.allocator`, and `layout` grows with its lists' own allocator. The caller sets the first
+// to its scratch arena, where the `delete`s here do nothing and the caller's `arena_free_all`
+// reclaims the lists.
+walk_file :: proc(file: ^ast.File, path: string, findings: ^[dynamic]Finding, layout: ^Layout) {
 	w := File_Walk {
 		path           = path,
-		abs_path       = abs_path,
-		file           = file,
 		src            = file.src,
 		findings       = findings,
 		layout         = layout,
 		ancestors      = make([dynamic]Ancestor, context.allocator),
 		procs          = make([dynamic]Proc_Frame, context.allocator),
 		code_line_sums = code_line_prefix_sums(file.src, file.comments[:]),
-		resolver       = resolver,
 	}
 	defer {
 		delete(w.ancestors)
@@ -74,7 +58,6 @@ visit_node :: proc(v: ^ast.Visitor, node: ^ast.Node) -> ^ast.Visitor {
 	if node == nil {
 		if pop(&w.ancestors).opens_proc_frame {
 			close_proc(w)
-			pop_scope(w.resolver)
 		}
 		return nil
 	}
@@ -104,7 +87,6 @@ visit_node :: proc(v: ^ast.Visitor, node: ^ast.Node) -> ^ast.Visitor {
 		depth = 0
 		if n.body != nil {
 			open_proc(w, n, parent)
-			push_scope(w.resolver, n)
 			opens_proc_frame = true
 		}
 	case ^ast.Proc_Type:

@@ -14,7 +14,7 @@ render_config_round_trips_through_the_config_parser :: proc(t: ^testing.T) {
 		pending  = pending,
 		vendored = vendored,
 	}
-	text := render_config(report, "2026-10-03", context.temp_allocator)
+	text := render_config(report, context.temp_allocator)
 	config, errors := parse_config(text, ".", context.temp_allocator)
 
 	testing.expect_value(t, len(errors), 0)
@@ -23,7 +23,7 @@ render_config_round_trips_through_the_config_parser :: proc(t: ^testing.T) {
 	testing.expect_value(t, len(config.pending), 2)
 	for entry, i in config.pending {
 		testing.expect_value(t, entry.dir, pending[i])
-		testing.expect_value(t, entry.reason, "odx init 2026-10-03")
+		testing.expect_value(t, entry.reason, "odx init")
 	}
 	testing.expect_value(t, len(config.vendored), 2)
 	for dir, i in config.vendored {
@@ -34,7 +34,7 @@ render_config_round_trips_through_the_config_parser :: proc(t: ^testing.T) {
 @(test)
 render_config_leaves_out_empty_lists :: proc(t: ^testing.T) {
 	defer free_all(context.temp_allocator)
-	text := render_config(Init_Report{odin = "v"}, "2026-10-03", context.temp_allocator)
+	text := render_config(Init_Report{odin = "v"}, context.temp_allocator)
 	expected := fmt.tprintf("{{\n\t\"version\": %d,\n\t\"odin\": \"v\"\n}}\n", RULE_SET)
 	testing.expect_value(t, text, expected)
 }

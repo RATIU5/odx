@@ -6,36 +6,35 @@ import "core:testing"
 @(test)
 add_rule_finding_mutes_and_holds_back_by_the_rule_table :: proc(t: ^testing.T) {
 	cases := []struct {
-		rule:        Rule,
-		status:      Package_Status,
-		muted:       bool,
-		strict_only: bool,
-		added:       bool,
-		held_back:   bool,
+		rule:      Rule,
+		status:    Package_Status,
+		muted:     bool,
+		added:     bool,
+		held_back: bool,
 	} {
-		{.Line_Length, .Strict, false, false, true, false},
-		{.Line_Length, .Pending, false, false, true, true},
-		{.Line_Length, .Pending, true, false, false, false},
-		{.Ignore_Invalid, .Pending, true, false, true, true},
-		{.Ignore_Unused, .Pending, false, false, true, true},
-		{.Ignore_Unused, .Strict, true, false, false, false},
-		{.Import_Escape, .Pending, true, false, true, false},
-		{.Path_Case, .Pending, false, false, true, false},
-		{.Parse_Unsupported, .Pending, false, false, true, false},
-		{.Odin, .Pending, true, false, true, false},
-		{.Odin, .Pending, false, true, true, true},
-		{.Odin, .Strict, false, true, true, false},
-		{.Pending_Stale, .Strict, false, false, true, false},
-		{.Format, .Strict, false, false, true, false},
-		{.Format, .Pending, false, false, true, true},
-		{.Format, .Strict, true, false, false, false},
-		{.Name_Case, .Pending, false, false, true, true},
-		{.Name_Case, .Strict, true, false, false, false},
-		{.Package_Name, .Strict, false, false, true, false},
-		{.Package_Name, .Strict, true, false, false, false},
-		{.File_Name, .Pending, false, false, true, true},
-		{.Import_Alias, .Strict, true, false, false, false},
-		{.Import_Order, .Pending, false, false, true, true},
+		{.Line_Length, .Strict, false, true, false},
+		{.Line_Length, .Pending, false, true, true},
+		{.Line_Length, .Pending, true, false, false},
+		{.Ignore_Invalid, .Pending, true, true, true},
+		{.Ignore_Unused, .Pending, false, true, true},
+		{.Ignore_Unused, .Strict, true, false, false},
+		{.Import_Escape, .Pending, true, true, false},
+		{.Path_Case, .Pending, false, true, false},
+		{.Parse_Unsupported, .Pending, false, true, false},
+		{.Odin, .Pending, true, true, false},
+		{.Odin, .Pending, false, true, false},
+		{.Odin, .Strict, false, true, false},
+		{.Pending_Stale, .Strict, false, true, false},
+		{.Format, .Strict, false, true, false},
+		{.Format, .Pending, false, true, true},
+		{.Format, .Strict, true, false, false},
+		{.Name_Case, .Pending, false, true, true},
+		{.Name_Case, .Strict, true, false, false},
+		{.Package_Name, .Strict, false, true, false},
+		{.Package_Name, .Strict, true, false, false},
+		{.File_Name, .Pending, false, true, true},
+		{.Import_Alias, .Strict, true, false, false},
+		{.Import_Order, .Pending, false, true, true},
 	}
 	for c in cases {
 		result: Result
@@ -44,12 +43,7 @@ add_rule_finding_mutes_and_holds_back_by_the_rule_table :: proc(t: ^testing.T) {
 			status = c.status,
 			muted  = c.muted,
 		}
-		add_rule_finding(
-			&result,
-			&pkg,
-			Finding{path = "a.odin", line = 1, col = 1, rule = c.rule},
-			c.strict_only,
-		)
+		add_rule_finding(&result, &pkg, Finding{path = "a.odin", line = 1, col = 1, rule = c.rule})
 		added := len(result.findings) == 1
 		held_back := added && result.findings[0].held_back
 		owned := added && result.findings[0].owner_dir == pkg.dir
@@ -57,11 +51,10 @@ add_rule_finding_mutes_and_holds_back_by_the_rule_table :: proc(t: ^testing.T) {
 		testing.expectf(
 			t,
 			added == c.added && held_back == c.held_back && owned == c.added,
-			"%v on %v (muted %v, strict only %v): added %v held back %v, want %v %v",
+			"%v on %v (muted %v): added %v held back %v, want %v %v",
 			c.rule,
 			c.status,
 			c.muted,
-			c.strict_only,
 			added,
 			held_back,
 			c.added,
@@ -74,7 +67,7 @@ add_rule_finding_mutes_and_holds_back_by_the_rule_table :: proc(t: ^testing.T) {
 add_rule_finding_adds_an_unowned_finding_as_shown :: proc(t: ^testing.T) {
 	result: Result
 	defer delete(result.findings)
-	add_rule_finding(&result, nil, Finding{path = "/elsewhere/a.odin", rule = .Odin}, true)
+	add_rule_finding(&result, nil, Finding{path = "/elsewhere/a.odin", rule = .Odin})
 	testing.expect_value(t, len(result.findings), 1)
 	if len(result.findings) == 1 {
 		testing.expect_value(t, result.findings[0].held_back, false)
@@ -95,7 +88,7 @@ add_rule_finding_keeps_a_held_back_finding_held_back_in_a_strict_package :: proc
 		rule      = .Odin,
 		held_back = true,
 	}
-	add_rule_finding(&result, &pkg, finding, false)
+	add_rule_finding(&result, &pkg, finding)
 	testing.expect_value(t, len(result.findings), 1)
 	if len(result.findings) == 1 {
 		testing.expect_value(t, result.findings[0].held_back, true)
@@ -106,31 +99,31 @@ add_rule_finding_keeps_a_held_back_finding_held_back_in_a_strict_package :: proc
 @(test)
 rules_table_matches_the_contract_flag_by_flag :: proc(t: ^testing.T) {
 	want := [Rule]Rule_Info {
-		.Odin                   = {"odin", false, true, .Strict_Only, false},
-		.Parse_Unsupported      = {"parse-unsupported", false, true, .No, false},
-		.Import_Escape          = {"import-escape", false, true, .No, true},
-		.Path_Case              = {"path-case", false, true, .No, true},
-		.Line_Length            = {"line-length", true, false, .Yes, false},
-		.Ignore_Invalid         = {"ignore-invalid", false, true, .Yes, false},
-		.Ignore_Unused          = {"ignore-unused", false, false, .Yes, false},
-		.Pending_Stale          = {"pending-stale", false, true, .No, false},
-		.Block_Comment          = {"block-comment", false, false, .Yes, true},
-		.One_Line_Block         = {"one-line-block", false, false, .Yes, true},
-		.Auto_Cast              = {"auto-cast", false, false, .Yes, true},
-		.Do_Stmt                = {"do-stmt", false, false, .Yes, true},
-		.Fallthrough            = {"fallthrough", true, false, .Yes, true},
-		.Bounds_Check_Directive = {"bounds-check-directive", true, false, .Yes, true},
-		.Vet_Disabled           = {"vet-disabled", false, false, .Yes, false},
-		.Feature_Relaxed        = {"feature-relaxed", true, false, .Yes, false},
-		.Transmute              = {"transmute", true, false, .Yes, true},
-		.Format                 = {"format", false, false, .Yes, true},
-		.Proc_Length            = {"proc-length", true, false, .Yes, true},
-		.Nesting_Depth          = {"nesting-depth", true, false, .Yes, true},
-		.Name_Case              = {"name-case", true, false, .Yes, true},
-		.Package_Name           = {"package-name", false, false, .Yes, false},
-		.File_Name              = {"file-name", false, false, .Yes, false},
-		.Import_Alias           = {"import-alias", false, false, .Yes, true},
-		.Import_Order           = {"import-order", false, false, .Yes, true},
+		.Odin                   = {"odin", false, true, false, false},
+		.Parse_Unsupported      = {"parse-unsupported", false, true, false, false},
+		.Import_Escape          = {"import-escape", false, true, false, true},
+		.Path_Case              = {"path-case", false, true, false, true},
+		.Line_Length            = {"line-length", true, false, true, false},
+		.Ignore_Invalid         = {"ignore-invalid", false, true, true, false},
+		.Ignore_Unused          = {"ignore-unused", false, false, true, false},
+		.Pending_Stale          = {"pending-stale", false, true, false, false},
+		.Block_Comment          = {"block-comment", false, false, true, true},
+		.One_Line_Block         = {"one-line-block", false, false, true, true},
+		.Auto_Cast              = {"auto-cast", false, false, true, true},
+		.Do_Stmt                = {"do-stmt", false, false, true, true},
+		.Fallthrough            = {"fallthrough", true, false, true, true},
+		.Bounds_Check_Directive = {"bounds-check-directive", true, false, true, true},
+		.Vet_Disabled           = {"vet-disabled", false, false, true, false},
+		.Feature_Relaxed        = {"feature-relaxed", true, false, true, false},
+		.Transmute              = {"transmute", true, false, true, true},
+		.Format                 = {"format", false, false, true, true},
+		.Proc_Length            = {"proc-length", true, false, true, true},
+		.Nesting_Depth          = {"nesting-depth", true, false, true, true},
+		.Name_Case              = {"name-case", true, false, true, true},
+		.Package_Name           = {"package-name", false, false, true, false},
+		.File_Name              = {"file-name", false, false, true, false},
+		.Import_Alias           = {"import-alias", false, false, true, true},
+		.Import_Order           = {"import-order", false, false, true, true},
 	}
 	for got, rule in RULES {
 		w := want[rule]
@@ -206,7 +199,6 @@ add_rule_finding_counts_what_a_muted_package_hides :: proc(t: ^testing.T) {
 			&result,
 			&pkg,
 			Finding{path = "lib/a.odin", line = c.line, col = 1, rule = c.rule},
-			false,
 		)
 		testing.expectf(
 			t,
@@ -232,23 +224,22 @@ add_rule_finding_counts_what_a_muted_package_hides :: proc(t: ^testing.T) {
 }
 
 @(test)
-note_hidden_lists_each_package_with_a_hidden_finding_in_package_order :: proc(t: ^testing.T) {
+note_hidden_notes_each_package_with_a_hidden_finding_in_package_order :: proc(t: ^testing.T) {
 	packages := []Package {
 		{dir = ".", muted = true, hidden = 1},
 		{dir = "a", muted = true},
 		{dir = "b", muted = true, hidden = 2, status = .Pending},
 		{dir = "c"},
 	}
+	context.allocator = context.temp_allocator
+	defer free_all(context.temp_allocator)
 	result: Result
-	defer delete(result.hidden)
 	note_hidden(packages, &result)
-	want := []Hidden_Package{{dir = "."}, {dir = "b", held_back = true}}
-	testing.expect_value(t, len(result.hidden), len(want))
-	for w, i in want {
-		if i < len(result.hidden) {
-			testing.expect_value(t, result.hidden[i], w)
-		}
+	want := []Note {
+		{text = "odx: .: compile errors hide this package's other findings"},
+		{"odx: b: compile errors hide this package's other findings", true},
 	}
+	testing.expectf(t, slice.equal(result.notes[:], want), "got %v", result.notes)
 }
 
 @(test)
@@ -268,46 +259,13 @@ note_test_tagged_counts_each_package_s_test_tagged_files_in_package_order :: pro
 		{dir = "c", files = files(true), compile = Skipped{}},
 		{dir = "d", files = files()},
 	}
+	context.allocator = context.temp_allocator
 	result: Result
-	defer delete(result.test_tagged)
 	note_test_tagged(packages, &result)
-	want := []Test_Tagged_Package {
-		{dir = ".", files = 1},
-		{dir = "b", files = 3, held_back = true},
-		{dir = "c", files = 1},
+	want := []Note {
+		{text = "odx: .: the compiler doesn't check 1 files tagged #+test"},
+		{"odx: b: the compiler doesn't check 3 files tagged #+test", true},
+		{text = "odx: c: the compiler doesn't check 1 files tagged #+test"},
 	}
-	testing.expect_value(t, len(result.test_tagged), len(want))
-	for w, i in want {
-		if i < len(result.test_tagged) {
-			testing.expect_value(t, result.test_tagged[i], w)
-		}
-	}
-}
-
-@(test)
-note_not_compiled_lists_each_package_a_special_entry_stops_in_package_order :: proc(
-	t: ^testing.T,
-) {
-	packages := []Package {
-		{dir = ".", compile = Special_Entry{"lib/x.odin"}},
-		{dir = "a", compile = Compiled{{.Darwin_Arm64}}},
-		{dir = "b", compile = Special_Entry{"lib/x.odin"}, status = .Pending},
-		{dir = "c", compile = Skipped{}},
-		{dir = "d", compile = Name_Conflict{}},
-		{dir = "lib", compile = Special_Entry{"lib/x.odin"}},
-	}
-	result: Result
-	defer delete(result.not_compiled)
-	note_not_compiled(packages, &result)
-	want := []Uncompiled_Package {
-		{dir = ".", entry = "lib/x.odin"},
-		{dir = "b", entry = "lib/x.odin", held_back = true},
-		{dir = "lib", entry = "lib/x.odin"},
-	}
-	testing.expect_value(t, len(result.not_compiled), len(want))
-	for w, i in want {
-		if i < len(result.not_compiled) {
-			testing.expect_value(t, result.not_compiled[i], w)
-		}
-	}
+	testing.expectf(t, slice.equal(result.notes[:], want), "got %v", result.notes)
 }

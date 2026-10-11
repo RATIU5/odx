@@ -219,29 +219,6 @@ find_on_path_passes_over_a_fifo :: proc(t: ^testing.T) {
 }
 
 @(test)
-the_loader_never_opens_an_imported_fifo :: proc(t: ^testing.T) {
-	repo: Fifo_Repo
-	testing.expect(t, virtual.arena_init_growing(&repo.arena) == nil)
-	context.allocator = virtual.arena_allocator(&repo.arena)
-	make_fifo_repo(t, &repo, {"app"}, {"pipe"})
-	defer destroy_fifo_repo(&repo)
-	src := "package app\n\nimport \"../pipe\"\n\nAlias :: pipe.Thing\n"
-	testing.expect_value(t, os.write_entire_file(at(&repo, "app/a.odin"), src), nil)
-
-	resolver: Resolver
-	resolver_init(&resolver, "", nil, {}, context.allocator)
-	result: Result
-	started := time.tick_now()
-	packages := discover(repo.root, {}, &resolver, &result, context.allocator)
-	expect_quick(t, started, "discovery")
-	testing.expect_value(t, len(result.errors), 0)
-	testing.expect_value(t, len(packages), 1)
-
-	_, list_err := list_dir(at(&repo, "pipe"), context.allocator)
-	testing.expect(t, list_err != nil, "a FIFO listed as a directory")
-}
-
-@(test)
 check_paths_never_opens_a_fifo_on_a_path_a_file_names :: proc(t: ^testing.T) {
 	repo: Fifo_Repo
 	testing.expect(t, virtual.arena_init_growing(&repo.arena) == nil)

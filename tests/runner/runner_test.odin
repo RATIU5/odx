@@ -7,12 +7,7 @@ rerun_only_for_an_unexpected_compiler_signal :: proc(t: ^testing.T) {
 	TWICE ::
 		"--- stderr\n" +
 		"odx: error: compiler-output: checking 'lib' for darwin_arm64 " +
-		"died by SIGSEGV twice; stderr was empty\n" +
-		"--- exit 2\n"
-	UNNAMED_TWICE ::
-		"--- stderr\n" +
-		"odx: error: compiler-output: checking 'lib' for darwin_arm64 " +
-		"died by signal 1 twice; stderr was empty\n" +
+		"died by signal 11 twice; stderr was empty\n" +
 		"--- exit 2\n"
 	CLEAN :: "--- stdout\nodx: 1 package checked\n--- stderr\n--- exit 0\n"
 	RETRIED ::
@@ -26,7 +21,6 @@ rerun_only_for_an_unexpected_compiler_signal :: proc(t: ^testing.T) {
 		rerun:    bool,
 	} {
 		{"a second death where a pass was expected", CLEAN, TWICE, true},
-		{"a second death by a signal odx doesn't name", CLEAN, UNNAMED_TWICE, true},
 		{"a retry where a pass was expected", CLEAN, RETRIED, true},
 		{"a second death where one was expected", TWICE, TWICE, false},
 		{"a retry where one was expected", RETRIED, RETRIED, false},
@@ -43,7 +37,7 @@ rerun_only_for_an_unexpected_compiler_signal :: proc(t: ^testing.T) {
 		{
 			"the signal text under another error code",
 			CLEAN,
-			"odx: error: dir-unreadable: died by SIGSEGV twice; stderr was empty\n",
+			"odx: error: dir-unreadable: died by signal 11 twice; stderr was empty\n",
 			false,
 		},
 		{

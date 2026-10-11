@@ -8,11 +8,11 @@ import "core:strings"
 
 JSON_VERSION :: 1
 
-HIDDEN_LINE :: "odx: %s: compile errors hide this package's other findings\n"
+HIDDEN_LINE :: "odx: %s: compile errors hide this package's other findings"
 
-NOT_COMPILED_LINE :: "odx: %s: not compiled, because %s isn't a regular file\n"
-
-TEST_TAGGED_LINE :: "odx: %s: the compiler doesn't check %d files tagged #+test\n"
+// `odin check` leaves a file tagged `#+test` out, and only `odin test` compiles it, which odx can't
+// run (ADR 0005).
+TEST_TAGGED_LINE :: "odx: %s: the compiler doesn't check %d files tagged #+test"
 
 RETRIES_LINE :: "odx: the compiler died by a signal %d times, and odx ran it again each time\n"
 
@@ -58,27 +58,10 @@ Error :: struct {
 	message: string,
 }
 
-// A package whose compile errors hid at least one of its findings. `held_back` says the hidden
-// findings are held back, so the line about them prints only with `--pending`.
-Hidden_Package :: struct {
-	dir:       string,
-	held_back: bool,
-}
-
-// A package `odin check` didn't run for because of the `.odin` entry at `entry`. `held_back` says
-// the package is pending, so the line about it prints only with `--pending`.
-Uncompiled_Package :: struct {
-	dir:       string,
-	entry:     string,
-	held_back: bool,
-}
-
-// A package with files tagged `#+test`. `odin check` leaves such a file out, and only `odin test`
-// compiles it, which odx can't run (ADR 0005). `held_back` says the package is pending, so the line
-// about it prints only with `--pending`.
-Test_Tagged_Package :: struct {
-	dir:       string,
-	files:     int,
+// A stderr line of a run that has a result. `held_back` says it is about a pending package, so it
+// prints only with `--pending`.
+Note :: struct {
+	text:      string,
 	held_back: bool,
 }
 
@@ -88,12 +71,9 @@ Result :: struct {
 	ignored:          int,
 	pending:          int,
 	skipped:          int,
-	// Stderr lines, such as what was skipped and why.
-	notes:            [dynamic]string,
-	// All three in package order.
-	not_compiled:     [dynamic]Uncompiled_Package,
-	test_tagged:      [dynamic]Test_Tagged_Package,
-	hidden:           [dynamic]Hidden_Package,
+	// In print order: the skipped packages, those with `#+test` files, then those with hidden
+	// findings.
+	notes:            [dynamic]Note,
 	// How many times a signal ended the compiler and odx ran it again.
 	compiler_retries: int,
 	rule_set:         int,
@@ -107,7 +87,7 @@ version_line :: proc(allocator: runtime.Allocator) -> string {
 		"odx %s, rule set %d, odin %s\n",
 		RELEASE,
 		RULE_SET,
-		strings.join(SUPPORTED_COMPILERS[:], ", ", context.temp_allocator),
+		SUPPORTED_COMPILER,
 		allocator = allocator,
 	)
 }
@@ -195,21 +175,8 @@ render_result :: proc(out, err: ^strings.Builder, result: Result, cmd: Check_Com
 	failed := len(result.errors) > 0
 	if !failed {
 		for note in result.notes {
-			fmt.sbprintf(err, "%s\n", note)
-		}
-		for u in result.not_compiled {
-			if cmd.pending || !u.held_back {
-				fmt.sbprintf(err, NOT_COMPILED_LINE, u.dir, u.entry)
-			}
-		}
-		for p in result.test_tagged {
-			if cmd.pending || !p.held_back {
-				fmt.sbprintf(err, TEST_TAGGED_LINE, p.dir, p.files)
-			}
-		}
-		for h in result.hidden {
-			if cmd.pending || !h.held_back {
-				fmt.sbprintf(err, HIDDEN_LINE, h.dir)
+			if cmd.pending || !note.held_back {
+				fmt.sbprintf(err, "%s\n", note.text)
 			}
 		}
 	}
@@ -332,7 +299,6 @@ render_json :: proc(out: ^strings.Builder, result: Result, cmd: Check_Command, f
 	strings.write_string(out, "}}\n")
 }
 
-@(private = "file")
 render_json_string :: proc(out: ^strings.Builder, s: string) {
 	strings.write_byte(out, '"')
 	for i in 0 ..< len(s) {

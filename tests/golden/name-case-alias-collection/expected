@@ -1,5 +1,0 @@
---- stdout
-app/app.odin:7:1: name-case: type 'kind' isn't Ada_Case
-odx: 1 findings, 0 ignored, 0 pending, 0 skipped (rules 1, odx <release>, odin <odin>)
---- stderr
---- exit 1

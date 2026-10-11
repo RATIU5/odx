@@ -9,7 +9,7 @@ init: 1 strict, 1 pending, 0 vendored, 0 skipped
 	"version": 1,
 	"odin": "<odin>",
 	"pending": {
-		"lib": "odx init <date>"
+		"lib": "odx init"
 	}
 }
 --- odinfmt.json

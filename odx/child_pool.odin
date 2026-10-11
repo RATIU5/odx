@@ -34,9 +34,6 @@ STREAM_NAMES := [Stream]string {
 Child_Budget :: struct {
 	limit: int,
 	slots: sync.Sema,
-	// The children started and not yet reaped, and the most there have been at once.
-	live:  int,
-	peak:  int,
 }
 
 init_child_budget :: proc(budget: ^Child_Budget, limit: int) {
@@ -230,44 +227,16 @@ died_on_its_own :: proc(end: Child_End) -> bool {
 	return signaled && !end.timed_out && end.failure == ""
 }
 
-// `exit <n>` or the signal per `signal_text`, so a message never calls a signal an exit code.
-// Allocates with `allocator`.
+// `exit <n>` or `signal <n>`, so a message never calls a signal an exit code. Allocates with
+// `allocator`.
 status_text :: proc(status: Child_Status, allocator: runtime.Allocator) -> string {
 	switch s in status {
 	case Exited:
 		return fmt.aprintf("exit %d", s.code, allocator = allocator)
 	case Signaled:
-		return signal_text(s.signal, allocator)
+		return fmt.aprintf("signal %d", s.signal, allocator = allocator)
 	}
 	unreachable()
-}
-
-// The signals that a crash or a kill ends a compiler with. The numbers are the platform's own,
-// because SIGBUS is 10 on macOS and 7 on Linux.
-@(private = "file", rodata)
-SIGNAL_NAMES := [?]struct {
-	signal: posix.Signal,
-	name:   string,
-} {
-	{.SIGSEGV, "SIGSEGV"},
-	{.SIGBUS, "SIGBUS"},
-	{.SIGABRT, "SIGABRT"},
-	{.SIGILL, "SIGILL"},
-	{.SIGTRAP, "SIGTRAP"},
-	{.SIGFPE, "SIGFPE"},
-	{.SIGKILL, "SIGKILL"},
-	{.SIGTERM, "SIGTERM"},
-}
-
-// The name of a signal in `SIGNAL_NAMES`, and `signal <n>` for any other. Allocates with
-// `allocator`.
-signal_text :: proc(signal: int, allocator: runtime.Allocator) -> string {
-	for s in SIGNAL_NAMES {
-		if int(s.signal) == signal {
-			return s.name
-		}
-	}
-	return fmt.aprintf("signal %d", signal, allocator = allocator)
 }
 
 @(private = "file")
@@ -431,14 +400,9 @@ capture_failure :: proc(
 			allocator = allocator,
 		)
 	case over_cap:
-		size, unit := stream_cap, "bytes"
-		if stream_cap % (1 << 20) == 0 {
-			size, unit = stream_cap >> 20, "MB"
-		}
 		return fmt.aprintf(
-			"wrote more than %d %s to its %s, the most odx reads from one stream",
-			size,
-			unit,
+			"wrote more than %d MB to its %s, the most odx reads from one stream",
+			stream_cap >> 20,
 			STREAM_NAMES[stream],
 			allocator = allocator,
 		)
@@ -562,21 +526,11 @@ run_child :: proc(
 	end: Child_End,
 	ended: bool,
 ) {
-	live := sync.atomic_add(&pool.budget.live, 1) + 1
-	for peak := sync.atomic_load(&pool.budget.peak); live > peak; {
-		seen, swapped := sync.atomic_compare_exchange_strong(&pool.budget.peak, peak, live)
-		if swapped {
-			break
-		}
-		peak = seen
-	}
 	desc := os.Process_Desc {
 		working_dir = pool.working_dir,
 		command     = pool.commands[job],
 	}
-	end, ended = run_captured(desc, {pool.captured}, pool.timeout, &pool.killed, allocator)
-	sync.atomic_sub(&pool.budget.live, 1)
-	return
+	return run_captured(desc, {pool.captured}, pool.timeout, &pool.killed, allocator)
 }
 
 // The variable's value in a debug build, and "" in a release build, so a shipped result can't

@@ -31,7 +31,6 @@ Snapshot :: struct {
 
 Placeholders :: struct {
 	odin_version: string,
-	today:        string,
 	tests_dir:    string,
 }
 
@@ -66,11 +65,6 @@ run :: proc() -> int {
 		fmt.eprintln("runner: could not read 'odin version'")
 		return 2
 	}
-	today, today_ok := read_today()
-	if !today_ok {
-		fmt.eprintln("runner: could not read 'date +%F'")
-		return 2
-	}
 	golden := os.args[2]
 	golden_abs, golden_err := os.get_absolute_path(golden, context.allocator)
 	if golden_err != nil {
@@ -78,7 +72,7 @@ run :: proc() -> int {
 		return 2
 	}
 	tests_dir := os.dir(golden_abs)
-	placeholders := Placeholders{odin_version, today, tests_dir}
+	placeholders := Placeholders{odin_version, tests_dir}
 	entries, read_err := os.read_directory_by_path(golden, -1, context.allocator)
 	if read_err != nil {
 		fmt.eprintfln("runner: %s: %v", golden, read_err)
@@ -159,16 +153,6 @@ read_odin_version :: proc() -> (version: string, ok: bool) {
 		return "", false
 	}
 	return strings.trim_prefix(text, "odin version "), true
-}
-
-read_today :: proc() -> (today: string, ok: bool) {
-	state, stdout, stderr, err := os.process_exec({command = {"date", "+%F"}}, context.allocator)
-	delete(stderr)
-	text := strings.trim_right_space(string(stdout))
-	if err != nil || state.exit_code != 0 || len(text) != len("YYYY-MM-DD") {
-		return "", false
-	}
-	return text, true
 }
 
 // Runs the case's commands in order on one copy of its repo and returns their rendered output, or a
@@ -356,7 +340,6 @@ write_stream :: proc(b: ^strings.Builder, name, raw: string, placeholders: Place
 	ta := context.temp_allocator
 	text, _ := strings.replace_all(raw, placeholders.odin_version, "<odin>", ta)
 	text, _ = strings.replace_all(text, odx.RELEASE, "<release>", ta)
-	text, _ = strings.replace_all(text, placeholders.today, "<date>", ta)
 	text, _ = strings.replace_all(text, placeholders.tests_dir, "<tests>", ta)
 	fmt.sbprintf(b, "--- %s\n%s", name, text)
 	if text != "" && !strings.has_suffix(text, "\n") {

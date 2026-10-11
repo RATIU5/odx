@@ -1,11 +1,8 @@
 --- stdout
-app/app.odin:5:1: name-case: constant 'bad_Name' isn't SCREAMING_CASE
+/dev/null:3:1: odin: Syntax Error: Failed to parse file: x.odin; invalid file extension: File must have the extension '.odin'
 free/free.odin:3:14: odin: Cannot convert '"the compiler reports this"' to 'int' from 'untyped string', got "the compiler reports this"
 lib/x.odin:1:1: parse-unsupported: odx can't read this file: it isn't a regular file
 odx: 3 findings, 0 ignored, 0 pending, 0 skipped (rules 1, odx <release>, odin <odin>)
 --- stderr
 odx: no odx.json, so rule set 1, the running compiler and every package strict
-odx: app: not compiled, because lib/x.odin isn't a regular file
-odx: lib: not compiled, because lib/x.odin isn't a regular file
-odx: top: not compiled, because lib/x.odin isn't a regular file
 --- exit 1

@@ -2,14 +2,12 @@ package odx
 
 import "base:runtime"
 import "core:fmt"
-import "core:slice"
 import "core:strings"
 import "core:time"
 
-// This release's supported Odin range as `odin version` texts. Support is dropped only in a major
-// release.
-@(rodata)
-SUPPORTED_COMPILERS := [?]string{"dev-2026-09-nightly:a2fb372"}
+// The compiler this release supports, as its `odin version` text. Support is dropped only in a
+// major release.
+SUPPORTED_COMPILER :: "dev-2026-09-nightly:a2fb372"
 
 // `running` is the running compiler's version text, and `pin` is odx.json's `odin`, absent without
 // odx.json. A mismatch is reported alone, because support only matters for the compiler that will
@@ -29,11 +27,11 @@ check_compiler :: proc(
 			allocator = allocator,
 		)
 		append(errors, Error{.Compiler_Mismatch, message})
-	} else if !slice.contains(SUPPORTED_COMPILERS[:], running) {
+	} else if running != SUPPORTED_COMPILER {
 		message := fmt.aprintf(
 			"odin %s is outside the range this release supports: %s",
 			running,
-			strings.join(SUPPORTED_COMPILERS[:], ", ", context.temp_allocator),
+			SUPPORTED_COMPILER,
 			allocator = allocator,
 		)
 		append(errors, Error{.Compiler_Unsupported, message})

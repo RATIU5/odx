@@ -29,8 +29,9 @@ Diagnostics :: struct {
 	entries: []Compiler_Entry,
 }
 
-// `reason` completes "checking <package> for <target> ...". `unread` says odx has no stderr to
-// show, because it couldn't run the check or read what the check wrote.
+// `reason` completes "checking <package> for <target> ...", and is "" for a check that timed out,
+// whose message names the limit. `unread` says odx has no stderr to show, because it couldn't run
+// the check or read what the check wrote.
 Untrusted :: struct {
 	reason: string,
 	stderr: string,
@@ -56,24 +57,18 @@ read_check :: proc(
 	allocator: runtime.Allocator,
 ) -> Check_Outcome {
 	context.allocator = allocator
+	if timed_out {
+		return Untrusted{stderr = stderr}
+	}
 	exit_code: int
 	switch s in status {
 	case Signaled:
-		if timed_out {
-			return Untrusted{reason = "timed out", stderr = stderr}
-		}
-		reason := fmt.aprintf(
-			"died by %s%s",
-			signal_text(s.signal, allocator),
-			" twice" if retried else "",
-		)
+		reason := fmt.aprintf("died by signal %d%s", s.signal, " twice" if retried else "")
 		return Untrusted{reason = reason, stderr = stderr}
 	case Exited:
 		exit_code = s.code
 	}
 	switch {
-	case timed_out:
-		return Untrusted{reason = "timed out", stderr = stderr}
 	case exit_code != 0 && exit_code != 1:
 		return Untrusted {
 			reason = fmt.aprintf("ended with exit code %d", exit_code),
@@ -215,11 +210,9 @@ real_root :: proc(path: string, allocator: runtime.Allocator) -> string {
 }
 
 Placed :: struct {
-	path:      string,
-	line:      int,
-	col:       int,
-	message:   string,
-	relocated: bool,
+	using located: Located,
+	message:       string,
+	relocated:     bool,
 }
 
 // Applies Appendix E.4's normalization, in its order, to one entry of `checked`'s check. Allocates
@@ -248,7 +241,7 @@ normalize :: proc(
 		}
 	}
 
-	if code_home(placed.path, code) != .Repo {
+	if in_odin_root_or_vendored(placed.path, code) {
 		if caller, found := last_owned_caller(entry.msgs, code); found {
 			message = fmt.aprintf(
 				"%s (reported at %s:%d:%d)",
@@ -257,7 +250,7 @@ normalize :: proc(
 				placed.line,
 				placed.col,
 			)
-			placed.path, placed.line, placed.col = caller.path, caller.line, caller.col
+			placed.located = caller
 			placed.relocated = true
 		}
 	}
@@ -371,26 +364,18 @@ replace_root :: proc(text, root, with: string) -> string {
 	return strings.to_string(b)
 }
 
-// Whose code a path is, in the order a group of sites is reported in: the team's own first.
-@(private = "file")
-Code_Home :: enum u8 {
-	Repo,
-	Vendored,
-	Odin_Root,
-}
-
 // `path` is a location as `rewrite_roots` leaves it.
 @(private = "file")
-code_home :: proc(path: string, code: Code_Map) -> Code_Home {
+in_odin_root_or_vendored :: proc(path: string, code: Code_Map) -> bool {
 	if strings.has_prefix(path, ODIN_ROOT_PREFIX) {
-		return .Odin_Root
+		return true
 	}
 	for dir in code.vendored {
 		if strings.has_prefix(path, dir) && len(path) > len(dir) && path[len(dir)] == '/' {
-			return .Vendored
+			return true
 		}
 	}
-	return .Repo
+	return false
 }
 
 Located :: struct {
@@ -521,7 +506,7 @@ settle_redeclarations :: proc(records: []Redeclaration, allocator: runtime.Alloc
 	at := make([]Located, len(records))
 	others := make([][]Located, len(records))
 	for r, i in records {
-		at[i], others[i] = {r.placed.path, r.placed.line, r.placed.col}, r.others
+		at[i], others[i] = r.placed.located, r.others
 	}
 	groups, of := group_sites(at, others)
 
@@ -545,11 +530,11 @@ settle_redeclarations :: proc(records: []Redeclaration, allocator: runtime.Alloc
 				first.line,
 				first.col,
 			)
-			append(&settled, Placed{path = c.path, line = c.line, col = c.col, message = message})
+			append(&settled, Placed{located = c, message = message})
 		}
 	}
 	slice.sort_by(settled[:], proc(a, b: Placed) -> bool {
-		return located_less({a.path, a.line, a.col}, {b.path, b.line, b.col})
+		return located_less(a.located, b.located)
 	})
 	return settled[:]
 }
@@ -594,13 +579,11 @@ read_duplicate_package :: proc(
 // the first, and the order it reads them in varies under load. So an importer's checks for the two
 // targets can blame either site, and odx then showed one finding or two. The sites link into one
 // group per clash, as `settle_redeclarations` links declarations, and odx reports each group once,
-// at the site that sorts first, naming the others in the same order: the repo's own sites, then
-// those in vendored trees, then the Odin root's, each in path order. So the finding lies in code
-// the team can change whenever a site does. `of` gives each record's index in `settled`. Allocates
-// with `allocator`.
+// at the site that sorts first, naming the others in the same order: the repo's sites, then the
+// Odin root's, each in path order. So the finding lies in the repo whenever a site does. `of` gives
+// each record's index in `settled`. Allocates with `allocator`.
 settle_duplicate_packages :: proc(
 	records: []Duplicate_Package,
-	code: Code_Map,
 	allocator: runtime.Allocator,
 ) -> (
 	settled: []Placed,
@@ -610,8 +593,7 @@ settle_duplicate_packages :: proc(
 	at := make([]Located, len(records))
 	others := make([][]Located, len(records))
 	for &r, i in records {
-		at[i], others[i] =
-			{r.placed.path, r.placed.line, r.placed.col}, slice.from_ptr(&r.other, 1)
+		at[i], others[i] = r.placed.located, slice.from_ptr(&r.other, 1)
 	}
 	groups: [][]Located
 	groups, of = group_sites(at, others)
@@ -619,9 +601,9 @@ settle_duplicate_packages :: proc(
 	settled = make([]Placed, len(groups))
 	for group, g in groups {
 		ordered := make([dynamic]Located, 0, len(group))
-		for home in Code_Home {
+		for in_odin_root in ([2]bool{false, true}) {
 			for c in group {
-				if code_home(c.path, code) == home {
+				if strings.has_prefix(c.path, ODIN_ROOT_PREFIX) == in_odin_root {
 					append(&ordered, c)
 				}
 			}
@@ -631,11 +613,8 @@ settle_duplicate_packages :: proc(
 		for c in ordered[1:] {
 			fmt.sbprintf(&b, " %s(%d:%d) found at previous location", c.path, c.line, c.col)
 		}
-		first := ordered[0]
 		settled[g] = Placed {
-			path    = first.path,
-			line    = first.line,
-			col     = first.col,
+			located = ordered[0],
 			message = strings.to_string(b),
 		}
 	}

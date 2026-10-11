@@ -105,15 +105,16 @@ load_config :: proc(
 	config: Config,
 	errors: [dynamic]Error,
 ) {
+	context.allocator = allocator
 	path := fmt.tprintf("%s/%s", root, CONFIG_FILE)
-	errors = make([dynamic]Error, allocator)
+	errors = make([dynamic]Error)
 	if kind := disk_kind(path); kind == .Dir || kind == .Special {
-		append(&errors, invalid(allocator, "%s isn't a regular file", CONFIG_FILE))
+		append(&errors, invalid("%s isn't a regular file", CONFIG_FILE))
 		return
 	}
 	data, err := os.read_entire_file(path, allocator)
 	if err != nil {
-		append(&errors, invalid(allocator, "could not read %s: %v", CONFIG_FILE, err))
+		append(&errors, invalid("could not read %s: %v", CONFIG_FILE, err))
 		return
 	}
 	return parse_config(string(data), root, allocator)
@@ -135,52 +136,32 @@ parse_config :: proc(
 	value, syntax := read_json(text)
 	if e, bad := syntax.?; bad {
 		line, col := text_position(text, e.offset)
-		if e.what == "" {
-			append(
-				&errors,
-				invalid(
-					allocator,
-					"%s:%d:%d: nests deeper than %d",
-					CONFIG_FILE,
-					line,
-					col,
-					MAX_CONFIG_NESTING,
-				),
-			)
-			return
-		}
-		append(
-			&errors,
-			invalid(allocator, "%s:%d:%d: not strict JSON: %s", CONFIG_FILE, line, col, e.what),
-		)
+		append(&errors, invalid("%s:%d:%d: not strict JSON: %s", CONFIG_FILE, line, col, e.what))
 		return
 	}
 	object, is_object := value.(Json_Object)
 	if !is_object {
-		append(&errors, invalid(allocator, "%s must hold one JSON object", CONFIG_FILE))
+		append(&errors, invalid("%s must hold one JSON object", CONFIG_FILE))
 		return
 	}
 
-	real_root, root_err := os.get_absolute_path(root, allocator)
-	if root_err != nil {
-		real_root = root
-	}
+	real := real_root(root, allocator)
 	seen: bit_set[Config_Key]
 	members: for member in object {
 		for info, key in CONFIG_KEYS {
 			if info.name == member.key {
 				seen += {key}
-				if !decode_key(&config, &errors, key, member.value, real_root) {
-					append(&errors, invalid(allocator, "'%s' must be %s", info.name, info.shape))
+				if !decode_key(&config, &errors, key, member.value, real) {
+					append(&errors, invalid("'%s' must be %s", info.name, info.shape))
 				}
 				continue members
 			}
 		}
-		append(&errors, invalid(allocator, "unknown key '%s'", member.key))
+		append(&errors, invalid("unknown key '%s'", member.key))
 	}
 	for info, key in CONFIG_KEYS {
 		if info.required && key not_in seen {
-			append(&errors, invalid(allocator, "missing required key '%s'", info.name))
+			append(&errors, invalid("missing required key '%s'", info.name))
 		}
 	}
 	for dir in config.vendored {
@@ -188,10 +169,7 @@ parse_config :: proc(
 		for entry in config.pending {
 			clean_entry, _ := os.clean_path(entry.dir, context.temp_allocator)
 			if clean_dir == clean_entry {
-				append(
-					&errors,
-					invalid(allocator, "'%s' is listed under both 'vendored' and 'pending'", dir),
-				)
+				append(&errors, invalid("'%s' is listed under both 'vendored' and 'pending'", dir))
 			}
 		}
 	}
@@ -214,12 +192,11 @@ decode_key :: proc(
 		n := value.(i64) or_return
 		switch {
 		case n < 1:
-			append(errors, invalid(context.allocator, "'version' %d is not a rule set", n))
+			append(errors, invalid("'version' %d is not a rule set", n))
 		case n > RULE_SET:
 			append(
 				errors,
 				invalid(
-					context.allocator,
 					"'version' %d is newer than rule set %d, the newest this release supports",
 					n,
 					RULE_SET,
@@ -235,14 +212,7 @@ decode_key :: proc(
 		for member in object {
 			reason := member.value.(string) or_return
 			if strings.trim_space(reason) == "" {
-				append(
-					errors,
-					invalid(
-						context.allocator,
-						"'pending' entry '%s' has an empty reason",
-						member.key,
-					),
-				)
+				append(errors, invalid("'pending' entry '%s' has an empty reason", member.key))
 			}
 			append(&config.pending, Pending_Entry{member.key, reason, member.line, member.col})
 		}
@@ -278,26 +248,17 @@ decode_strings :: proc(value: Json_Value) -> (strs: [dynamic]string, ok: bool) {
 decode_collection :: proc(config: ^Config, errors: ^[dynamic]Error, entry, real_root: string) {
 	name, path, ok := split_entry(entry)
 	if !ok {
-		append(
-			errors,
-			invalid(context.allocator, "'collections' entry '%s' is not 'name=path'", entry),
-		)
+		append(errors, invalid("'collections' entry '%s' is not 'name=path'", entry))
 		return
 	}
 	name_ok := false
 	switch {
 	case !is_identifier(name):
-		append(
-			errors,
-			invalid(context.allocator, "collection name '%s' is not an identifier", name),
-		)
+		append(errors, invalid("collection name '%s' is not an identifier", name))
 	case slice.contains(RESERVED_COLLECTIONS[:], name):
-		append(
-			errors,
-			invalid(context.allocator, "collection name '%s' is reserved for the Odin root", name),
-		)
+		append(errors, invalid("collection name '%s' is reserved for the Odin root", name))
 	case is_listed(config.collections[:], name):
-		append(errors, invalid(context.allocator, "collection '%s' is listed twice", name))
+		append(errors, invalid("collection '%s' is listed twice", name))
 	case:
 		name_ok = true
 	}
@@ -306,20 +267,9 @@ decode_collection :: proc(config: ^Config, errors: ^[dynamic]Error, entry, real_
 	real, real_err := os.get_absolute_path(full, context.allocator)
 	switch {
 	case real_err != nil || disk_kind(real) != .Dir:
-		append(
-			errors,
-			invalid(context.allocator, "collection '%s' path '%s' is not a directory", name, path),
-		)
+		append(errors, invalid("collection '%s' path '%s' is not a directory", name, path))
 	case !is_within(real, real_root):
-		append(
-			errors,
-			invalid(
-				context.allocator,
-				"collection '%s' path '%s' is outside the repo",
-				name,
-				path,
-			),
-		)
+		append(errors, invalid("collection '%s' path '%s' is outside the repo", name, path))
 	case name_ok:
 		append(&config.collections, Collection{name, real})
 	}
@@ -332,14 +282,11 @@ decode_define :: proc(config: ^Config, errors: ^[dynamic]Error, entry: string) {
 	name, value, ok := split_entry(entry)
 	switch {
 	case !ok:
-		append(
-			errors,
-			invalid(context.allocator, "'defines' entry '%s' is not 'NAME=value'", entry),
-		)
+		append(errors, invalid("'defines' entry '%s' is not 'NAME=value'", entry))
 	case !is_identifier(name):
-		append(errors, invalid(context.allocator, "define name '%s' is not an identifier", name))
+		append(errors, invalid("define name '%s' is not an identifier", name))
 	case is_listed(config.defines[:], name):
-		append(errors, invalid(context.allocator, "define '%s' is listed twice", name))
+		append(errors, invalid("define '%s' is listed twice", name))
 	case:
 		append(&config.defines, Define{name, value})
 	}
@@ -382,9 +329,10 @@ is_within :: proc(path, dir: string) -> bool {
 	return len(path) == len(dir) || strings.has_suffix(dir, "/") || path[len(dir)] == '/'
 }
 
+// Allocates the message with `context.allocator`.
 @(private = "file")
-invalid :: proc(allocator: runtime.Allocator, format: string, args: ..any) -> Error {
-	return Error{.Config_Invalid, fmt.aprintf(format, ..args, allocator = allocator)}
+invalid :: proc(format: string, args: ..any) -> Error {
+	return Error{.Config_Invalid, fmt.aprintf(format, ..args)}
 }
 
 // Lines and columns count from 1, and columns count code points.
@@ -426,21 +374,14 @@ Json_Member :: struct {
 @(private = "file")
 Syntax_Error :: struct {
 	offset: int,
-	// "" when the object or array at `offset` passes `MAX_CONFIG_NESTING`, which strict JSON may.
 	what:   string,
 }
-
-// How deep objects and arrays may nest in odx.json. A valid one nests 2 deep, and the reader
-// recurses per level.
-MAX_CONFIG_NESTING :: 16
 
 @(private = "file")
 Json_Reader :: struct {
 	data:      string,
 	tokenizer: json.Tokenizer,
 	token:     json.Token,
-	// How many objects and arrays are open around the token.
-	depth:     int,
 }
 
 // Reads one strict JSON document with `core:encoding/json`'s tokenizer. Its parser accepts trailing
@@ -504,15 +445,9 @@ expected :: proc(r: ^Json_Reader, what: string) -> Syntax_Error {
 read_value :: proc(r: ^Json_Reader) -> (value: Json_Value, err: Maybe(Syntax_Error)) {
 	token := r.token
 	#partial switch token.kind {
-	case .Open_Brace, .Open_Bracket:
-		if r.depth == MAX_CONFIG_NESTING {
-			return nil, Syntax_Error{token.offset, ""}
-		}
-		r.depth += 1
-		defer r.depth -= 1
-		if token.kind == .Open_Brace {
-			return read_object(r)
-		}
+	case .Open_Brace:
+		return read_object(r)
+	case .Open_Bracket:
 		return read_array(r)
 	case .Null:
 		value = Json_Null{}

@@ -1,7 +1,7 @@
 --- stdout
 --- stderr
 odx: no odx.json, so rule set 1, the running compiler and every package strict
-odx: error: compiler-output: checking 'lib' for darwin_arm64 died by SIGTRAP twice; stderr:
+odx: error: compiler-output: checking 'lib' for darwin_arm64 died by signal 5 twice; stderr:
 	{
 		"error_count": 1,
 		"errors": [

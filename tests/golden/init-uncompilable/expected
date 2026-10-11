@@ -15,7 +15,7 @@ odx: 1 findings, 0 ignored, 1 pending, 0 skipped (rules 1, odx <release>, odin <
 	"version": 1,
 	"odin": "<odin>",
 	"pending": {
-		"long": "odx init <date>"
+		"long": "odx init"
 	}
 }
 --- odinfmt.json

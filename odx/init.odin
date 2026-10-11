@@ -1,13 +1,10 @@
 package odx
 
 import "base:runtime"
-import "core:encoding/json"
 import "core:fmt"
 import "core:os"
 import "core:slice"
 import "core:strings"
-import "core:time"
-import "core:time/timezone"
 
 INIT_EXISTS :: "%s already exists, so odx init wrote nothing"
 INIT_ODINFMT_DIFFERS ::
@@ -51,7 +48,7 @@ run_init :: proc() -> int {
 	}
 	root, report := plan_init(&result)
 	if len(result.errors) == 0 {
-		text := render_config(report, today(context.allocator), context.allocator)
+		text := render_config(report, context.allocator)
 		write_init_files(root, text, report.writes_odinfmt, &result)
 	}
 	if len(result.errors) > 0 {
@@ -61,10 +58,7 @@ run_init :: proc() -> int {
 
 	notes := strings.builder_make()
 	for note in result.notes {
-		fmt.sbprintf(&notes, "%s\n", note)
-	}
-	for u in result.not_compiled {
-		fmt.sbprintf(&notes, NOT_COMPILED_LINE, u.dir, u.entry)
+		fmt.sbprintf(&notes, "%s\n", note.text)
 	}
 	out := strings.builder_make()
 	for dir in report.not_compiling {
@@ -120,9 +114,7 @@ plan_init :: proc(result: ^Result) -> (root: string, report: Init_Report) {
 	report.vendored = config.vendored[:]
 
 	odin_root := read_odin_root(odin, context.allocator)
-	resolver: Resolver
-	init_repo_resolver(&resolver, odin_root, config, result.odin)
-	packages := discover(root, config, &resolver, result, context.allocator)
+	packages := discover(root, config, result, context.allocator)
 	if len(result.errors) > 0 {
 		return
 	}
@@ -151,7 +143,7 @@ plan_init :: proc(result: ^Result) -> (root: string, report: Init_Report) {
 	findings := &result.findings
 	recheck: Result
 	if len(candidates.pending) > 0 {
-		rediscovered := discover(root, candidates, &resolver, &recheck, context.allocator)
+		rediscovered := discover(root, candidates, &recheck, context.allocator)
 		check(odin, odin_root, root, candidates, rediscovered[:], &recheck)
 		if len(recheck.errors) > 0 {
 			append(&result.errors, ..recheck.errors[:])
@@ -245,18 +237,17 @@ holds_odin_file :: proc(abs: string) -> bool {
 }
 
 // Allocates the text with `allocator`.
-render_config :: proc(report: Init_Report, date: string, allocator: runtime.Allocator) -> string {
+render_config :: proc(report: Init_Report, allocator: runtime.Allocator) -> string {
 	b := strings.builder_make(allocator)
 	fmt.sbprintf(&b, "{{\n\t\"version\": %d,\n\t\"odin\": ", RULE_SET)
-	write_json_string(&b, report.odin)
+	render_json_string(&b, report.odin)
 	if len(report.pending) > 0 {
-		reason := fmt.tprintf("odx init %s", date)
 		strings.write_string(&b, ",\n\t\"pending\": {")
 		for dir, i in report.pending {
 			start_json_item(&b, i)
-			write_json_string(&b, dir)
+			render_json_string(&b, dir)
 			strings.write_string(&b, ": ")
-			write_json_string(&b, reason)
+			render_json_string(&b, "odx init")
 		}
 		strings.write_string(&b, "\n\t}")
 	}
@@ -264,7 +255,7 @@ render_config :: proc(report: Init_Report, date: string, allocator: runtime.Allo
 		strings.write_string(&b, ",\n\t\"vendored\": [")
 		for dir, i in report.vendored {
 			start_json_item(&b, i)
-			write_json_string(&b, dir)
+			render_json_string(&b, dir)
 		}
 		strings.write_string(&b, "\n\t]")
 	}
@@ -275,14 +266,6 @@ render_config :: proc(report: Init_Report, date: string, allocator: runtime.Allo
 @(private = "file")
 start_json_item :: proc(b: ^strings.Builder, index: int) {
 	strings.write_string(b, ",\n\t\t" if index > 0 else "\n\t\t")
-}
-
-@(private = "file")
-write_json_string :: proc(b: ^strings.Builder, s: string) {
-	options: json.Marshal_Options
-	if err := json.marshal_to_builder(b, s, &options); err != nil {
-		fmt.panicf("could not encode %q as JSON: %v", s, err)
-	}
 }
 
 // Whether init has to write odinfmt.json at `root`. False when the file is there with the bytes
@@ -363,18 +346,4 @@ write_new_file :: proc(root, name, text: string, result: ^Result) -> (written: b
 		append(&result.errors, Error{.Init_Write, message})
 	}
 	return false
-}
-
-// Allocates the date with `allocator`.
-@(private = "file")
-today :: proc(allocator: runtime.Allocator) -> string {
-	utc, in_range := time.time_to_datetime(time.now())
-	ensure(in_range, "the clock is outside the range of a date")
-	date := utc
-	if zone, ok := timezone.region_load("local", context.temp_allocator); ok {
-		if local, converted := timezone.datetime_to_tz(utc, zone); converted {
-			date = local
-		}
-	}
-	return fmt.aprintf("%04d-%02d-%02d", date.year, date.month, date.day, allocator = allocator)
 }
