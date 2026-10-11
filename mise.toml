@@ -60,3 +60,8 @@ description = "Format the Odin sources with the vendored printer, which is left 
 alias = "f"
 depends = ["build-fixture-fmt"]
 run = "$OUT/fixture-fmt odx tests/runner tests/selection tests/fixture_fmt"
+
+[tasks.e2e]
+description = "Follow the README with the release build and the pinned odinfmt; the first run clones OLS and builds odinfmt"
+depends = ["release"]
+run = "tests/e2e/a.sh && tests/e2e/b.sh && tests/e2e/c.sh"
