@@ -225,7 +225,7 @@ text_prints_held_back_findings_only_with_pending :: proc(t: ^testing.T) {
 		RELEASE +
 		", odin dev-x)\n",
 	)
-	testing.expect_value(t, strings.to_string(w.err), "odx: pending findings:\n")
+	testing.expect_value(t, strings.to_string(w.err), "odx: held-back findings:\n")
 }
 
 @(test)
@@ -258,7 +258,7 @@ json_prints_one_document :: proc(t: ^testing.T) {
 		`{"version":1,"findings":[` +
 		`{"path":"a/b.odin","line":3,"col":7,"rule":"line-length",` +
 		`"message":"line is 120 \"wide\""},` +
-		`{"path":"p/q.odin","line":1,"col":1,"rule":"odin","message":"held","pending":true}],` +
+		`{"path":"p/q.odin","line":1,"col":1,"rule":"odin","message":"held","held_back":true}],` +
 		`"errors":[],` +
 		`"summary":{"findings":1,"ignored":2,"pending":1,"skipped":3,"rules":1,"release":"` +
 		RELEASE +
@@ -366,7 +366,7 @@ a_note_prints_only_when_its_finding_is_shown :: proc(t: ^testing.T) {
 	} {
 		{{}, SHOWN},
 		{{json = true}, SHOWN},
-		{{pending = true}, SHOWN + "odx: pending findings:\n" + HELD_BACK},
+		{{pending = true}, SHOWN + "odx: held-back findings:\n" + HELD_BACK},
 		{{json = true, pending = true}, SHOWN + HELD_BACK},
 	}
 	for c in cases {
@@ -428,10 +428,10 @@ version_line_names_the_release_the_rule_set_and_the_compiler :: proc(t: ^testing
 	testing.expect_value(t, line, "odx 0.1.0, rule set 1, odin dev-2026-09-nightly:a2fb372\n")
 }
 
-HIDDEN_ROOT_LINE :: "odx: .: compile errors hide this package's other findings\n"
-HIDDEN_LIB_LINE :: "odx: lib: compile errors hide this package's other findings\n"
+MUTED_ROOT_LINE :: "odx: .: compile errors hide this package's other findings\n"
+MUTED_LIB_LINE :: "odx: lib: compile errors hide this package's other findings\n"
 
-hidden_result :: proc() -> Result {
+muted_result :: proc() -> Result {
 	result := sample_result()
 	append(
 		&result.notes,
@@ -443,15 +443,15 @@ hidden_result :: proc() -> Result {
 	return result
 }
 
-destroy_hidden_result :: proc(result: ^Result) {
+destroy_muted_result :: proc(result: ^Result) {
 	delete(result.findings)
 	delete(result.notes)
 }
 
 @(test)
-hidden_lines_follow_the_notes_and_leave_stdout_alone :: proc(t: ^testing.T) {
-	result := hidden_result()
-	defer destroy_hidden_result(&result)
+muted_lines_follow_the_notes_and_leave_stdout_alone :: proc(t: ^testing.T) {
+	result := muted_result()
+	defer destroy_muted_result(&result)
 	plain := sample_result()
 	defer delete(plain.findings)
 
@@ -466,16 +466,16 @@ hidden_lines_follow_the_notes_and_leave_stdout_alone :: proc(t: ^testing.T) {
 			t,
 			strings.to_string(w.err),
 			"odx: skipped t: no file\n" +
-			HIDDEN_ROOT_LINE +
+			MUTED_ROOT_LINE +
 			"odx: format: a/b.odin formatter crashed\n",
 		)
 	}
 }
 
 @(test)
-hidden_line_of_a_pending_package_needs_the_pending_flag :: proc(t: ^testing.T) {
-	result := hidden_result()
-	defer destroy_hidden_result(&result)
+muted_line_of_a_pending_package_needs_the_pending_flag :: proc(t: ^testing.T) {
+	result := muted_result()
+	defer destroy_muted_result(&result)
 
 	for cmd in ([]Check_Command{{pending = true}, {pending = true, json = true}}) {
 		w: Written
@@ -484,7 +484,7 @@ hidden_line_of_a_pending_package_needs_the_pending_flag :: proc(t: ^testing.T) {
 		got := strings.to_string(w.err)
 		testing.expectf(
 			t,
-			strings.contains(got, HIDDEN_ROOT_LINE + HIDDEN_LIB_LINE),
+			strings.contains(got, MUTED_ROOT_LINE + MUTED_LIB_LINE),
 			"json %v: stderr is %q",
 			cmd.json,
 			got,
@@ -496,8 +496,8 @@ hidden_line_of_a_pending_package_needs_the_pending_flag :: proc(t: ^testing.T) {
 test_tagged_and_retry_lines_print_between_the_package_lines_and_the_finding_notes :: proc(
 	t: ^testing.T,
 ) {
-	result := hidden_result()
-	defer destroy_hidden_result(&result)
+	result := muted_result()
+	defer destroy_muted_result(&result)
 	inject_at(
 		&result.notes,
 		1,
@@ -525,14 +525,14 @@ test_tagged_and_retry_lines_print_between_the_package_lines_and_the_finding_note
 		testing.expect_value(
 			t,
 			strings.to_string(w.err),
-			BEFORE + APP + HIDDEN_ROOT_LINE + RETRIES + NOTE,
+			BEFORE + APP + MUTED_ROOT_LINE + RETRIES + NOTE,
 		)
 		got := strings.to_string(pending.err)
 		testing.expectf(
 			t,
 			strings.has_prefix(
 				got,
-				BEFORE + APP + OLD + HIDDEN_ROOT_LINE + HIDDEN_LIB_LINE + RETRIES + NOTE,
+				BEFORE + APP + OLD + MUTED_ROOT_LINE + MUTED_LIB_LINE + RETRIES + NOTE,
 			),
 			"json %v: stderr is %q",
 			json,
@@ -544,7 +544,7 @@ test_tagged_and_retry_lines_print_between_the_package_lines_and_the_finding_note
 	none: Written
 	defer destroy_written(&none)
 	write_to_builders(t, &none, result, {})
-	testing.expect_value(t, strings.to_string(none.err), BEFORE + APP + HIDDEN_ROOT_LINE + NOTE)
+	testing.expect_value(t, strings.to_string(none.err), BEFORE + APP + MUTED_ROOT_LINE + NOTE)
 
 	// An error leaves the retry line as the only other stderr line, after the errors.
 	result.compiler_retries = 3
@@ -571,9 +571,9 @@ test_tagged_and_retry_lines_print_between_the_package_lines_and_the_finding_note
 }
 
 @(test)
-hidden_lines_are_not_written_with_an_error :: proc(t: ^testing.T) {
-	result := hidden_result()
-	defer destroy_hidden_result(&result)
+muted_lines_are_not_written_with_an_error :: proc(t: ^testing.T) {
+	result := muted_result()
+	defer destroy_muted_result(&result)
 	append(&result.errors, Error{.Config_Invalid, "bad"})
 	defer delete(result.errors)
 

@@ -148,7 +148,7 @@ judge_tags :: proc(tags: []File_Tag, project: string) -> (verdict: Tag_Verdict) 
 // `is_excluded_target_filename` in build_settings.cpp:1006, negated. It splits the name without its
 // extension at its last two `_` and matches an OS and an architecture in either order.
 file_name_targets :: proc(name: string) -> (targets: Targets) {
-	if is_hidden_file(name) {
+	if is_dot_file(name) {
 		return {}
 	}
 	stem := remove_extension(name)
@@ -186,7 +186,7 @@ file_name_targets :: proc(name: string) -> (targets: Targets) {
 
 // The compiler never compiles a name that starts with `.` once its extension is gone, so the file
 // `.odin` itself does compile.
-is_hidden_file :: proc(name: string) -> bool {
+is_dot_file :: proc(name: string) -> bool {
 	return strings.has_prefix(remove_extension(name), ".")
 }
 

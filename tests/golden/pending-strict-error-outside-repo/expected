@@ -2,5 +2,5 @@
 /fake-odin/a.odin:1:1: odin: Only strict flags find this
 odx: 0 findings, 0 ignored, 1 pending, 0 skipped (rules 1, odx <release>, odin <odin>)
 --- stderr
-odx: pending findings:
+odx: held-back findings:
 --- exit 0

@@ -152,13 +152,13 @@ read_format_end_takes_a_whole_result_line_however_the_child_ended :: proc(t: ^te
 	} {
 		{
 			"a child that never started",
-			{failure = "couldn't start: Permission denied"},
+			{error = "couldn't start: Permission denied"},
 			Run_Failed{"couldn't start: Permission denied"},
 			true,
 		},
 		{
 			"a child odx couldn't wait for",
-			{failure = "couldn't be waited for: No child processes"},
+			{error = "couldn't be waited for: No child processes"},
 			Run_Failed{"couldn't be waited for: No child processes"},
 			true,
 		},
@@ -180,7 +180,7 @@ read_format_end_takes_a_whole_result_line_however_the_child_ended :: proc(t: ^te
 		{"a child that exited 14", {status = Exited{14}}, Crashed{}, false},
 		{
 			"a child whose stream odx couldn't read",
-			{failure = "started, but odx couldn't read its output: Input/output error"},
+			{error = "started, but odx couldn't read its output: Input/output error"},
 			Run_Failed{"started, but odx couldn't read its output: Input/output error"},
 			true,
 		},
@@ -241,11 +241,11 @@ finish_format_reports_the_first_error_in_path_order :: proc(t: ^testing.T) {
 		{path = "app/d.odin", pool_index = 0},
 	}
 	cases := []struct {
-		name:    string,
-		failure: string,
+		name:  string,
+		error: string,
 		// In pool order, which is `by_path` reversed.
-		runs:    []Format_Outcome,
-		want:    Error,
+		runs:  []Format_Outcome,
+		want:  Error,
 	} {
 		{
 			"a file the child couldn't read",
@@ -290,7 +290,7 @@ finish_format_reports_the_first_error_in_path_order :: proc(t: ^testing.T) {
 	for c in cases {
 		jobs := Format_Jobs {
 			by_path = by_path,
-			failure = c.failure,
+			error   = c.error,
 		}
 		jobs.pool.runs = c.runs
 		jobs.pool.timeout = FORMAT_TIMEOUT

@@ -70,7 +70,7 @@ parse_source :: proc(
 	allocator: runtime.Allocator,
 ) -> (
 	file: ^ast.File,
-	failure: Maybe(Parse_Error),
+	parse_error: Maybe(Parse_Error),
 ) {
 	first: Maybe(Parse_Error)
 	p := parser.default_parser()

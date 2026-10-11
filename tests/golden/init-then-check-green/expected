@@ -15,7 +15,7 @@ long/long.odin:3:101: line-length: line is 110 columns wide, over the limit of 1
 unused/unused.odin:4:2: odin: 'spare' declared but not used
 odx: 0 findings, 1 ignored, 3 pending, 0 skipped (rules 1, odx <release>, odin <odin>)
 --- stderr
-odx: pending findings:
+odx: held-back findings:
 --- exit 0
 --- odx.json
 {

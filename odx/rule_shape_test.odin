@@ -38,8 +38,8 @@ code_line_prefix_sums_counts_only_lines_that_hold_code :: proc(t: ^testing.T) {
 		},
 	}
 	for c in cases {
-		file, failure := parse_source(c.src, context.allocator)
-		if _, failed := failure.?; failed {
+		file, parse_error := parse_source(c.src, context.allocator)
+		if _, failed := parse_error.?; failed {
 			testing.expectf(t, false, "%s: the source doesn't parse", c.name)
 			continue
 		}

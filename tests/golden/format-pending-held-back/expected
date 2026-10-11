@@ -8,5 +8,5 @@ odx: 0 findings, 0 ignored, 1 pending, 0 skipped (rules 1, odx <release>, odin <
 lib/lib.odin:4:1: format: the file differs from the formatter's output
 odx: 0 findings, 0 ignored, 1 pending, 0 skipped (rules 1, odx <release>, odin <odin>)
 --- stderr
-odx: pending findings:
+odx: held-back findings:
 --- exit 0

@@ -269,8 +269,8 @@ run_command :: proc(
 		nil,
 		context.temp_allocator,
 	)
-	if end.failure != "" {
-		return {}, fmt.tprintf("odx %s", end.failure)
+	if end.error != "" {
+		return {}, fmt.tprintf("odx %s", end.error)
 	}
 	return {end.captured[.Stdout], end.captured[.Stderr], end.status, end.timed_out}, ""
 }

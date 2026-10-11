@@ -112,7 +112,7 @@ check_repo :: proc(result: ^Result) -> (note_err: os.Error) {
 		return
 	}
 	note_test_tagged(packages[:], result)
-	note_hidden(packages[:], result)
+	note_muted(packages[:], result)
 	stale := stale_pending(
 		repo.root,
 		config.pending[:],
@@ -134,8 +134,8 @@ check :: proc(
 	result: ^Result,
 ) {
 	if len(packages) > 0 {
-		if odin_root.failure != "" {
-			append(&result.errors, Error{.Compiler_Output, odin_root.failure})
+		if odin_root.error != "" {
+			append(&result.errors, Error{.Compiler_Output, odin_root.error})
 			return
 		}
 		check_paths(packages, root, odin_root.path, config.collections[:], context.allocator)
@@ -185,9 +185,9 @@ locate_repo :: proc(result: ^Result) -> Repo {
 // errors that stop the run. Without odx.json, the config is empty. `odin` is the compiler's path.
 load :: proc(repo: Repo, result: ^Result) -> (config: Config, odin: string) {
 	version: string
-	failure: Maybe(Error)
-	odin, version, failure = read_odin_version()
-	if e, failed := failure.?; failed {
+	error: Maybe(Error)
+	odin, version, error = read_odin_version()
+	if e, failed := error.?; failed {
 		append(&result.errors, e)
 		return
 	}
@@ -209,7 +209,7 @@ load :: proc(repo: Repo, result: ^Result) -> (config: Config, odin: string) {
 
 // Returns the compiler's path and the text after `odin version `. Both are allocated with
 // `context.allocator` and stay alive for the process, so callers free neither.
-read_odin_version :: proc() -> (odin: string, version: string, failure: Maybe(Error)) {
+read_odin_version :: proc() -> (odin: string, version: string, error: Maybe(Error)) {
 	found: bool
 	odin, found = find_on_path(os.get_env("PATH", context.temp_allocator), "odin")
 	if !found {

@@ -229,7 +229,7 @@ holds_odin_file :: proc(abs: string) -> bool {
 			if !strings.has_prefix(entry.name, ".") && holds_odin_file(entry.fullpath) {
 				return true
 			}
-		case strings.has_suffix(entry.name, ".odin") && !is_hidden_file(entry.name):
+		case strings.has_suffix(entry.name, ".odin") && !is_dot_file(entry.name):
 			return true
 		}
 	}
@@ -293,7 +293,7 @@ needs_odinfmt :: proc(root: string, result: ^Result) -> bool {
 
 // Creates odx.json at `root`, and odinfmt.json beside it when `with_odinfmt`. When the second file
 // can't be created, the first is removed, so a failed init leaves no file. Adds `init-exists` or
-// `init-write` on failure, with the message allocated with `context.allocator`.
+// `init-write` when it fails, with the message allocated with `context.allocator`.
 write_init_files :: proc(root, config: string, with_odinfmt: bool, result: ^Result) {
 	if !write_new_file(root, CONFIG_FILE, config, result) || !with_odinfmt {
 		return
@@ -313,7 +313,7 @@ write_init_files :: proc(root, config: string, with_odinfmt: bool, result: ^Resu
 }
 
 // Creates `name` at `root` only when it doesn't exist, and removes a partly written one. Adds
-// `init-exists` or `init-write` on failure, with the message allocated with `context.allocator`.
+// `init-exists` or `init-write` when it fails, with the message allocated with `context.allocator`.
 @(private = "file")
 write_new_file :: proc(root, name, text: string, result: ^Result) -> (written: bool) {
 	path := fmt.tprintf("%s/%s", root, name)

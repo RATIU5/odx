@@ -19,7 +19,6 @@ Rule :: enum u8 {
 	Block_Comment,
 	One_Line_Block,
 	Auto_Cast,
-	Do_Stmt,
 	Fallthrough,
 	Bounds_Check_Directive,
 	Vet_Disabled,
@@ -58,7 +57,6 @@ RULES := [Rule]Rule_Info {
 	.Block_Comment          = {"block-comment", false, false, true, true},
 	.One_Line_Block         = {"one-line-block", false, false, true, true},
 	.Auto_Cast              = {"auto-cast", false, false, true, true},
-	.Do_Stmt                = {"do-stmt", false, false, true, true},
 	.Fallthrough            = {"fallthrough", true, false, true, true},
 	.Bounds_Check_Directive = {"bounds-check-directive", true, false, true, true},
 	.Vet_Disabled           = {"vet-disabled", false, false, true, false},
@@ -106,7 +104,7 @@ ERROR_CODES := [Error_Code]string {
 
 // Adds `finding` as `pkg`'s. A nil `pkg` leaves it unowned and adds it as given, with no mute or
 // hold-back. Otherwise it is dropped when `pkg` is muted and the rule doesn't run when muted, and
-// held back in a pending package per the rule's row in `RULES`. A dropped finding counts as hidden
+// held back in a pending package per the rule's row in `RULES`. A dropped finding is counted
 // unless an ignore covers it, which uses the ignore as a shown finding would. So a muted package
 // must get its findings before its unused ignores are looked for. A finding that arrives held back
 // stays held back. The added finding borrows its strings and `pkg`'s dir.
@@ -120,7 +118,7 @@ add_rule_finding :: proc(result: ^Result, pkg: ^Package, finding: Finding) {
 		if ignore := ignore_covering(pkg, finding); ignore != nil {
 			ignore.used = true
 		} else {
-			pkg.hidden += 1
+			pkg.muted_count += 1
 		}
 		return
 	}
@@ -131,12 +129,12 @@ add_rule_finding :: proc(result: ^Result, pkg: ^Package, finding: Finding) {
 }
 
 // Notes the packages whose compile errors hid a finding, in the order of `packages`. A pending
-// package's hidden findings are all held back, because every rule that a mute drops is. Allocates
+// package's dropped findings are all held back, because every rule that a mute drops is. Allocates
 // the lines with `context.allocator`.
-note_hidden :: proc(packages: []Package, result: ^Result) {
+note_muted :: proc(packages: []Package, result: ^Result) {
 	for p in packages {
-		if p.hidden > 0 {
-			append(&result.notes, Note{fmt.aprintf(HIDDEN_LINE, p.dir), p.status == .Pending})
+		if p.muted_count > 0 {
+			append(&result.notes, Note{fmt.aprintf(MUTED_LINE, p.dir), p.status == .Pending})
 		}
 	}
 }

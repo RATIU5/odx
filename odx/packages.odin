@@ -62,18 +62,18 @@ Compile :: union #no_nil {
 
 Package :: struct {
 	// Repo-relative with `/`, and "." for the root.
-	dir:     string,
+	dir:         string,
 	// The name of the first file in path order that compiles for a target and isn't a test file.
-	name:    string,
-	status:  Package_Status,
+	name:        string,
+	status:      Package_Status,
 	// In path order, without the files odx doesn't read.
-	files:   [dynamic]Source_File,
-	compile: Compile,
+	files:       [dynamic]Source_File,
+	compile:     Compile,
 	// Its own check reported an error in its own files that wasn't relocated, so only the rules
 	// that run when muted apply.
-	muted:   bool,
+	muted:       bool,
 	// How many findings were dropped because it is muted, without those an ignore covers.
-	hidden:  int,
+	muted_count: int,
 }
 
 @(private = "file")
@@ -137,7 +137,7 @@ Dir_Entry_Kind :: enum u8 {
 	// A directory itself. A link to one is `Other`, because odx never walks it.
 	Dir,
 	// A `.odin` file the compiler never compiles, which still makes its directory a package.
-	Hidden_Source,
+	Dot_Source,
 	// A `.odin` file odx reads, unless its tags say `#+build ignore`. A link that doesn't resolve
 	// is one too, and reading it reports why.
 	Source,
@@ -182,8 +182,8 @@ dir_entry_kind :: proc(entry: os.File_Info) -> Dir_Entry_Kind {
 		return .Dir
 	case !strings.has_suffix(entry.name, ".odin"):
 		return .Other
-	case is_hidden_file(entry.name):
-		return .Hidden_Source
+	case is_dot_file(entry.name):
+		return .Dot_Source
 	case !is_regular:
 		return .Special_Source
 	}
@@ -230,7 +230,7 @@ walk_dir :: proc(w: ^Walker, rel, abs, project: string) {
 				continue
 			}
 			walk_dir(w, child, entry.fullpath, entry.name)
-		case .Hidden_Source:
+		case .Dot_Source:
 			is_package = true
 		case .Special_Source:
 			is_package = true

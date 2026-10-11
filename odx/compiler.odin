@@ -39,23 +39,23 @@ check_compiler :: proc(
 }
 
 // What `odin root` printed, without a trailing `/`, or a message saying why odx couldn't read it.
-// The failure only stops a run that has packages to check.
+// The error only stops a run that has packages to check.
 Odin_Root :: struct {
-	path:    string,
-	failure: string,
+	path:  string,
+	error: string,
 }
 
 read_odin_root :: proc(odin: string, allocator: runtime.Allocator) -> Odin_Root {
 	probe := probe_odin(odin, "root", allocator)
 	if probe.error != "" {
-		return {failure = probe.error}
+		return {error = probe.error}
 	}
 	text := strings.trim_space(probe.stdout)
 	if probe.status != (Exited{0}) || text == "" {
 		b := strings.builder_make(allocator)
 		fmt.sbprintf(&b, "'%s root' failed: %s", odin, status_text(probe.status, allocator))
 		write_stderr_tail(&b, probe.stderr)
-		return {failure = strings.to_string(b)}
+		return {error = strings.to_string(b)}
 	}
 	return {path = strings.trim_right(text, "/")}
 }
@@ -83,14 +83,8 @@ probe_odin :: proc(odin, subcommand: string, allocator: runtime.Allocator) -> (p
 		allocator,
 	)
 	switch {
-	case end.failure != "":
-		probe.error = fmt.aprintf(
-			"'%s %s' %s",
-			odin,
-			subcommand,
-			end.failure,
-			allocator = allocator,
-		)
+	case end.error != "":
+		probe.error = fmt.aprintf("'%s %s' %s", odin, subcommand, end.error, allocator = allocator)
 	case end.timed_out:
 		b := strings.builder_make(allocator)
 		fmt.sbprintf(&b, "'%s %s' ", odin, subcommand)

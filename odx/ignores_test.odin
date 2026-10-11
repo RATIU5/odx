@@ -20,8 +20,8 @@ binding_covers_the_lines_each_fixture_expects :: proc(t: ^testing.T) {
 			continue
 		}
 		src := string(data)
-		tree, failure := parse_source(src, context.allocator)
-		if !testing.expectf(t, failure == nil, "%s doesn't parse: %v", path, failure) {
+		tree, parse_error := parse_source(src, context.allocator)
+		if !testing.expectf(t, parse_error == nil, "%s doesn't parse: %v", path, parse_error) {
 			continue
 		}
 		line_starts := make_line_starts(src, context.allocator)

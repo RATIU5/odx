@@ -12,7 +12,6 @@ TRANSMUTE_MESSAGE :: "'transmute' isn't allowed"
 FALLTHROUGH_MESSAGE :: "'fallthrough' isn't allowed"
 BLOCK_COMMENT_MESSAGE :: "block comments aren't allowed"
 ONE_LINE_BLOCK_MESSAGE :: "this block opens and closes on one line"
-DO_MESSAGE :: "'do' isn't allowed"
 BOUNDS_CHECK_MESSAGE :: "'#bounds_check' isn't allowed"
 NO_BOUNDS_CHECK_MESSAGE :: "'#no_bounds_check' isn't allowed"
 
@@ -32,13 +31,12 @@ check_block_comments :: proc(w: ^File_Walk, groups: []^ast.Comment_Group) {
 	}
 }
 
-// The parser wraps a `do` body in a block that starts at the body's statement.
+// The parser wraps a `do` body in a block, which is no finding.
 check_block :: proc(w: ^File_Walk, block: ^ast.Block_Stmt, is_proc_or_foreign_block_body: bool) {
-	if block.uses_do {
-		report(w, .Do_Stmt, block.pos, DO_MESSAGE)
-		return
-	}
-	if len(block.stmts) == 0 || block.pos.line != block.end.line || is_proc_or_foreign_block_body {
+	if block.uses_do ||
+	   len(block.stmts) == 0 ||
+	   block.pos.line != block.end.line ||
+	   is_proc_or_foreign_block_body {
 		return
 	}
 	report(w, .One_Line_Block, block.pos, ONE_LINE_BLOCK_MESSAGE)

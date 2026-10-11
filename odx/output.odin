@@ -8,7 +8,7 @@ import "core:strings"
 
 JSON_VERSION :: 1
 
-HIDDEN_LINE :: "odx: %s: compile errors hide this package's other findings"
+MUTED_LINE :: "odx: %s: compile errors hide this package's other findings"
 
 // `odin check` leaves a file tagged `#+test` out, and only `odin test` compiles it, which odx can't
 // run (ADR 0005).
@@ -71,7 +71,7 @@ Result :: struct {
 	ignored:          int,
 	pending:          int,
 	skipped:          int,
-	// In print order: the skipped packages, those with `#+test` files, then those with hidden
+	// In print order: the skipped packages, those with `#+test` files, then those with dropped
 	// findings.
 	notes:            [dynamic]Note,
 	// How many times a signal ended the compiler and odx ran it again.
@@ -206,7 +206,7 @@ render_result :: proc(out, err: ^strings.Builder, result: Result, cmd: Check_Com
 		}
 	}
 	if cmd.pending && count < len(result.findings) {
-		strings.write_string(err, "odx: pending findings:\n")
+		strings.write_string(err, "odx: held-back findings:\n")
 		render_finding_notes(err, result.findings[:], true)
 		for f in result.findings {
 			if f.held_back {
@@ -267,7 +267,7 @@ render_json :: proc(out: ^strings.Builder, result: Result, cmd: Check_Command, f
 		)
 		render_json_string(out, f.message)
 		if f.held_back {
-			strings.write_string(out, `,"pending":true`)
+			strings.write_string(out, `,"held_back":true`)
 		}
 		strings.write_byte(out, '}')
 	}

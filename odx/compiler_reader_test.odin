@@ -40,8 +40,8 @@ outcome_name :: proc(outcome: Check_Outcome) -> string {
 	switch _ in outcome {
 	case Clean:
 		return "clean"
-	case Diagnostics:
-		return "diagnostics"
+	case Entries:
+		return "entries"
 	case Untrusted:
 		return "untrusted"
 	}
@@ -73,7 +73,7 @@ expect_read_cases :: proc(t: ^testing.T, cases: []Read_Case) {
 		)
 		got := outcome_name(outcome)
 		testing.expectf(t, got == c.want, "%s: got %s, want %s", c.name, got, c.want)
-		if d, ok := outcome.(Diagnostics); ok {
+		if d, ok := outcome.(Entries); ok {
 			testing.expectf(
 				t,
 				len(d.entries) == c.entries,
@@ -97,13 +97,13 @@ read_check_trusts_a_run_whose_exit_code_fits_its_document :: proc(t: ^testing.T)
 	defer free_all(context.temp_allocator)
 	cases := []Read_Case {
 		{"exit 0, empty stderr", 0, false, "", "clean", 0},
-		{"exit 0, only warnings", 0, false, document(1, WARNING_ENTRY), "diagnostics", 1},
+		{"exit 0, only warnings", 0, false, document(1, WARNING_ENTRY), "entries", 1},
 		{
 			"exit 1, an error and a matching count",
 			1,
 			false,
 			document(2, ERROR_ENTRY, WARNING_ENTRY),
-			"diagnostics",
+			"entries",
 			2,
 		},
 		{
@@ -111,7 +111,7 @@ read_check_trusts_a_run_whose_exit_code_fits_its_document :: proc(t: ^testing.T)
 			1,
 			false,
 			document(1, SYNTAX_ENTRY),
-			"diagnostics",
+			"entries",
 			1,
 		},
 	}
@@ -258,7 +258,7 @@ read_check_reads_a_second_run_like_a_first :: proc(t: ^testing.T) {
 
 	_, clean := read_check(Exited{0}, false, true, "", allocator).(Clean)
 	testing.expect(t, clean, "a clean second run isn't clean")
-	d, has := read_check(Exited{1}, false, true, document(1, ERROR_ENTRY), allocator).(Diagnostics)
+	d, has := read_check(Exited{1}, false, true, document(1, ERROR_ENTRY), allocator).(Entries)
 	testing.expect(t, has && len(d.entries) == 1, "a second run lost its entries")
 }
 
@@ -271,7 +271,7 @@ read_check_types_each_entry_and_keeps_its_position :: proc(t: ^testing.T) {
 
 	stderr := document(3, ERROR_ENTRY, WARNING_ENTRY, SYNTAX_ENTRY)
 	outcome := read_check(Exited{1}, false, false, stderr, virtual.arena_allocator(&arena))
-	d, ok := outcome.(Diagnostics)
+	d, ok := outcome.(Entries)
 	testing.expectf(t, ok, "got %s", outcome_name(outcome))
 	if !ok || len(d.entries) != 3 {
 		return

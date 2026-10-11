@@ -13,7 +13,7 @@ Entry_Kind :: enum u8 {
 	Warning,
 }
 
-// One compiler diagnostic as the compiler reported it.
+// One error or warning as the compiler reported it.
 Compiler_Entry :: struct {
 	kind: Entry_Kind,
 	// The compiler's absolute path, or "" for a null `pos`.
@@ -25,7 +25,7 @@ Compiler_Entry :: struct {
 
 Clean :: struct {}
 
-Diagnostics :: struct {
+Entries :: struct {
 	entries: []Compiler_Entry,
 }
 
@@ -41,7 +41,7 @@ Untrusted :: struct {
 // The caller attaches the package and the target.
 Check_Outcome :: union {
 	Clean,
-	Diagnostics,
+	Entries,
 	Untrusted,
 }
 
@@ -109,7 +109,7 @@ read_check :: proc(
 		)
 		return Untrusted{reason = reason, stderr = stderr}
 	}
-	return Diagnostics{entries}
+	return Entries{entries}
 }
 
 // `json.parse` accepts trailing data, so the document counts only when the parser reaches the end

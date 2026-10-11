@@ -144,13 +144,13 @@ finish_compile :: proc(
 	// The package whose check gave each of `duplicates`.
 	duplicate_checks := make([dynamic]int, scratch)
 	for run, i in pool.runs {
-		diagnostics, has := run.outcome.(Diagnostics)
+		outcome, has := run.outcome.(Entries)
 		if !has {
 			continue
 		}
 		checked := &packages[jobs[i].pkg]
 		pending_strict := jobs[i].strict && checked.status == .Pending
-		for entry in diagnostics.entries {
+		for entry in outcome.entries {
 			if clashes_with_foreign_procedure(entry, &foreign_decls, scratch) {
 				continue
 			}
@@ -285,9 +285,9 @@ read_check_end :: proc(
 	stop: bool,
 ) {
 	run.timed_out, run.retried = end.timed_out, end.retried
-	if end.failure != "" {
+	if end.error != "" {
 		run.outcome = Untrusted {
-			reason = end.failure,
+			reason = end.error,
 			unread = true,
 		}
 	} else {

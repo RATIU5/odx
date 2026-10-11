@@ -110,7 +110,6 @@ rules_table_matches_the_contract_flag_by_flag :: proc(t: ^testing.T) {
 		.Block_Comment          = {"block-comment", false, false, true, true},
 		.One_Line_Block         = {"one-line-block", false, false, true, true},
 		.Auto_Cast              = {"auto-cast", false, false, true, true},
-		.Do_Stmt                = {"do-stmt", false, false, true, true},
 		.Fallthrough            = {"fallthrough", true, false, true, true},
 		.Bounds_Check_Directive = {"bounds-check-directive", true, false, true, true},
 		.Vet_Disabled           = {"vet-disabled", false, false, true, false},
@@ -166,10 +165,10 @@ rules_table_matches_the_contract_flag_by_flag :: proc(t: ^testing.T) {
 @(test)
 add_rule_finding_counts_what_a_muted_package_hides :: proc(t: ^testing.T) {
 	cases := []struct {
-		rule:   Rule,
-		muted:  bool,
-		line:   int,
-		hidden: int,
+		rule:        Rule,
+		muted:       bool,
+		line:        int,
+		muted_count: int,
 	} {
 		{.Name_Case, true, 9, 1},
 		{.Format, true, 9, 1},
@@ -202,13 +201,13 @@ add_rule_finding_counts_what_a_muted_package_hides :: proc(t: ^testing.T) {
 		)
 		testing.expectf(
 			t,
-			pkg.hidden == c.hidden,
-			"%v at line %d (muted %v): hidden %d, want %d",
+			pkg.muted_count == c.muted_count,
+			"%v at line %d (muted %v): muted_count %d, want %d",
 			c.rule,
 			c.line,
 			c.muted,
-			pkg.hidden,
-			c.hidden,
+			pkg.muted_count,
+			c.muted_count,
 		)
 		covered := c.muted && c.rule == .Name_Case && c.line == 3
 		testing.expectf(
@@ -224,17 +223,17 @@ add_rule_finding_counts_what_a_muted_package_hides :: proc(t: ^testing.T) {
 }
 
 @(test)
-note_hidden_notes_each_package_with_a_hidden_finding_in_package_order :: proc(t: ^testing.T) {
+note_muted_notes_each_package_with_a_dropped_finding_in_package_order :: proc(t: ^testing.T) {
 	packages := []Package {
-		{dir = ".", muted = true, hidden = 1},
+		{dir = ".", muted = true, muted_count = 1},
 		{dir = "a", muted = true},
-		{dir = "b", muted = true, hidden = 2, status = .Pending},
+		{dir = "b", muted = true, muted_count = 2, status = .Pending},
 		{dir = "c"},
 	}
 	context.allocator = context.temp_allocator
 	defer free_all(context.temp_allocator)
 	result: Result
-	note_hidden(packages, &result)
+	note_muted(packages, &result)
 	want := []Note {
 		{text = "odx: .: compile errors hide this package's other findings"},
 		{"odx: b: compile errors hide this package's other findings", true},

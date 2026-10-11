@@ -60,7 +60,7 @@ the_work_stack_carries_the_parser_twice_as_deep_as_the_compiler_goes :: proc(t: 
 					shape.tail,
 				},
 			)
-			if _, failure := parse_source(src, context.allocator); failure != nil {
+			if _, parse_error := parse_source(src, context.allocator); parse_error != nil {
 				failed |= 1 << uint(i)
 			}
 			virtual.arena_free_all(&arena)

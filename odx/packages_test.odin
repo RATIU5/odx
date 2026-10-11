@@ -109,8 +109,8 @@ dir_entry_kind_follows_a_link_only_to_learn_its_kind :: proc(t: ^testing.T) {
 		name: string,
 		kind: Dir_Entry_Kind,
 	} {
-		{".hidden.odin", .Hidden_Source},
-		{".hidden_device.odin", .Hidden_Source},
+		{".hidden.odin", .Dot_Source},
+		{".hidden_device.odin", .Dot_Source},
 		{"dangling.odin", .Source},
 		{"dir.odin", .Dir},
 		{"file.odin", .Source},

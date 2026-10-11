@@ -284,7 +284,7 @@ Format_Jobs :: struct {
 	pool:    Pool(Format_Outcome),
 	work:    virtual.Arena,
 	// Why no child could start, and "" otherwise.
-	failure: string,
+	error:   string,
 }
 
 // Starts one `__format` child per parsed file of `packages`, largest file first, and returns
@@ -303,7 +303,7 @@ start_format :: proc(
 
 	odx, exe_err := os.get_executable_path(work)
 	if exe_err != nil {
-		jobs.failure = fmt.aprintf(
+		jobs.error = fmt.aprintf(
 			"odx can't find its own executable to run the formatter: %s",
 			os.error_string(exe_err),
 			allocator = work,
@@ -364,8 +364,8 @@ finish_format :: proc(
 	join_pool(&jobs.pool)
 	defer destroy_format(jobs)
 
-	if jobs.failure != "" {
-		append(&result.errors, Error{.Format_Failed, strings.clone(jobs.failure, allocator)})
+	if jobs.error != "" {
+		append(&result.errors, Error{.Format_Failed, strings.clone(jobs.error, allocator)})
 		return
 	}
 	for job in jobs.by_path {
@@ -447,8 +447,8 @@ read_format_end :: proc(
 	outcome: Format_Outcome,
 	stop: bool,
 ) {
-	if end.failure != "" {
-		return Run_Failed{end.failure}, true
+	if end.error != "" {
+		return Run_Failed{end.error}, true
 	}
 	switch result in read_print_result(end.captured[.Stdout]) {
 	case Formatted:

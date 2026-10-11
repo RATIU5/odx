@@ -66,10 +66,10 @@ Child_Status :: union #no_nil {
 	Signaled,
 }
 
-// `failure` says why odx couldn't run the child or can't believe what it read of the child's
-// streams, and is "" otherwise. With a failure, nothing is captured.
+// `error` says why odx couldn't run the child or can't believe what it read of the child's
+// streams, and is "" otherwise. With an error, nothing is captured.
 Child_End :: struct {
-	failure:   string,
+	error:     string,
 	// odx killed the child at its limit.
 	timed_out: bool,
 	// The pool ran the command a second time, and this is how that run ended.
@@ -224,7 +224,7 @@ charge_poll :: proc(left, slice, poll: time.Duration) -> time.Duration {
 // odx couldn't read, isn't known to pass the second time.
 died_on_its_own :: proc(end: Child_End) -> bool {
 	_, signaled := end.status.(Signaled)
-	return signaled && !end.timed_out && end.failure == ""
+	return signaled && !end.timed_out && end.error == ""
 }
 
 // `exit <n>` or `signal <n>`, so a message never calls a signal an exit code. Allocates with
@@ -262,8 +262,8 @@ END_POLL :: 50 * time.Microsecond
 //
 // The streams in `captured` come through pipes that this thread drains while it waits, so no disk
 // stands between the child and odx. The child's other stream is discarded. This is the one place
-// odx reads a child's stream, and `end.failure` is the one answer to whether the stream can be
-// believed: a pipe that odx can't make or read is a failure, never an empty stream. So is a stream
+// odx reads a child's stream, and `end.error` is the one answer to whether the stream can be
+// believed: a pipe that odx can't make or read is an error, never an empty stream. So is a stream
 // of more than `stream_cap` bytes, whose child odx kills. Allocates `end` with `allocator`.
 run_captured :: proc(
 	desc: os.Process_Desc,
@@ -293,7 +293,7 @@ run_captured :: proc(
 		readers[stream], writers[stream], pipe_err = os.pipe()
 		if pipe_err != nil {
 			close_all(&writers)
-			end.failure = fmt.aprintf(
+			end.error = fmt.aprintf(
 				"couldn't capture its %s: %s",
 				STREAM_NAMES[stream],
 				os.error_string(pipe_err),
@@ -306,7 +306,7 @@ run_captured :: proc(
 	process, start_err := os.process_start(desc)
 	close_all(&writers)
 	if start_err != nil {
-		end.failure = fmt.aprintf(
+		end.error = fmt.aprintf(
 			"couldn't start: %s",
 			os.error_string(start_err),
 			allocator = allocator,
@@ -367,8 +367,8 @@ run_captured :: proc(
 	if lose != "" && len(desc.command) > 1 && desc.command[1] == lose {
 		read_errno = .EIO
 	}
-	end.failure = capture_failure(read_errno, wait_errno, pipes.over, stream_cap, allocator)
-	if end.failure == "" {
+	end.error = capture_error(read_errno, wait_errno, pipes.over, stream_cap, allocator)
+	if end.error == "" {
 		for stream in captured {
 			end.captured[stream] = strings.clone(string(pipes.texts[stream][:]), allocator)
 		}
@@ -379,7 +379,7 @@ run_captured :: proc(
 // Why odx can't believe what it read of a child's streams, as the rest of a sentence about the
 // child, or "" when it can. The text never quotes the stream. Allocates with `allocator`.
 @(private = "file")
-capture_failure :: proc(
+capture_error :: proc(
 	read_errno, wait_errno: posix.Errno,
 	over: Maybe(Stream),
 	stream_cap: int,

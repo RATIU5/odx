@@ -11,7 +11,7 @@ odx: 0 findings, 0 ignored, 1 pending, 0 skipped (rules 1, odx <release>, odin <
 --- stderr
 odx: app: the compiler doesn't check 1 files tagged #+test
 odx: old: the compiler doesn't check 1 files tagged #+test
-odx: pending findings:
+odx: held-back findings:
 --- exit 0
 === odx check --json
 --- stdout

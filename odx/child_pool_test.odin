@@ -13,7 +13,7 @@ import "core:time"
 @(private = "file")
 exit_code_of :: proc(end: Child_End, allocator: runtime.Allocator) -> (code: int, stop: bool) {
 	exited, has_code := end.status.(Exited)
-	return exited.code if end.failure == "" && !end.timed_out && has_code else -1, false
+	return exited.code if end.error == "" && !end.timed_out && has_code else -1, false
 }
 
 @(private = "file")
@@ -219,7 +219,7 @@ died_on_its_own_is_a_signal_that_odx_didnt_send :: proc(t: ^testing.T) {
 		{"exit code 139, a shell's name for SIGSEGV", {status = Exited{139}}, false},
 		{
 			"a child odx killed because it lost the stream",
-			{status = Signaled{9}, failure = "started, but odx couldn't read its output"},
+			{status = Signaled{9}, error = "started, but odx couldn't read its output"},
 			false,
 		},
 	}
@@ -273,7 +273,7 @@ run_captured_tells_a_signal_from_an_exit_code :: proc(t: ^testing.T) {
 	}
 	for c in cases {
 		end := run_shell(c.script)
-		testing.expectf(t, end.failure == "", "%s: %s", c.script, end.failure)
+		testing.expectf(t, end.error == "", "%s: %s", c.script, end.error)
 		testing.expectf(t, !end.timed_out, "%s: timed out", c.script)
 		testing.expectf(
 			t,
@@ -291,7 +291,7 @@ run_captured_returns_the_captured_streams_and_drops_the_other :: proc(t: ^testin
 	defer free_all(context.temp_allocator)
 	SCRIPT :: "printf out; printf err >&2; exit 3"
 	both := run_shell(SCRIPT, captured = {.Stdout, .Stderr})
-	testing.expect_value(t, both.failure, "")
+	testing.expect_value(t, both.error, "")
 	testing.expect_value(t, both.status, Exited{3})
 	testing.expect_value(t, both.captured, [Stream]string{.Stdout = "out", .Stderr = "err"})
 
@@ -312,7 +312,7 @@ run_captured_reads_a_100_mb_stream_whole :: proc(t: ^testing.T) {
 	)
 	defer delete(end.captured[.Stdout])
 	text := end.captured[.Stdout]
-	testing.expect_value(t, end.failure, "")
+	testing.expect_value(t, end.error, "")
 	testing.expect_value(t, end.status, Exited{0})
 	testing.expect_value(t, len(text), SIZE + len("end"))
 	testing.expect(t, strings.has_suffix(text, "xend"), "the stream's end is missing")
@@ -343,7 +343,7 @@ run_captured_kills_a_child_that_writes_past_the_cap :: proc(t: ^testing.T) {
 	endless := capped("exec yes flood >&2", .Stderr)
 	took := time.tick_since(started)
 	WANT :: "wrote more than 1 MB to its stderr, the most odx reads from one stream"
-	testing.expect_value(t, endless.failure, WANT)
+	testing.expect_value(t, endless.error, WANT)
 	testing.expect_value(t, endless.status, Signaled{9})
 	testing.expect(t, !endless.timed_out, "the cap was reported as a timeout")
 	testing.expect_value(t, endless.captured[.Stderr], "")
@@ -351,7 +351,7 @@ run_captured_kills_a_child_that_writes_past_the_cap :: proc(t: ^testing.T) {
 	testing.expectf(t, took < 2 * time.Second, "the kill took %v", took)
 
 	at_cap := capped("head -c 1048576 /dev/zero", .Stdout)
-	testing.expect_value(t, at_cap.failure, "")
+	testing.expect_value(t, at_cap.error, "")
 	testing.expect_value(t, at_cap.status, Exited{0})
 	testing.expect_value(t, len(at_cap.captured[.Stdout]), CAP)
 
@@ -359,8 +359,8 @@ run_captured_kills_a_child_that_writes_past_the_cap :: proc(t: ^testing.T) {
 	one_over := capped("head -c 1048577 /dev/zero", .Stdout)
 	testing.expect(
 		t,
-		strings.has_prefix(one_over.failure, "wrote more than 1 MB to its stdout"),
-		one_over.failure,
+		strings.has_prefix(one_over.error, "wrote more than 1 MB to its stdout"),
+		one_over.error,
 	)
 	testing.expect_value(t, one_over.captured[.Stdout], "")
 }
@@ -392,7 +392,7 @@ run_captured_kills_a_child_at_its_limit_and_keeps_what_it_wrote :: proc(t: ^test
 	end := run_shell("echo before; exec sleep 30", 200 * time.Millisecond, {.Stdout})
 	took := time.tick_since(started)
 
-	testing.expect_value(t, end.failure, "")
+	testing.expect_value(t, end.error, "")
 	testing.expect(t, end.timed_out, "the child didn't time out")
 	testing.expect_value(t, end.status, Signaled{9})
 	testing.expect_value(t, end.captured[.Stdout], "before\n")
@@ -412,7 +412,7 @@ run_captured_doesnt_wait_for_a_process_the_child_left_holding_the_pipe :: proc(t
 	started := time.tick_now()
 	quiet := run_shell("sleep 3 & echo done", captured = {.Stdout})
 	took := time.tick_since(started)
-	testing.expect_value(t, quiet.failure, "")
+	testing.expect_value(t, quiet.error, "")
 	testing.expect_value(t, quiet.status, Exited{0})
 	testing.expect_value(t, quiet.captured[.Stdout], "done\n")
 	testing.expectf(t, took < 2 * time.Second, "the wait took %v", took)
@@ -421,7 +421,7 @@ run_captured_doesnt_wait_for_a_process_the_child_left_holding_the_pipe :: proc(t
 	started = time.tick_now()
 	loud := run_shell("yes & sleep 0.2", captured = {.Stdout})
 	took = time.tick_since(started)
-	testing.expect_value(t, loud.failure, "")
+	testing.expect_value(t, loud.error, "")
 	testing.expect_value(t, loud.status, Exited{0})
 	testing.expectf(t, took < 2 * time.Second, "the wait took %v", took)
 }
@@ -437,6 +437,6 @@ run_captured_says_why_a_child_didnt_start :: proc(t: ^testing.T) {
 		context.temp_allocator,
 	)
 	testing.expect(t, ended, "the wait reports a kill that nobody asked for")
-	testing.expect(t, strings.has_prefix(end.failure, "couldn't start: "), end.failure)
+	testing.expect(t, strings.has_prefix(end.error, "couldn't start: "), end.error)
 	testing.expect_value(t, end.captured[.Stderr], "")
 }
