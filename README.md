@@ -1,5 +1,8 @@
 # odx
 
+> [!WARNING]
+> This is a 100% vibe-coded proof-of-concept project. My goal is to see if it is any use to me only. Use at your own risk.
+
 A strict, opinionated checker for Odin projects: format, naming and syntax rules on top of pinned compiler flags. Memory-checked tests and runs are planned. Terms: [GLOSSARY.md](GLOSSARY.md); principles: [docs/adr/0004-principles.md](docs/adr/0004-principles.md).
 
 ## Workflow
@@ -13,15 +16,15 @@ A strict, opinionated checker for Odin projects: format, naming and syntax rules
 
 ## Commands
 
-| Command | Does |
-| --- | --- |
-| `odx check` | Checks every package under the repo root and prints the findings. |
-| `odx check --json` | Prints the same result as one JSON document on stdout. |
-| `odx check --pending` | Also prints the held-back findings of pending packages. |
-| `odx init` | Writes `odx.json` and `odinfmt.json` for a repo that has no `odx.json`. |
-| `odx --help` | Prints the commands, the flags and the exit codes. |
-| `odx --version` | Prints the release, its rule set and the compiler it supports, as `odx 0.1.0, rule set 1, odin dev-2026-09-nightly:a2fb372`. |
-| `odx test`, `odx run` | Planned. Today each is a `usage` error. |
+| Command               | Does                                                                                                                         |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `odx check`           | Checks every package under the repo root and prints the findings.                                                            |
+| `odx check --json`    | Prints the same result as one JSON document on stdout.                                                                       |
+| `odx check --pending` | Also prints the held-back findings of pending packages.                                                                      |
+| `odx init`            | Writes `odx.json` and `odinfmt.json` for a repo that has no `odx.json`.                                                      |
+| `odx --help`          | Prints the commands, the flags and the exit codes.                                                                           |
+| `odx --version`       | Prints the release, its rule set and the compiler it supports, as `odx 0.1.0, rule set 1, odin dev-2026-09-nightly:a2fb372`. |
+| `odx test`, `odx run` | Planned. Today each is a `usage` error.                                                                                      |
 
 The repo root is the nearest directory above the working directory that holds `odx.json`, else the nearest that holds `.git`, else the working directory.
 
@@ -37,11 +40,11 @@ A finding is one line on stdout, `path:line:col: rule: message`. The last stdout
 odx: 0 findings, 2 ignored, 0 pending, 0 skipped (rules 1, odx 0.1.0, odin dev-2026-09-nightly:a2fb372)
 ```
 
-| Exit | Means |
-| --- | --- |
-| 0 | No findings. |
-| 1 | At least one finding. |
-| 2 | An error: odx can't give a trustworthy result. Stderr has `odx: error: <code>: <message>`. |
+| Exit | Means                                                                                      |
+| ---- | ------------------------------------------------------------------------------------------ |
+| 0    | No findings.                                                                               |
+| 1    | At least one finding.                                                                      |
+| 2    | An error: odx can't give a trustworthy result. Stderr has `odx: error: <code>: <message>`. |
 
 `--json` prints `{"version":1,"findings":[...],"errors":[...],"summary":{...}}`. Each finding has `path`, `line`, `col`, `rule` and `message`. `errors` is non-empty when the exit is 2, except for a usage error, which prints no JSON.
 
@@ -91,15 +94,15 @@ An error message that quotes a compiler's stderr shows its last 40 lines. The me
 
 Without `odx.json`, odx uses rule set 1 and the running compiler, treats every package as strict, and says so on stderr. An unknown key, a duplicate key or a wrong type is the error `config-invalid`.
 
-| Key | Type | Required | Meaning |
-| --- | --- | --- | --- |
-| `version` | integer | yes | The rule set in force. |
-| `odin` | string | yes | The pinned compiler, the text after `odin version `. |
-| `pending` | object of directory to reason | no | Packages that aren't strict yet. A reason can't be empty. |
-| `vendored` | array of directories | no | Third-party trees that odx applies no rules to. |
-| `exclude_dirs` | array of directories | no | Directories odx never scans. |
-| `collections` | array of `name=path` | no | Passed to the compiler. The path must be inside the repo. |
-| `defines` | array of `NAME=value` | no | Passed to the compiler. |
+| Key            | Type                          | Required | Meaning                                                   |
+| -------------- | ----------------------------- | -------- | --------------------------------------------------------- |
+| `version`      | integer                       | yes      | The rule set in force.                                    |
+| `odin`         | string                        | yes      | The pinned compiler, the text after `odin version `.      |
+| `pending`      | object of directory to reason | no       | Packages that aren't strict yet. A reason can't be empty. |
+| `vendored`     | array of directories          | no       | Third-party trees that odx applies no rules to.           |
+| `exclude_dirs` | array of directories          | no       | Directories odx never scans.                              |
+| `collections`  | array of `name=path`          | no       | Passed to the compiler. The path must be inside the repo. |
+| `defines`      | array of `NAME=value`         | no       | Passed to the compiler.                                   |
 
 A `pending` entry with nothing left to fix is the finding `pending-stale`, at the entry's place in `odx.json`.
 
@@ -107,32 +110,32 @@ A `pending` entry with nothing left to fix is the finding `pending-stale`, at th
 
 All rules belong to rule set 1. A rule that can be ignored takes an ignore with a reason. The others have no exception.
 
-| Rule | Ignorable | Reports |
-| --- | --- | --- |
-| `odin` | no | An error or a warning from `odin check` with odx's strict flags. |
-| `parse-unsupported` | no | A file that odx can't read or parse. [Files odx can't read](#files-odx-cant-read) lists the cases. |
-| `import-escape` | no | An import, `#load` or `foreign import` path that leaves the repo. |
-| `path-case` | no | A path whose case differs from the directory entry on disk. |
-| `line-length` | yes | A line wider than 100 columns, with a tab counted as 4. |
-| `ignore-invalid` | no | An ignore that is misspelled, names an unknown rule or a rule that can't be ignored, or covers nothing. |
-| `ignore-unused` | no | An ignore that suppressed no finding. |
-| `pending-stale` | no | A `pending` entry that has no findings left or names no package. |
-| `block-comment` | no | A `/* */` comment. |
-| `one-line-block` | no | A `{ }` block that holds a statement and opens and closes on one line. Procedure bodies are exempt. A one-statement body is written with `do` on one line or with braces on their own lines. |
-| `auto-cast` | no | `auto_cast`. |
-| `fallthrough` | yes | `fallthrough`. |
-| `bounds-check-directive` | yes | `#no_bounds_check` or `#bounds_check`. |
-| `vet-disabled` | no | A `#+vet` tag that turns a check off. |
-| `feature-relaxed` | yes | A `#+feature` tag that turns off a compiler error. Only a whole-file ignore covers it. |
-| `transmute` | yes | `transmute`. |
-| `format` | no | A file that differs from the formatter's output. |
-| `proc-length` | yes | A procedure body with more than 100 counted lines. |
-| `nesting-depth` | yes | A block nested more than 6 levels deep. |
-| `name-case` | yes | A name without its kind's case: `Ada_Case` types, `snake_case` procedures and variables, `SCREAMING_CASE` constants and package-level literal tables. |
-| `package-name` | no | A `package` clause that differs from its directory's name and isn't `main`, or a directory name that isn't `snake_case`. |
-| `file-name` | no | A `.odin` file name that isn't `snake_case`. |
-| `import-alias` | no | An import alias equal to the name the import has without one. |
-| `import-order` | no | Imports out of group order or spaced wrongly. Groups run `base:` and `core:`, then `vendor:`, then other collections, then relative paths, with one blank line between groups. |
+| Rule                     | Ignorable | Reports                                                                                                                                                                                      |
+| ------------------------ | --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `odin`                   | no        | An error or a warning from `odin check` with odx's strict flags.                                                                                                                             |
+| `parse-unsupported`      | no        | A file that odx can't read or parse. [Files odx can't read](#files-odx-cant-read) lists the cases.                                                                                           |
+| `import-escape`          | no        | An import, `#load` or `foreign import` path that leaves the repo.                                                                                                                            |
+| `path-case`              | no        | A path whose case differs from the directory entry on disk.                                                                                                                                  |
+| `line-length`            | yes       | A line wider than 100 columns, with a tab counted as 4.                                                                                                                                      |
+| `ignore-invalid`         | no        | An ignore that is misspelled, names an unknown rule or a rule that can't be ignored, or covers nothing.                                                                                      |
+| `ignore-unused`          | no        | An ignore that suppressed no finding.                                                                                                                                                        |
+| `pending-stale`          | no        | A `pending` entry that has no findings left or names no package.                                                                                                                             |
+| `block-comment`          | no        | A `/* */` comment.                                                                                                                                                                           |
+| `one-line-block`         | no        | A `{ }` block that holds a statement and opens and closes on one line. Procedure bodies are exempt. A one-statement body is written with `do` on one line or with braces on their own lines. |
+| `auto-cast`              | no        | `auto_cast`.                                                                                                                                                                                 |
+| `fallthrough`            | yes       | `fallthrough`.                                                                                                                                                                               |
+| `bounds-check-directive` | yes       | `#no_bounds_check` or `#bounds_check`.                                                                                                                                                       |
+| `vet-disabled`           | no        | A `#+vet` tag that turns a check off.                                                                                                                                                        |
+| `feature-relaxed`        | yes       | A `#+feature` tag that turns off a compiler error. Only a whole-file ignore covers it.                                                                                                       |
+| `transmute`              | yes       | `transmute`.                                                                                                                                                                                 |
+| `format`                 | no        | A file that differs from the formatter's output.                                                                                                                                             |
+| `proc-length`            | yes       | A procedure body with more than 100 counted lines.                                                                                                                                           |
+| `nesting-depth`          | yes       | A block nested more than 6 levels deep.                                                                                                                                                      |
+| `name-case`              | yes       | A name without its kind's case: `Ada_Case` types, `snake_case` procedures and variables, `SCREAMING_CASE` constants and package-level literal tables.                                        |
+| `package-name`           | no        | A `package` clause that differs from its directory's name and isn't `main`, or a directory name that isn't `snake_case`.                                                                     |
+| `file-name`              | no        | A `.odin` file name that isn't `snake_case`.                                                                                                                                                 |
+| `import-alias`           | no        | An import alias equal to the name the import has without one.                                                                                                                                |
+| `import-order`           | no        | Imports out of group order or spaced wrongly. Groups run `base:` and `core:`, then `vendor:`, then other collections, then relative paths, with one blank line between groups.               |
 
 ## Packages for one platform
 
