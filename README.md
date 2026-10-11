@@ -71,7 +71,7 @@ odx: the compiler died by a signal 2 times, and odx ran it again each time
 
 On a run that ends in an error, the count covers only the compiles that ran before odx stopped, so it can differ between runs.
 
-The line doesn't change stdout, `--json` or the exit code. It also prints when the run ends in an error, after the error lines, so a run with exit 2 still shows how often the compiler crashed. When the second run also dies by a signal, the run ends with the error `compiler-output`, and the message names the package, the target and the signal, as in `checking 'app' for darwin_arm64 died by SIGSEGV twice`. odx names `SIGSEGV`, `SIGBUS`, `SIGABRT`, `SIGILL`, `SIGTRAP`, `SIGFPE`, `SIGKILL` and `SIGTERM`, and writes any other signal as `signal` and its number. odx reruns nothing else: a check that times out or exits with an unexpected code is `compiler-output` at once.
+The line doesn't change stdout, `--json` or the exit code. It also prints when the run ends in an error, after the error lines, so a run with exit 2 still shows how often the compiler crashed. When the second run also dies by a signal, the run ends with the error `compiler-output`, and the message names the package, the target and the signal's number, as in `checking 'app' for darwin_arm64 died by signal 11 twice`. odx reruns nothing else: a check that times out or exits with an unexpected code is `compiler-output` at once.
 
 odx reads what the compiler and the formatter write through pipes, and writes no temp files. A stream that odx can't read is never taken for an empty one. It is the error `compiler-output` for the compiler and `format-failed` for the formatter, with a message that says so:
 
@@ -85,7 +85,7 @@ odx reads at most 512 MB from one stream of a compiler or formatter process. It 
 odx: error: compiler-output: checking 'app' for darwin_arm64 wrote more than 512 MB to its stderr, the most odx reads from one stream
 ```
 
-An error message that quotes a compiler's stderr shows its last 40 lines, and at most the last 8 KB of them. The message says how many lines or bytes the stderr has when it shows fewer.
+An error message that quotes a compiler's stderr shows its last 40 lines. The message says how many lines the stderr has when it shows fewer.
 
 ## `odx.json`
 
@@ -148,21 +148,13 @@ Each case below is the finding `parse-unsupported`, which no ignore covers. The 
 - A file with no `package` clause, which includes a 0-byte file and a file that holds only comments. The compiler accepts a 0-byte file and reports the others, so those also get an `odin` finding.
 - A file that `core:odin/parser` reports an error for.
 
-The compiler reads every `.odin` entry of a package and of the packages it imports, and it waits forever on a FIFO. So odx doesn't run `odin check` for the package that holds such an entry, or for any package odx checks that reaches it through imports. Those packages get every rule except `odin`, and stderr names each one:
-
-```text
-odx: app: not compiled, because lib/x.odin isn't a regular file
-```
-
-Stdout and `--json` stay the same. For a pending package the line prints only with `--pending`. Such a package is never counted as skipped. An entry in a tree odx doesn't check, such as a vendored one, still reaches the compiler when a checked package imports that tree.
+The compiler reads every `.odin` entry of a package and of the packages it imports, and it waits forever on a FIFO. So odx doesn't run `odin check` for the package that holds such an entry. That package gets every rule except `odin`, and it is never counted as skipped. The entry still reaches the compiler when a checked package imports the package or the tree that holds it. The importer's check then waits on a FIFO until its time limit and ends the run with the error `compiler-output`.
 
 odx opens no other path that the repo names unless it is a regular file or a directory. An `odx.json` that is anything else is the error `config-invalid`. An `odinfmt.json` that is a FIFO or a device is the error `init-exists`. A `collections` path, a `pending` entry or an import that names one is treated as a file, not a directory.
 
 odx sets no nesting limit of its own. It parses 1,000 nested parentheses as it parses 10, and it reads at least twice as deep as the compiler does. The compiler's stack ends first, near 3,000 nested parentheses. odx runs the crashed check once more, and a compiler that crashes both times is the error `compiler-output`.
 
 The formatter runs in its own process for each file, and that process ends when it has taken 2 GB more memory than it started with. The file then gets the `format` finding `the formatter crashed, so odx can't check this file's format`, and stderr names it. A type with 20 `proc() ->` in a row does this. The largest file measured, 2 MB of generated tables, takes 0.2 GB.
-
-An `odx.json` that nests objects and arrays more than 16 deep is the error `config-invalid`, at the bracket that passes the limit.
 
 ## Ignores
 
@@ -202,6 +194,5 @@ mise run fmt        # format odx's sources with the vendored printer
 mise run test
 mise run golden     # the cases in tests/golden against build/odx
 mise run selection  # rerun on every compiler bump
-mise run universe   # rerun on every compiler bump
 mise run self       # odx check on odx's own sources
 ```
