@@ -21,7 +21,7 @@ One reported violation: a place in the code, a rule, and a message saying what i
 _Avoid_: warning, diagnostic, issue
 
 **Rule**:
-One named check with a permanent ID that produces findings.
+One named check with a permanent ID that produces findings. The commands `odx check` and `odin check` keep the word as a verb.
 _Avoid_: lint, check, inspection
 
 **Ignore**:
@@ -29,16 +29,20 @@ An in-source comment that suppresses named rules for one statement or file, with
 _Avoid_: suppression, waiver, exemption
 
 **Error**:
-A reason odx can't give a trustworthy result. Each has a permanent code, and any error means no result at all.
+A reason odx can't give a trustworthy result. Each has a permanent code, and any error means no result at all. The compiler's own errors are findings of the `odin` rule, and odx text calls them compile errors.
 _Avoid_: failure, fatal finding
 
 **Skipped**:
 A package with no files for any target odx checks, so the compiler can't check it. odx's own rules still run on it. It is counted, never failed.
-_Avoid_: excluded, ignored
+_Avoid_: ignored
 
 **Held-back finding**:
 A finding a pending package would have as strict. It is shown only on request and never changes the result.
 _Avoid_: pending finding, hidden finding
+
+**Note**:
+A line on stderr that says what odx assumed or left out. It is neither a finding nor an error, and it never changes the exit code.
+_Avoid_: warning, hint, info
 
 ### Package status
 
@@ -54,9 +58,21 @@ _Avoid_: baseline, allowlist, legacy
 A tree of third-party code in the repo that odx applies no rules to.
 _Avoid_: external, third-party, dependency
 
+**Excluded directory**:
+A directory listed in `exclude_dirs` that odx never scans for packages. The compiler still reads it when a checked package imports from it.
+_Avoid_: ignored, skipped
+
 **Pure package**:
 A package with no global state that imports only other pure packages.
 _Avoid_: stateless, library package
+
+**Muted package**:
+A package whose own files fail to compile. odx reports its `odin` findings and the few rules marked to run anyway, and leaves out the rest until it compiles. A note says so when a finding was left out.
+_Avoid_: hidden, suppressed
+
+**Target**:
+One of the two platforms odx compiles for, `darwin_arm64` and `linux_amd64`. A package is compiled for each target it has files for.
+_Avoid_: host
 
 ### Versions
 
@@ -65,7 +81,7 @@ The numbered set of rules in force for a project, pinned in its config. Any chan
 _Avoid_: config version, rules version
 
 **Release**:
-A version of the odx tool itself. It supports a range of rule sets and Odin compilers.
+A version of the odx tool itself. It supports a range of rule sets and Odin compilers. `odx --version` prints it.
 _Avoid_: version, build
 
 ### Formatting

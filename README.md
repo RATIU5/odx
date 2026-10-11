@@ -7,7 +7,7 @@ A strict, opinionated checker for Odin projects: format, naming and syntax rules
 1. `odx check` on any repo.
 2. `odx init` pins the rule set and compiler, lists failing packages as `pending`, and writes `odx.json` and `odinfmt.json`. Commit both files.
 3. During development: format with odinfmt at OLS commit `dd0f85d`, which reads the `odinfmt.json` that `odx init` wrote (in this repo, `mise run fmt`), then fix what `odx check` reports. `odx test` and `odx run` are planned and don't exist yet.
-4. CI installs odx and runs `odx check`. `odx test` joins it when it exists.
+4. CI builds odx as the Development section says, puts `build/release/odx` on `PATH`, and runs `odx check`. `odx test` joins it when it exists.
 5. Remove `pending` entries as packages are fixed; `odx check --pending` shows what's left.
 6. Upgrade: bump `version` or `odin` in `odx.json` in one commit.
 
@@ -45,7 +45,7 @@ odx: 0 findings, 2 ignored, 0 pending, 0 skipped (rules 1, odx 0.1.0, odin dev-2
 
 `--json` prints `{"version":1,"findings":[...],"errors":[...],"summary":{...}}`. Each finding has `path`, `line`, `col`, `rule` and `message`. `errors` is non-empty when the exit is 2, except for a usage error, which prints no JSON.
 
-`--pending` prints the held-back findings after the others, under the stderr line `odx: pending findings:`. In `--json` each carries `"pending": true`. The exit code doesn't change.
+`--pending` prints the held-back findings after the others, under the stderr line `odx: held-back findings:`. In `--json` each carries `"held_back":true`. The exit code doesn't change.
 
 A package whose own compile check reports an error in its own files gets only its `odin`, `parse-unsupported`, `import-escape`, `path-case` and `ignore-invalid` findings. When that hides a finding, stderr says so with one line per package, and stdout and `--json` stay the same:
 
@@ -118,9 +118,8 @@ All rules belong to rule set 1. A rule that can be ignored takes an ignore with 
 | `ignore-unused` | no | An ignore that suppressed no finding. |
 | `pending-stale` | no | A `pending` entry that has no findings left or names no package. |
 | `block-comment` | no | A `/* */` comment. |
-| `one-line-block` | no | A `{ }` block that holds a statement and opens and closes on one line. Procedure bodies are exempt. |
+| `one-line-block` | no | A `{ }` block that holds a statement and opens and closes on one line. Procedure bodies are exempt. A one-statement body is written with `do` on one line or with braces on their own lines. |
 | `auto-cast` | no | `auto_cast`. |
-| `do-stmt` | no | A `do` body. |
 | `fallthrough` | yes | `fallthrough`. |
 | `bounds-check-directive` | yes | `#no_bounds_check` or `#bounds_check`. |
 | `vet-disabled` | no | A `#+vet` tag that turns a check off. |
@@ -143,7 +142,7 @@ odx checks every package for `darwin_arm64` and `linux_amd64`. A package written
 
 Each case below is the finding `parse-unsupported`, which no ignore covers. The rules that need the file's syntax tree, `format` among them, don't run on that file. The rest of its package is checked as usual, except in the first case.
 
-- A `.odin` entry that is neither a regular file nor a link to one, such as a FIFO, a socket, a device or a link to `/dev/null`. The finding is at `1:1`, and odx never opens the entry. A hidden entry such as `.notes.odin` is exempt, because the compiler never opens it.
+- A `.odin` entry that is neither a regular file nor a link to one, such as a FIFO, a socket, a device or a link to `/dev/null`. The finding is at `1:1`, and odx never opens the entry. A dot-file such as `.notes.odin` is exempt, because the compiler never opens it.
 - A link that doesn't resolve. The finding is at `1:1`.
 - A file with no `package` clause, which includes a 0-byte file and a file that holds only comments. The compiler accepts a 0-byte file and reports the others, so those also get an `odin` finding.
 - A file that `core:odin/parser` reports an error for.
@@ -183,16 +182,22 @@ git checkout dd0f85d31c91e9d04202cc422288d15b52206474
 
 `odx init` writes `odinfmt.json` at the repo root, so `odinfmt` uses the configuration odx checks against. A repo that already has `odx.json` copies `odinfmt.json` from the root of the odx repo, because `odx init` writes nothing there. odx itself ignores any `odinfmt.json` in the checked repo. `odinfmt -w .` also rewrites vendored trees, so pass it the directories you own, as in `odinfmt -w src`.
 
+`odinfmt -w` takes one path, so run it once for each directory. It sorts the imports inside a group, where a group ends at a blank line. Put a blank line between import groups before you format, or it moves a relative import above the `core:` ones and `import-order` reports the file.
+
 In the odx repo, `mise run fmt` runs the vendored printer and not the machine's `odinfmt`.
 
 ## Development
 
 ```sh
 mise install
-mise run build      # build/odx
+mise run build      # build/odx, the debug build the tests use
+mise run release    # build/release/odx, the build to install
 mise run fmt        # format odx's sources with the vendored printer
 mise run test
 mise run golden     # the cases in tests/golden against build/odx
 mise run selection  # rerun on every compiler bump
 mise run self       # odx check on odx's own sources
+mise run e2e        # follow this README with the release build and the pinned odinfmt
 ```
+
+`mise run e2e` needs `git`, `python3`, `perl` and `timeout` on `PATH`. Its first run, and the first after a compiler or printer bump, clones OLS from GitHub and builds `odinfmt`. No other task depends on it.
