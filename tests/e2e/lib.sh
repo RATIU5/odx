@@ -1,8 +1,10 @@
+# shellcheck shell=bash
 # Shared setup for the e2e scenarios. Each scenario sources this file, which installs the release
 # odx and the README's odinfmt into build/e2e/bin and puts that directory first on PATH. $E is
 # build/e2e, which outlives the run. $S is the scenario's own temp directory, removed on exit. It
 # is outside this repo because odx takes the nearest odx.json above the working directory as the
 # repo root, so under build/ every scenario repo would be read as part of odx itself.
+# The odinfmt comes from tests/e2e/odinfmt.sh.
 # Exit codes: 1 a failed assertion, 2 a missing tool or a bad argument, 3 the formatter's source
 # could not be fetched.
 set -eu
@@ -26,30 +28,7 @@ trap 'rm -rf "$S"' EXIT
 mkdir -p "$E/bin"
 cp "$root/${OUT:-build}/release/odx" "$E/bin/odx"
 
-# odx/ols_printer/README.md is where a printer bump records the commit, so README.md must follow it.
-commit=$(sed -n 's/^| OLS commit | `\([0-9a-f]\{40\}\)` |$/\1/p' "$root/odx/ols_printer/README.md")
-if [ "$(grep -o '[0-9a-f]\{40\}' "$root/README.md" | sort -u)" != "$commit" ]; then
-	echo "e2e: README.md and odx/ols_printer/README.md name different OLS commits" >&2
-	exit 1
-fi
-# Only the binary is kept: `mise run self` checks every .odin file under build/, so the OLS checkout
-# can't stay there.
-built="$commit $(odin version)"
-if [ ! -x "$E/bin/odinfmt" ] || [ "$(cat "$E/odinfmt.built" 2>/dev/null)" != "$built" ]; then
-	rm -f "$E/bin/odinfmt"
-	if ! timeout 300 git clone -q https://github.com/DanielGavin/ols "$S/ols" >"$E/ols.log" 2>&1; then
-		echo "e2e: could not fetch the formatter: git clone of DanielGavin/ols failed, see $E/ols.log" >&2
-		exit 3
-	fi
-	if ! (cd "$S/ols" && git checkout -q "$commit" && timeout 300 ./odinfmt.sh) >>"$E/ols.log" 2>&1; then
-		echo "e2e: could not build odinfmt at $commit, see $E/ols.log" >&2
-		exit 1
-	fi
-	cp "$S/ols/odinfmt" "$E/bin/odinfmt"
-	echo "$built" >"$E/odinfmt.built"
-	rm -rf "$S/ols"
-	echo "e2e: built odinfmt at OLS $commit"
-fi
+"$root/tests/e2e/odinfmt.sh"
 
 PATH=$E/bin:$PATH
 unset FORCE_COLOR
@@ -98,5 +77,6 @@ sys.exit(not eval(sys.argv[2]))' "$S/out" "$1" || fail "stdout as JSON fails: $1
 format() {
 	what=$1
 	shift
+	# shellcheck disable=SC2016 # the inner sh expands $dir
 	step "$what" 0 sh -c 'for dir; do odinfmt -w "$dir" || exit; done' sh "$@"
 }

@@ -20,3 +20,7 @@
 !.claude/settings.json
 !tests/
 !tests/**
+!dist/
+!dist/**
+!.github/
+!.github/**

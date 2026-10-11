@@ -1,0 +1,76 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  # A newer push replaces a pull request's run. Every commit on main keeps its own.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  NO_COLOR: "1"
+
+jobs:
+  gates:
+    # macOS on arm64 is the only host a release is tested on (docs/adr/0005-fixed-check-targets.md).
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Installs mise and the compiler mise.toml pins, which brings its own LLVM.
+      - uses: jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca # v5.1.1
+        with:
+          version: 2026.8.6
+
+      - name: Check the compiler is the one odx.json pins
+        run: |
+          mise exec -- odin version
+          want=$(python3 -c 'import json; print(json.load(open("odx.json"))["odin"])')
+          got=$(mise exec -- odin version | awk '{ print $NF }')
+          if [ "$got" != "$want" ]; then
+            echo "::error::mise installed odin '$got', and odx.json pins '$want'"
+            exit 1
+          fi
+
+      # tests/e2e runs every command under timeout, which the image's software list doesn't name.
+      - name: Make sure timeout is on PATH
+        run: |
+          if ! command -v timeout; then
+            brew install coreutils
+            mkdir -p "$RUNNER_TEMP/bin"
+            ln -s "$(brew --prefix)/bin/gtimeout" "$RUNNER_TEMP/bin/timeout"
+            echo "$RUNNER_TEMP/bin" >>"$GITHUB_PATH"
+          fi
+
+      - name: mise run fmt, which must change nothing
+        run: |
+          mise run fmt
+          git diff --exit-code
+
+      - run: mise run build
+
+      - name: Check the built odx runs
+        run: |
+          if ! ./build/odx --version; then
+            echo "::error::build/odx can't print its version, so the toolchain on this runner doesn't match"
+            exit 1
+          fi
+
+      - run: mise run test
+      - run: mise run golden
+      - run: mise run selection
+      - run: mise run self
+      - run: mise run e2e
