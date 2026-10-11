@@ -3,6 +3,7 @@
 
 !.gitignore
 !.gitattributes
+!LICENSE
 !README.md
 !CLAUDE.md
 !mise.toml
