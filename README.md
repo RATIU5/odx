@@ -11,8 +11,8 @@ odx installs through [mise](https://mise.jdx.dev), beside the compiler a project
 
 ```toml
 [tools]
-odin = "dev-2026-09"
-"github:RATIU5/odx" = "0.1.0"
+odin = "dev-2026-10"
+"github:RATIU5/odx" = "0.2.0"
 ```
 
 `mise install` then puts `odx` and `odinfmt` on `PATH`. The `odin` line is the compiler that release supports, which `odx --version` names. The `odinfmt` is the one the Formatting section builds by hand, and the release's `VERSIONS` file states what it was built from.
@@ -25,10 +25,10 @@ If the odx repository is private, mise needs a GitHub token that can read it: a 
 Without mise, download the release's `.tar.gz` and `.sha256` with `gh` or `curl`, check them, and unpack the archive into a directory of its own, because it has no top directory. A release isn't signed for download through a browser.
 
 ```sh
-gh release download v0.1.0 --repo RATIU5/odx --pattern 'odx-0.1.0-macos-arm64.tar.gz*'
-shasum -a 256 -c odx-0.1.0-macos-arm64.tar.gz.sha256
+gh release download v0.2.0 --repo RATIU5/odx --pattern 'odx-0.2.0-macos-arm64.tar.gz*'
+shasum -a 256 -c odx-0.2.0-macos-arm64.tar.gz.sha256
 mkdir -p ~/.local/odx
-tar -xzf odx-0.1.0-macos-arm64.tar.gz -C ~/.local/odx
+tar -xzf odx-0.2.0-macos-arm64.tar.gz -C ~/.local/odx
 export PATH="$HOME/.local/odx/bin:$PATH"
 ```
 
@@ -39,7 +39,7 @@ export PATH="$HOME/.local/odx/bin:$PATH"
 3. During development: format with odinfmt at OLS commit `dd0f85d`, which reads the `odinfmt.json` that `odx init` wrote (in this repo, `mise run fmt`), then fix what `odx check` reports. `odx test` and `odx run` are planned and don't exist yet.
 4. CI on macOS installs odx with mise as the Install section says, and runs `odx check`. CI on Linux builds odx as the Development section says, which no release has tested. `odx test` joins it when it exists.
 5. Remove `pending` entries as packages are fixed; `odx check --pending` shows what's left.
-6. Upgrade: bump `version` or `odin` in `odx.json` in one commit.
+6. Upgrade: raise `odin` and `version` in `odx.json` and both tool lines in `mise.toml` in one commit. Each odx release supports one compiler and one rule set, so odx 0.2.0 refuses an `odx.json` with `"version": 1`, and odx 0.1.0 stays the release for a project on `dev-2026-09`. A newer compiler can report errors the older one missed. Fix them in the same commit, or list their packages under `pending` there.
 
 ## Commands
 
@@ -50,7 +50,7 @@ export PATH="$HOME/.local/odx/bin:$PATH"
 | `odx check --pending` | Also prints the held-back findings of pending packages.                                                                      |
 | `odx init`            | Writes `odx.json` and `odinfmt.json` for a repo that has no `odx.json`.                                                      |
 | `odx --help`          | Prints the commands, the flags and the exit codes.                                                                           |
-| `odx --version`       | Prints the release, its rule set and the compiler it supports, as `odx 0.1.0, rule set 1, odin dev-2026-09-nightly:a2fb372`. |
+| `odx --version`       | Prints the release, its rule set and the compiler it supports, as `odx 0.2.0, rule set 2, odin dev-2026-10-nightly:84bc3fc`. |
 | `odx test`, `odx run` | Planned. Today each is a `usage` error.                                                                                      |
 
 The repo root is the nearest directory above the working directory that holds `odx.json`, else the nearest that holds `.git`, else the working directory.
@@ -64,7 +64,7 @@ The repo root is the nearest directory above the working directory that holds `o
 A finding is one line on stdout, `path:line:col: rule: message`. The last stdout line is the summary:
 
 ```text
-odx: 0 findings, 2 ignored, 0 pending, 0 skipped (rules 1, odx 0.1.0, odin dev-2026-09-nightly:a2fb372)
+odx: 0 findings, 2 ignored, 0 pending, 0 skipped (rules 2, odx 0.2.0, odin dev-2026-10-nightly:84bc3fc)
 ```
 
 | Exit | Means                                                                                      |
@@ -119,7 +119,7 @@ An error message that quotes a compiler's stderr shows its last 40 lines. The me
 
 ## `odx.json`
 
-Without `odx.json`, odx uses rule set 1 and the running compiler, treats every package as strict, and says so on stderr. An unknown key, a duplicate key or a wrong type is the error `config-invalid`.
+Without `odx.json`, odx uses rule set 2 and the running compiler, treats every package as strict, and says so on stderr. An unknown key, a duplicate key, a wrong type or a `version` other than 2 is the error `config-invalid`.
 
 | Key            | Type                          | Required | Meaning                                                   |
 | -------------- | ----------------------------- | -------- | --------------------------------------------------------- |
@@ -135,7 +135,7 @@ A `pending` entry with nothing left to fix is the finding `pending-stale`, at th
 
 ## Rules
 
-All rules belong to rule set 1. A rule that can be ignored takes an ignore with a reason. The others have no exception.
+All rules belong to rule set 2. It has the same rules as rule set 1, and its `format` and `parse-unsupported` results come from a printer and a parser built with `dev-2026-10`. A rule that can be ignored takes an ignore with a reason. The others have no exception.
 
 | Rule                     | Ignorable | Reports                                                                                                                                                                                      |
 | ------------------------ | --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -175,7 +175,7 @@ Each case below is the finding `parse-unsupported`, which no ignore covers. The 
 - A `.odin` entry that is neither a regular file nor a link to one, such as a FIFO, a socket, a device or a link to `/dev/null`. The finding is at `1:1`, and odx never opens the entry. A dot-file such as `.notes.odin` is exempt, because the compiler never opens it.
 - A link that doesn't resolve. The finding is at `1:1`.
 - A file with no `package` clause, which includes a 0-byte file and a file that holds only comments. The compiler accepts a 0-byte file and reports the others, so those also get an `odin` finding.
-- A file that `core:odin/parser` reports an error for.
+- A file that `core:odin/parser` reports an error for. The compiler reports most such files too. One construct it accepts and the parser refuses is a `#branch_location` directive inside a `defer`, as in `defer _ = #branch_location`. A triple-quoted string no longer counts: the parser built with `dev-2026-10` reads it.
 
 The compiler reads every `.odin` entry of a package and of the packages it imports, and it waits forever on a FIFO. So odx doesn't run `odin check` for the package that holds such an entry. That package gets every rule except `odin`, and it is never counted as skipped. The entry still reaches the compiler when a checked package imports the package or the tree that holds it. The importer's check then waits on a FIFO until its time limit and ends the run with the error `compiler-output`.
 
@@ -226,6 +226,7 @@ mise run fmt        # format odx's sources with the vendored printer
 mise run test
 mise run golden     # the cases in tests/golden against build/odx
 mise run selection  # rerun on every compiler bump
+tests/bump.sh <old odin> <new odin> <old rule set> <new rule set> [--apply]  # on a compiler bump, list and then rewrite the pins in the test fixtures
 mise run self       # odx check on odx's own sources
 mise run e2e        # follow this README with the release build and the pinned odinfmt
 ```
