@@ -281,7 +281,7 @@ join_msgs :: proc(msgs: []string) -> string {
 	return strings.to_string(b)
 }
 
-// Deletes each `/* <digits>!<digits> */`, which differs per target and importer (probe R-D), with
+// Deletes each `/* <package>:<file>!<offset> */`, the compiler's id for a procedure literal, with
 // the space before it.
 @(private = "file")
 delete_ids :: proc(message: string) -> string {
@@ -305,26 +305,29 @@ delete_ids :: proc(message: string) -> string {
 	return strings.to_string(b)
 }
 
-// The length of the `/* <digits>!<digits> */` that `s` starts with, or 0.
+// The length of the `/* <package>:<file>!<offset> */` that `s` starts with, or 0. The offset is
+// read from the right, because a file name may hold spaces, `:` and `!`.
 @(private = "file")
 id_length :: proc(s: string) -> int {
-	i := len("/* ")
-	digits :: proc(s: string, i: int) -> int {
-		j := i
-		for j < len(s) && '0' <= s[j] && s[j] <= '9' {
-			j += 1
+	end := strings.index(s, " */")
+	if end < 0 {
+		return 0
+	}
+	id := s[len("/* "):end]
+	bang := strings.last_index_byte(id, '!')
+	colon := strings.index_byte(id, ':')
+	if colon < 1 || bang < colon || bang == len(id) - 1 {
+		return 0
+	}
+	if !strings.has_suffix(id[:bang], ".odin") || strings.contains_any(id[:colon], " /") {
+		return 0
+	}
+	for c in id[bang + 1:] {
+		if c < '0' || c > '9' {
+			return 0
 		}
-		return j
 	}
-	j := digits(s, i)
-	if j == i || j >= len(s) || s[j] != '!' {
-		return 0
-	}
-	k := digits(s, j + 1)
-	if k == j + 1 || !strings.has_prefix(s[k:], " */") {
-		return 0
-	}
-	return k + len(" */")
+	return end + len(" */")
 }
 
 // Rewrites each path under the repo root as repo-relative and each path under the Odin root as
@@ -455,7 +458,7 @@ mutes :: proc(kind: Entry_Kind, placed: Placed, checked: Package) -> bool {
 }
 
 // One `Redeclaration of 'N' in this scope` entry with the earlier declarations it names, or one
-// `Redeclaration of the entry pointer procedure 'N'` entry, which names none.
+// `Redeclaration of the entry point procedure 'N'` entry, which names none.
 Redeclaration :: struct {
 	name:   string,
 	placed: Placed,
@@ -474,7 +477,7 @@ read_redeclaration :: proc(
 	ok: bool,
 ) {
 	IN_SCOPE :: "' in this scope"
-	ENTRY_POINT :: "Redeclaration of the entry pointer procedure '"
+	ENTRY_POINT :: "Redeclaration of the entry point procedure '"
 	context.allocator = allocator
 	first := entry.msgs[0]
 	switch {
@@ -488,6 +491,10 @@ read_redeclaration :: proc(
 	others := make([dynamic]Located)
 	for m in entry.msgs[1:] {
 		line := strings.trim_space(m)
+		// The compiler ends an entry about a `main` in package main with this line.
+		if strings.has_prefix(line, "Suggestion: ") {
+			continue
+		}
 		located := strings.trim_prefix(line, "at ")
 		if len(located) == len(line) {
 			return

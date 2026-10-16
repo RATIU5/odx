@@ -1,19 +1,19 @@
 === odx check
 --- stdout
-odx: 0 findings, 0 ignored, 1 pending, 0 skipped (rules 1, odx <release>, odin <odin>)
+odx: 0 findings, 0 ignored, 1 pending, 0 skipped (rules 2, odx <release>, odin <odin>)
 --- stderr
 --- exit 0
 === odx check --pending
 --- stdout
 app/app.odin:4:2: odin: 'unused' declared but not used
-odx: 0 findings, 0 ignored, 1 pending, 0 skipped (rules 1, odx <release>, odin <odin>)
+odx: 0 findings, 0 ignored, 1 pending, 0 skipped (rules 2, odx <release>, odin <odin>)
 --- stderr
 odx: app: compile errors hide this package's other findings
 odx: held-back findings:
 --- exit 0
 === odx check --pending --json
 --- stdout
-{"version":1,"findings":[{"path":"app/app.odin","line":4,"col":2,"rule":"odin","message":"'unused' declared but not used","held_back":true}],"errors":[],"summary":{"findings":0,"ignored":0,"pending":1,"skipped":0,"rules":1,"release":"<release>","odin":"<odin>"}}
+{"version":1,"findings":[{"path":"app/app.odin","line":4,"col":2,"rule":"odin","message":"'unused' declared but not used","held_back":true}],"errors":[],"summary":{"findings":0,"ignored":0,"pending":1,"skipped":0,"rules":2,"release":"<release>","odin":"<odin>"}}
 --- stderr
 odx: app: compile errors hide this package's other findings
 --- exit 0

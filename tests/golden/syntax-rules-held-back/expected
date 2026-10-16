@@ -7,7 +7,7 @@ app/app.odin:9:11: auto-cast: 'auto_cast' isn't allowed
 app/app.odin:12:3: fallthrough: 'fallthrough' isn't allowed
 app/app.odin:15:19: bounds-check-directive: '#no_bounds_check' isn't allowed
 app/app.odin:18:13: transmute: 'transmute' isn't allowed
-odx: 0 findings, 0 ignored, 1 pending, 0 skipped (rules 1, odx <release>, odin <odin>)
+odx: 0 findings, 0 ignored, 1 pending, 0 skipped (rules 2, odx <release>, odin <odin>)
 --- stderr
 odx: held-back findings:
 --- exit 0

@@ -2,7 +2,7 @@
 app/app.odin:3:1: format: the file differs from the formatter's output
 app/app.odin:8:92: line-length: line is 115 columns wide, over the limit of 100
 app/app.odin:12:95: line-length: line is 113 columns wide, over the limit of 100
-odx: 3 findings, 1 ignored, 0 pending, 0 skipped (rules 1, odx <release>, odin <odin>)
+odx: 3 findings, 1 ignored, 0 pending, 0 skipped (rules 2, odx <release>, odin <odin>)
 --- stderr
-odx: no odx.json, so rule set 1, the running compiler and every package strict
+odx: no odx.json, so rule set 2, the running compiler and every package strict
 --- exit 1

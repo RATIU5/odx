@@ -1,0 +1,4 @@
+--- stdout
+--- stderr
+odx: error: config-invalid: 'version' 1 is older than rule set 2, the oldest this release supports
+--- exit 2

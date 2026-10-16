@@ -4,7 +4,7 @@ app/app.odin:17:1: name-case: variable 'TOTAL' isn't snake_case
 app/app.odin:19:1: name-case: variable 'STARTED' isn't snake_case
 app/app.odin:21:1: name-case: variable 'PAIR' isn't snake_case
 app/app.odin:29:2: name-case: variable 'LOCAL' isn't snake_case
-odx: 5 findings, 0 ignored, 0 pending, 0 skipped (rules 1, odx <release>, odin <odin>)
+odx: 5 findings, 0 ignored, 0 pending, 0 skipped (rules 2, odx <release>, odin <odin>)
 --- stderr
-odx: no odx.json, so rule set 1, the running compiler and every package strict
+odx: no odx.json, so rule set 2, the running compiler and every package strict
 --- exit 1

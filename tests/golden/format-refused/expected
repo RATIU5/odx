@@ -2,9 +2,9 @@
 app/app.odin:1:1: format: the formatter can't read the file
 app/app.odin:2:1: package-name: package 'runtime' differs from its directory 'app'
 lib/lib.odin:4:1: format: the file differs from the formatter's output
-odx: 3 findings, 0 ignored, 0 pending, 1 skipped (rules 1, odx <release>, odin <odin>)
+odx: 3 findings, 0 ignored, 0 pending, 1 skipped (rules 2, odx <release>, odin <odin>)
 --- stderr
-odx: no odx.json, so rule set 1, the running compiler and every package strict
+odx: no odx.json, so rule set 2, the running compiler and every package strict
 odx: skipped app: no non-test file compiles for darwin_arm64 or linux_amd64
 odx: format: app/app.odin formatter can't read the file
 --- exit 1

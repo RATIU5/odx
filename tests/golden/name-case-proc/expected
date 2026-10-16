@@ -4,7 +4,7 @@ app/app.odin:5:1: name-case: procedure 'Do_Thing' isn't snake_case
 app/app.odin:7:1: name-case: procedure 'DO_THING' isn't snake_case
 app/app.odin:13:1: name-case: procedure group 'Things' isn't snake_case
 app/app.odin:24:2: name-case: procedure 'AddOne' isn't snake_case
-odx: 5 findings, 0 ignored, 0 pending, 0 skipped (rules 1, odx <release>, odin <odin>)
+odx: 5 findings, 0 ignored, 0 pending, 0 skipped (rules 2, odx <release>, odin <odin>)
 --- stderr
-odx: no odx.json, so rule set 1, the running compiler and every package strict
+odx: no odx.json, so rule set 2, the running compiler and every package strict
 --- exit 1

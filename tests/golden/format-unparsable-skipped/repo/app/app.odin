@@ -6,8 +6,5 @@ Item :: struct {
 }
 
 g :: proc() {
-	s := """
-hello
-"""
-	_ = s
+	defer _ = #branch_location
 }

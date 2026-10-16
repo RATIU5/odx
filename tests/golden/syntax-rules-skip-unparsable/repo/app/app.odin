@@ -17,8 +17,5 @@ f :: proc(s: []int, y: i64, f: f32, ok: bool) -> i32 {
 }
 
 g :: proc() {
-	s := """
-hello
-"""
-	_ = s
+	defer _ = #branch_location
 }

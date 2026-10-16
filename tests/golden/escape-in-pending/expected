@@ -1,6 +1,6 @@
 --- stdout
 lib/lib.odin:3:9: import-escape: #load '../../outside.txt' resolves outside the repo and the Odin root's base, core and vendor
 lib/lib.odin:3:9: odin: Failed to `#load` file: lib//../../outside.txt; invalid file or cannot be found
-odx: 2 findings, 0 ignored, 1 pending, 0 skipped (rules 1, odx <release>, odin <odin>)
+odx: 2 findings, 0 ignored, 1 pending, 0 skipped (rules 2, odx <release>, odin <odin>)
 --- stderr
 --- exit 1

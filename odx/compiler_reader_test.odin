@@ -403,7 +403,7 @@ normalize_deletes_internal_ids :: proc(t: ^testing.T) {
 	packages["s1"] = .Strict
 	checked := test_package("s1", Source_File{path = "s1/a.odin"})
 	messages: [2]string
-	for id, i in ([]string{"34!85", "33!121"}) {
+	for id, i in ([]string{"s1:a.odin!85", "s1:b c.odin!121"}) {
 		entry := Compiler_Entry {
 			kind = .Error,
 			file = "/repo/s1/a.odin",
@@ -426,6 +426,12 @@ normalize_deletes_internal_ids :: proc(t: ^testing.T) {
 		"of type 'proc(string, int) -> bool' Note: The input parameter types differ"
 	testing.expect_value(t, messages[0], want)
 	testing.expect_value(t, messages[1], want)
+
+	for kept in ([]string{"a /* note */ b", "a /* 34!85 */ b", "a /* s1:a.odin!x */ b", "a /* b"}) {
+		entry := Compiler_Entry{.Error, "/repo/s1/a.odin", 7, 19, {kept}}
+		placed := normalize(entry, test_code_map(packages), checked, context.temp_allocator)
+		testing.expect_value(t, placed.message, kept)
+	}
 }
 
 @(test)
@@ -583,6 +589,9 @@ mutes_only_on_an_unrelocated_error_in_the_checked_packages_own_files :: proc(t: 
 
 @(test)
 settle_redeclarations_gives_one_report_whatever_order_the_compiler_used :: proc(t: ^testing.T) {
+	SUGGESTION ::
+		"\tSuggestion: Is this a single-file package? " +
+		"If so, try compiling using the `-file` flag."
 	allocator := context.temp_allocator
 
 	packages := make(map[string]Package_Status, context.temp_allocator)
@@ -598,17 +607,27 @@ settle_redeclarations_gives_one_report_whatever_order_the_compiler_used :: proc(
 		return {.Error, fmt.tprintf("/repo/tools/%s", file), line, 1, msgs[:]}
 	}
 	entry_point :: proc(file: string, line: int) -> Compiler_Entry {
-		msgs := make([]string, 1, context.temp_allocator)
-		msgs[0] = "Redeclaration of the entry pointer procedure 'main'"
+		msgs := make([]string, 2, context.temp_allocator)
+		msgs[0] = "Redeclaration of the entry point procedure 'main'"
+		msgs[1] = SUGGESTION
 		return {.Error, fmt.tprintf("/repo/tools/%s", file), line, 1, msgs}
 	}
-	// Two orders the compiler produced for one package in lane 7, plus a local redeclaration.
+	// The compiler ends each entry about a `main` in package main with this line.
+	suggested :: proc(entry: Compiler_Entry) -> Compiler_Entry {
+		msgs := make([dynamic]string, context.temp_allocator)
+		append(&msgs, ..entry.msgs)
+		append(&msgs, SUGGESTION)
+		return {entry.kind, entry.file, entry.line, entry.col, msgs[:]}
+	}
+	// Two orders the compiler may use for one package, plus a local redeclaration.
 	runs := [][]Compiler_Entry {
-		{in_scope("b.odin", 64, "a.odin(24:1)"), in_scope("c.odin", 64, "a.odin(24:1)")},
 		{
-			entry_point("a.odin", 24),
+			suggested(in_scope("b.odin", 64, "a.odin(24:1)")),
+			suggested(in_scope("c.odin", 64, "a.odin(24:1)")),
+		},
+		{
 			entry_point("b.odin", 64),
-			in_scope("c.odin", 64, "b.odin(64:1)", "a.odin(24:1)"),
+			suggested(in_scope("c.odin", 64, "b.odin(64:1)", "a.odin(24:1)")),
 		},
 	}
 	want := []Placed {
@@ -660,7 +679,7 @@ settle_redeclarations_gives_one_report_whatever_order_the_compiler_used :: proc(
 		testing.expect_value(
 			t,
 			got[0].message,
-			"Redeclaration of the entry pointer procedure 'main'",
+			"Redeclaration of the entry point procedure 'main' " + SUGGESTION[1:],
 		)
 	}
 

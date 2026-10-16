@@ -1,8 +1,8 @@
 --- stdout
 lib/Bad-Text.odin:1:1: file-name: file name 'Bad-Text.odin' isn't snake_case
 lib/Bad-Text.odin:1:1: package-name: package 'app' differs from its directory 'lib'
-lib/Bad-Text.odin:4:7: parse-unsupported: odx can't parse this file: expected ';', got string
-odx: 3 findings, 0 ignored, 0 pending, 0 skipped (rules 1, odx <release>, odin <odin>)
+lib/Bad-Text.odin:4:28: parse-unsupported: odx can't parse this file: expected an operand
+odx: 3 findings, 0 ignored, 0 pending, 0 skipped (rules 2, odx <release>, odin <odin>)
 --- stderr
-odx: no odx.json, so rule set 1, the running compiler and every package strict
+odx: no odx.json, so rule set 2, the running compiler and every package strict
 --- exit 1

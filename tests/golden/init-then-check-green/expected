@@ -5,7 +5,7 @@ init: 2 strict, 3 pending, 0 vendored, 0 skipped
 --- exit 0
 === odx check
 --- stdout
-odx: 0 findings, 1 ignored, 3 pending, 0 skipped (rules 1, odx <release>, odin <odin>)
+odx: 0 findings, 1 ignored, 3 pending, 0 skipped (rules 2, odx <release>, odin <odin>)
 --- stderr
 --- exit 0
 === odx check --pending
@@ -13,13 +13,13 @@ odx: 0 findings, 1 ignored, 3 pending, 0 skipped (rules 1, odx <release>, odin <
 deprecated/deprecated.odin:9:9: odin: old_greet is deprecated: use greet
 long/long.odin:3:101: line-length: line is 110 columns wide, over the limit of 100
 unused/unused.odin:4:2: odin: 'spare' declared but not used
-odx: 0 findings, 1 ignored, 3 pending, 0 skipped (rules 1, odx <release>, odin <odin>)
+odx: 0 findings, 1 ignored, 3 pending, 0 skipped (rules 2, odx <release>, odin <odin>)
 --- stderr
 odx: held-back findings:
 --- exit 0
 --- odx.json
 {
-	"version": 1,
+	"version": 2,
 	"odin": "<odin>",
 	"pending": {
 		"deprecated": "odx init",

@@ -6,7 +6,7 @@ init: 1 strict, 1 pending, 0 vendored, 0 skipped
 --- exit 0
 --- odx.json
 {
-	"version": 1,
+	"version": 2,
 	"odin": "<odin>",
 	"pending": {
 		"lib": "odx init"

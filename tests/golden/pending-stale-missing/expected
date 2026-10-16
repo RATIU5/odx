@@ -1,6 +1,6 @@
 --- stdout
 odx.json:5:3: pending-stale: 'gone' is not a package odx checks
 odx.json:6:3: pending-stale: 'docs' is not a package odx checks
-odx: 2 findings, 0 ignored, 0 pending, 0 skipped (rules 1, odx <release>, odin <odin>)
+odx: 2 findings, 0 ignored, 0 pending, 0 skipped (rules 2, odx <release>, odin <odin>)
 --- stderr
 --- exit 1

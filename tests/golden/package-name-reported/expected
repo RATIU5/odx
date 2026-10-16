@@ -2,7 +2,7 @@
 lib/lib.odin:1:1: package-name: package 'util' differs from its directory 'lib'
 lib/more.odin:1:1: package-name: package 'util' differs from its directory 'lib'
 root.odin:1:1: package-name: package 'Root_Pkg' isn't snake_case
-odx: 3 findings, 0 ignored, 0 pending, 0 skipped (rules 1, odx <release>, odin <odin>)
+odx: 3 findings, 0 ignored, 0 pending, 0 skipped (rules 2, odx <release>, odin <odin>)
 --- stderr
-odx: no odx.json, so rule set 1, the running compiler and every package strict
+odx: no odx.json, so rule set 2, the running compiler and every package strict
 --- exit 1

@@ -2,10 +2,10 @@ package odx
 
 import "core:fmt"
 
-RELEASE :: "0.1.0"
+RELEASE :: "0.2.0"
 
-// The newest rule set this release runs, and the one used without `odx.json`.
-RULE_SET :: 1
+// The one rule set this release runs, with or without `odx.json`.
+RULE_SET :: 2
 
 Rule :: enum u8 {
 	Odin,

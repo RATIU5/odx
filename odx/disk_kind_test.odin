@@ -133,7 +133,11 @@ a_collection_path_that_is_a_fifo_is_not_a_directory :: proc(t: ^testing.T) {
 	make_fifo_repo(t, &repo, {}, {"pipe"})
 	defer destroy_fifo_repo(&repo)
 
-	text := fmt.aprintf(`{{"version": 1, "odin": "%s", "collections": ["lib=pipe"]}}`, PIN)
+	text := fmt.aprintf(
+		`{{"version": %d, "odin": "%s", "collections": ["lib=pipe"]}}`,
+		RULE_SET,
+		PIN,
+	)
 	started := time.tick_now()
 	config, errors := parse_config(text, repo.root, context.allocator)
 	expect_quick(t, started, "parse_config")
@@ -263,7 +267,7 @@ a_link_name_clash_at_a_fifo_is_no_foreign_procedure :: proc(t: ^testing.T) {
 		line = 1,
 		col  = 1,
 		msgs = {
-			"Non unique linking name for procedure 'x'",
+			"Non-unique linking name for procedure 'x'",
 			fmt.aprintf("\tother at %s(6:2)", at(&repo, "x.odin")),
 		},
 	}

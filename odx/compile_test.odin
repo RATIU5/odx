@@ -195,7 +195,7 @@ defined :: proc "c" () {}
 			line = 1,
 			col  = 1,
 			msgs = {
-				"Non unique linking name for procedure 'x'",
+				"Non-unique linking name for procedure 'x'",
 				fmt.tprintf("\tother at %s%s", path, c.other_at),
 			},
 		}

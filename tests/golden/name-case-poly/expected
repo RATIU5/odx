@@ -9,7 +9,7 @@ app/app.odin:45:38: name-case: parametric value 'Size' isn't SCREAMING_CASE
 app/app.odin:53:21: name-case: parametric type 'elem' isn't Ada_Case
 app/app.odin:53:35: name-case: parametric value 'size' isn't SCREAMING_CASE
 app/app.odin:57:30: name-case: parametric type 'other' isn't Ada_Case
-odx: 10 findings, 0 ignored, 0 pending, 0 skipped (rules 1, odx <release>, odin <odin>)
+odx: 10 findings, 0 ignored, 0 pending, 0 skipped (rules 2, odx <release>, odin <odin>)
 --- stderr
-odx: no odx.json, so rule set 1, the running compiler and every package strict
+odx: no odx.json, so rule set 2, the running compiler and every package strict
 --- exit 1

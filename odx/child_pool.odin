@@ -7,7 +7,6 @@ import "core:os"
 import "core:strconv"
 import "core:strings"
 import "core:sync"
-import si "core:sys/info"
 import "core:sys/posix"
 import "core:thread"
 import "core:time"
@@ -45,7 +44,7 @@ init_child_budget :: proc(budget: ^Child_Budget, limit: int) {
 // there are gigabytes of RAM.
 worker_count :: proc() -> int {
 	n := os.get_processor_core_count()
-	if total, _, _, _, ok := si.ram_stats(); ok {
+	if total, ok := total_ram(); ok {
 		n = min(n, int(total / (1 << 30)))
 	}
 	return max(n, 1)

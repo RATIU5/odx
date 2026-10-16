@@ -1,5 +1,5 @@
 --- stdout
-{"version":1,"findings":[{"path":"odx.json","line":1,"col":67,"rule":"pending-stale","message":"'./lib/' has no findings as strict"},{"path":"odx.json","line":1,"col":100,"rule":"pending-stale","message":"'gone' is not a package odx checks"}],"errors":[],"summary":{"findings":2,"ignored":0,"pending":1,"skipped":1,"rules":1,"release":"<release>","odin":"<odin>"}}
+{"version":1,"findings":[{"path":"odx.json","line":1,"col":67,"rule":"pending-stale","message":"'./lib/' has no findings as strict"},{"path":"odx.json","line":1,"col":100,"rule":"pending-stale","message":"'gone' is not a package odx checks"}],"errors":[],"summary":{"findings":2,"ignored":0,"pending":1,"skipped":1,"rules":2,"release":"<release>","odin":"<odin>"}}
 --- stderr
 odx: skipped lib/win: no non-test file compiles for darwin_arm64 or linux_amd64
 --- exit 1

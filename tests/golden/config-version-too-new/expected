@@ -1,4 +1,4 @@
 --- stdout
 --- stderr
-odx: error: config-invalid: 'version' 99 is newer than rule set 1, the newest this release supports
+odx: error: config-invalid: 'version' 99 is newer than rule set 2, the newest this release supports
 --- exit 2

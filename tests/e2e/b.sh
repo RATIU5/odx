@@ -1,16 +1,18 @@
 #!/bin/bash
 # Scenario B: the pinned odinfmt agrees with the `format` rule on real code. The code is odx's own
-# sources at HEAD, and also the repo E2E_REPO names, formatting its directories E2E_DIRS.
+# sources as the working tree has them, so a change is tested before its commit, and also the repo
+# E2E_REPO names, formatting its directories E2E_DIRS.
 . "$(dirname "$0")/lib.sh"
 
 # Findings of other rules are not this scenario's business, so exit 1 passes too.
 check() { step "$1" 0 sh -c 'odx check --json --pending; [ $? -le 1 ]'; }
 own="odx tests/runner tests/selection tests/fixture_fmt"
 mkdir "$S/repo"
-(cd "$root" && git archive HEAD $own odx.json odinfmt.json) | tar -x -C "$S/repo"
+(cd "$root" && git ls-files -co --exclude-standard -z -- $own odx.json odinfmt.json |
+	tar -c --null -T -) | tar -x -C "$S/repo"
 cp -R "$S/repo" "$S/formatted"
 cd "$S/formatted"
-format "odinfmt over odx's sources at HEAD" $own
+format "odinfmt over odx's own sources" $own
 # odinfmt also rewrites the vendored printer under odx/, which stays as upstream wrote it.
 step "odinfmt changed no file of odx's own" 0 diff -rq -x ols_printer "$S/repo" "$S/formatted"
 check "odx check there has no format finding"

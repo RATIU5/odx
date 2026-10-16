@@ -1,6 +1,6 @@
 --- stdout
 lib/lib.odin:3:101: line-length: line is 129 columns wide, over the limit of 100
 odx.json:5:3: pending-stale: 'Lib' differs in case from the directory 'lib'
-odx: 2 findings, 0 ignored, 0 pending, 0 skipped (rules 1, odx <release>, odin <odin>)
+odx: 2 findings, 0 ignored, 0 pending, 0 skipped (rules 2, odx <release>, odin <odin>)
 --- stderr
 --- exit 1

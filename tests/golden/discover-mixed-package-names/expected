@@ -3,7 +3,7 @@ lib/a.odin:1:1: package-name: package 'foo' differs from its directory 'lib'
 lib/b.odin:1:1: odin: Different package name, expected 'foo', got 'bar'
 lib/b.odin:1:1: package-name: package 'bar' differs from its directory 'lib'
 lib/c.odin:3:1: package-name: package 'baz' differs from its directory 'lib'
-odx: 4 findings, 0 ignored, 0 pending, 0 skipped (rules 1, odx <release>, odin <odin>)
+odx: 4 findings, 0 ignored, 0 pending, 0 skipped (rules 2, odx <release>, odin <odin>)
 --- stderr
-odx: no odx.json, so rule set 1, the running compiler and every package strict
+odx: no odx.json, so rule set 2, the running compiler and every package strict
 --- exit 1

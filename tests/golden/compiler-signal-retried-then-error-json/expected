@@ -1,7 +1,7 @@
 --- stdout
-{"version":1,"findings":[],"errors":[{"code":"compiler-output","message":"checking 'lib' for darwin_arm64 exited 1 without one compiler JSON document on stderr; stderr:\n\tthis is not json"}],"summary":{"findings":0,"ignored":0,"pending":0,"skipped":0,"rules":1,"release":"<release>","odin":"<odin>"}}
+{"version":1,"findings":[],"errors":[{"code":"compiler-output","message":"checking 'lib' for darwin_arm64 exited 1 without one compiler JSON document on stderr; stderr:\n\tthis is not json"}],"summary":{"findings":0,"ignored":0,"pending":0,"skipped":0,"rules":2,"release":"<release>","odin":"<odin>"}}
 --- stderr
-odx: no odx.json, so rule set 1, the running compiler and every package strict
+odx: no odx.json, so rule set 2, the running compiler and every package strict
 odx: error: compiler-output: checking 'lib' for darwin_arm64 exited 1 without one compiler JSON document on stderr; stderr:
 	this is not json
 odx: the compiler died by a signal 2 times, and odx ran it again each time

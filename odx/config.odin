@@ -195,6 +195,15 @@ decode_key :: proc(
 		switch {
 		case n < 1:
 			append(errors, invalid("'version' %d is not a rule set", n))
+		case n < RULE_SET:
+			append(
+				errors,
+				invalid(
+					"'version' %d is older than rule set %d, the oldest this release supports",
+					n,
+					RULE_SET,
+				),
+			)
 		case n > RULE_SET:
 			append(
 				errors,

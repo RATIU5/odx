@@ -1,5 +1,5 @@
 --- stdout
 --- stderr
-odx: no odx.json, so rule set 1, the running compiler and every package strict
+odx: no odx.json, so rule set 2, the running compiler and every package strict
 odx: error: compiler-output: checking 'app' for darwin_arm64 wrote more than 512 MB to its stderr, the most odx reads from one stream
 --- exit 2

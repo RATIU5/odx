@@ -1,12 +1,12 @@
 === odx check
 --- stdout
-odx: 0 findings, 0 ignored, 1 pending, 0 skipped (rules 1, odx <release>, odin <odin>)
+odx: 0 findings, 0 ignored, 1 pending, 0 skipped (rules 2, odx <release>, odin <odin>)
 --- stderr
 --- exit 0
 === odx check --pending
 --- stdout
 lib/lib.odin:4:1: format: the file differs from the formatter's output
-odx: 0 findings, 0 ignored, 1 pending, 0 skipped (rules 1, odx <release>, odin <odin>)
+odx: 0 findings, 0 ignored, 1 pending, 0 skipped (rules 2, odx <release>, odin <odin>)
 --- stderr
 odx: held-back findings:
 --- exit 0

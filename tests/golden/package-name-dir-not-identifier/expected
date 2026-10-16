@@ -2,7 +2,7 @@
 Http/http.odin:1:1: package-name: package 'Http' is in directory 'Http', which isn't snake_case
 foo-bar/a.odin:1:1: package-name: package 'foo_bar' is in directory 'foo-bar', which isn't snake_case
 my-tool/main.odin:1:1: package-name: package 'main' is in directory 'my-tool', which isn't snake_case
-odx: 3 findings, 0 ignored, 0 pending, 0 skipped (rules 1, odx <release>, odin <odin>)
+odx: 3 findings, 0 ignored, 0 pending, 0 skipped (rules 2, odx <release>, odin <odin>)
 --- stderr
-odx: no odx.json, so rule set 1, the running compiler and every package strict
+odx: no odx.json, so rule set 2, the running compiler and every package strict
 --- exit 1

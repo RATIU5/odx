@@ -1,0 +1,6 @@
+--- stdout
+bl.odin:4:28: parse-unsupported: odx can't parse this file: expected an operand
+odx: 1 findings, 0 ignored, 0 pending, 0 skipped (rules 2, odx <release>, odin <odin>)
+--- stderr
+odx: no odx.json, so rule set 2, the running compiler and every package strict
+--- exit 1

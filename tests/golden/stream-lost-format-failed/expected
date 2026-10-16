@@ -1,5 +1,5 @@
 --- stdout
 --- stderr
-odx: no odx.json, so rule set 1, the running compiler and every package strict
+odx: no odx.json, so rule set 2, the running compiler and every package strict
 odx: error: format-failed: odx can't run the formatter process for 'app/app.odin': started, but odx couldn't read its output: Input/output error
 --- exit 2

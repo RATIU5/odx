@@ -7,12 +7,12 @@ init: 2 strict, 0 pending, 0 vendored, 0 skipped
 === odx check
 --- stdout
 strings/strings.odin:1:1: odin: Duplicate declaration of 'package strings' A package name must be unique There is no relation between a package name and the directory that contains it, so they can be completely different A package name is required for link name prefixing to have a consistent ABI $ODIN_ROOT/core/strings/ascii_set.odin(1:1) found at previous location
-odx: 1 findings, 0 ignored, 0 pending, 0 skipped (rules 1, odx <release>, odin <odin>)
+odx: 1 findings, 0 ignored, 0 pending, 0 skipped (rules 2, odx <release>, odin <odin>)
 --- stderr
 --- exit 1
 --- odx.json
 {
-	"version": 1,
+	"version": 2,
 	"odin": "<odin>"
 }
 --- odinfmt.json

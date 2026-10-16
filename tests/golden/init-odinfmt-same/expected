@@ -4,6 +4,6 @@ init: 1 strict, 0 pending, 0 vendored, 0 skipped
 --- exit 0
 --- odx.json
 {
-	"version": 1,
+	"version": 2,
 	"odin": "<odin>"
 }

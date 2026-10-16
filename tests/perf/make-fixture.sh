@@ -19,7 +19,7 @@ mkdir -p "$dir"
 git -C "$dir" init -q
 
 version=$(odin version)
-printf '{"version": 1, "odin": "%s"}\n' "${version#odin version }" >"$dir/odx.json"
+printf '{"version": 2, "odin": "%s"}\n' "${version#odin version }" >"$dir/odx.json"
 
 for n in $(seq -w 1 40); do
 	p=p$n

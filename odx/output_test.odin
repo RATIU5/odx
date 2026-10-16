@@ -425,7 +425,7 @@ help_names_every_command_and_exit_code_in_under_20_lines :: proc(t: ^testing.T) 
 version_line_names_the_release_the_rule_set_and_the_compiler :: proc(t: ^testing.T) {
 	line := version_line(context.allocator)
 	defer delete(line)
-	testing.expect_value(t, line, "odx 0.1.0, rule set 1, odin dev-2026-09-nightly:a2fb372\n")
+	testing.expect_value(t, line, "odx 0.2.0, rule set 2, odin dev-2026-10-nightly:84bc3fc\n")
 }
 
 MUTED_ROOT_LINE :: "odx: .: compile errors hide this package's other findings\n"

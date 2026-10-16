@@ -1,9 +1,9 @@
 --- stdout
-app/tq1.odin:7:7: parse-unsupported: odx can't parse this file: expected ';', got string
-app/tq2.odin:3:1: ignore-invalid: only whole-file ignores apply in a file odx can't parse
-app/tq2.odin:4:101: line-length: line is 107 columns wide, over the limit of 100
-app/tq2.odin:7:7: parse-unsupported: odx can't parse this file: expected ';', got string
-odx: 4 findings, 1 ignored, 0 pending, 0 skipped (rules 1, odx <release>, odin <odin>)
+app/bl1.odin:7:28: parse-unsupported: odx can't parse this file: expected an operand
+app/bl2.odin:3:1: ignore-invalid: only whole-file ignores apply in a file odx can't parse
+app/bl2.odin:4:101: line-length: line is 107 columns wide, over the limit of 100
+app/bl2.odin:7:28: parse-unsupported: odx can't parse this file: expected an operand
+odx: 4 findings, 1 ignored, 0 pending, 0 skipped (rules 2, odx <release>, odin <odin>)
 --- stderr
-odx: no odx.json, so rule set 1, the running compiler and every package strict
+odx: no odx.json, so rule set 2, the running compiler and every package strict
 --- exit 1

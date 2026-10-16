@@ -1,7 +1,7 @@
 --- stdout
 b/b.odin:3:101: line-length: line is 107 columns wide, over the limit of 100
 a/a.odin:3:101: line-length: line is 107 columns wide, over the limit of 100
-odx: 1 findings, 0 ignored, 1 pending, 0 skipped (rules 1, odx <release>, odin <odin>)
+odx: 1 findings, 0 ignored, 1 pending, 0 skipped (rules 2, odx <release>, odin <odin>)
 --- stderr
 odx: held-back findings:
 --- exit 1

@@ -1,7 +1,7 @@
 --- stdout
 app/app.odin:11:17: nesting-depth: this block is at depth 7, over the limit of 6
 app/app.odin:14:17: nesting-depth: this block is at depth 7, over the limit of 6
-odx: 2 findings, 0 ignored, 0 pending, 0 skipped (rules 1, odx <release>, odin <odin>)
+odx: 2 findings, 0 ignored, 0 pending, 0 skipped (rules 2, odx <release>, odin <odin>)
 --- stderr
-odx: no odx.json, so rule set 1, the running compiler and every package strict
+odx: no odx.json, so rule set 2, the running compiler and every package strict
 --- exit 1

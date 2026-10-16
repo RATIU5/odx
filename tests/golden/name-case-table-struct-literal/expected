@@ -1,7 +1,7 @@
 --- stdout
 app/app.odin:9:1: name-case: package-level literal variable 'state' isn't SCREAMING_CASE
 app/app.odin:11:1: name-case: package-level literal variable 'origin' isn't SCREAMING_CASE
-odx: 2 findings, 0 ignored, 0 pending, 0 skipped (rules 1, odx <release>, odin <odin>)
+odx: 2 findings, 0 ignored, 0 pending, 0 skipped (rules 2, odx <release>, odin <odin>)
 --- stderr
-odx: no odx.json, so rule set 1, the running compiler and every package strict
+odx: no odx.json, so rule set 2, the running compiler and every package strict
 --- exit 1

@@ -13,6 +13,7 @@ an escaped quote run \"""
 // odx:ignore line-length still text
 """
 	_ = s
+	defer _ = #branch_location
 }
 
 // odx:ignore line-length a statement ignore after the string

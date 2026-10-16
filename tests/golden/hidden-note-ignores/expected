@@ -1,7 +1,7 @@
 --- stdout
 covered/covered.odin:5:2: odin: 'unused' declared but not used
 spare/spare.odin:5:2: odin: 'unused' declared but not used
-odx: 2 findings, 0 ignored, 0 pending, 0 skipped (rules 1, odx <release>, odin <odin>)
+odx: 2 findings, 0 ignored, 0 pending, 0 skipped (rules 2, odx <release>, odin <odin>)
 --- stderr
 odx: spare: compile errors hide this package's other findings
 --- exit 1

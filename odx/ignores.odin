@@ -57,11 +57,6 @@ read_ignores :: proc(
 	t: tokenizer.Tokenizer
 	tokenizer.init(&t, src, "", nil)
 	for token := tokenizer.scan(&t); token.kind != .EOF; token = tokenizer.scan(&t) {
-		if is_triple_quote_start(src, token) {
-			t.read_offset = triple_quote_end(src, token.pos.offset + len(`"""`))
-			tokenizer.advance_rune(&t)
-			continue
-		}
 		if token.kind != .Comment || !is_odx_directive(token.text) {
 			continue
 		}
@@ -104,28 +99,6 @@ read_ignores :: proc(
 		}
 		append(&file.ignores, ignore)
 	}
-}
-
-// core:odin's tokenizer doesn't know the compiler's `"""` strings: it reads `""` and then lines
-// of the string as code, so an ignore written inside one would be reported.
-@(private = "file")
-is_triple_quote_start :: proc(src: string, token: tokenizer.Token) -> bool {
-	end := token.pos.offset + len(token.text)
-	return token.kind == .String && token.text == `""` && end < len(src) && src[end] == '"'
-}
-
-// Returns the offset just past the closing `"""`, or the end of `src` if there is none.
-@(private = "file")
-triple_quote_end :: proc(src: string, from: int) -> int {
-	for i := from; i < len(src); i += 1 {
-		switch {
-		case src[i] == '\\':
-			i += 1
-		case strings.has_prefix(src[i:], `"""`):
-			return i + len(`"""`)
-		}
-	}
-	return len(src)
 }
 
 // Any comment that reads as an attempt at a directive is one, so a misspelled ignore is reported

@@ -6,13 +6,13 @@ odx: skipped tests: no non-test file compiles for darwin_arm64 or linux_amd64
 --- exit 0
 === odx check
 --- stdout
-odx: 0 findings, 0 ignored, 1 pending, 1 skipped (rules 1, odx <release>, odin <odin>)
+odx: 0 findings, 0 ignored, 1 pending, 1 skipped (rules 2, odx <release>, odin <odin>)
 --- stderr
 odx: skipped tests: no non-test file compiles for darwin_arm64 or linux_amd64
 --- exit 0
 --- odx.json
 {
-	"version": 1,
+	"version": 2,
 	"odin": "<odin>",
 	"pending": {
 		"tests": "odx init"

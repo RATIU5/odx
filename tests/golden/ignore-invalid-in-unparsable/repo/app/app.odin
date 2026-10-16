@@ -5,6 +5,7 @@ package app
 A :: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 //odx:ignore line-length malformed
 // odx:ignore nope r
-B :: """
-x
-"""
+
+f :: proc() {
+	defer _ = #branch_location
+}

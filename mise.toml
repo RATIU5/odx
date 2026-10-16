@@ -1,5 +1,5 @@
 [tools]
-odin = "dev-2026-09"
+odin = "dev-2026-10"
 
 [env]
 OUT = "build"

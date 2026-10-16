@@ -4,7 +4,7 @@ import "core:fmt"
 import "core:os"
 import "core:testing"
 
-PIN :: "dev-2026-09-nightly:a2fb372"
+PIN :: "dev-2026-10-nightly:84bc3fc"
 
 @(test)
 parse_config_rejects_json_that_is_not_strict :: proc(t: ^testing.T) {
@@ -69,8 +69,9 @@ parse_config_keeps_pending_keys_in_order_with_positions :: proc(t: ^testing.T) {
 	allocator := context.temp_allocator
 
 	text := fmt.tprintf(
-		"{{\n  \"version\": 1,\n  \"odin\": \"%s\",\n" +
+		"{{\n  \"version\": %d,\n  \"odin\": \"%s\",\n" +
 		"  \"pending\": {{\"zeta\": \"r1\",\n\t\"é/b\": \"r2\", \"a\": \"r3\"}}\n}}\n",
+		RULE_SET,
 		PIN,
 	)
 	config, errors := parse_config(text, ".", allocator)
@@ -86,8 +87,51 @@ parse_config_keeps_pending_keys_in_order_with_positions :: proc(t: ^testing.T) {
 			testing.expect_value(t, config.pending[i], w)
 		}
 	}
-	testing.expect_value(t, config.rule_set, 1)
+	testing.expect_value(t, config.rule_set, RULE_SET)
 	testing.expect_value(t, config.odin, PIN)
+}
+
+@(test)
+parse_config_takes_only_the_rule_set_this_release_runs :: proc(t: ^testing.T) {
+	allocator := context.temp_allocator
+
+	cases := []struct {
+		version: int,
+		message: string,
+	} {
+		{RULE_SET, ""},
+		{
+			RULE_SET - 1,
+			fmt.tprintf(
+				"'version' %d is older than rule set %d, the oldest this release supports",
+				RULE_SET - 1,
+				RULE_SET,
+			),
+		},
+		{
+			RULE_SET + 1,
+			fmt.tprintf(
+				"'version' %d is newer than rule set %d, the newest this release supports",
+				RULE_SET + 1,
+				RULE_SET,
+			),
+		},
+		{0, "'version' 0 is not a rule set"},
+	}
+	for c in cases {
+		text := fmt.tprintf(`{{"version": %d, "odin": "%s"}}`, c.version, PIN)
+		config, errors := parse_config(text, ".", allocator)
+		if c.message == "" {
+			testing.expectf(t, len(errors) == 0, "version %d: errors %v", c.version, errors)
+			testing.expect_value(t, config.rule_set, c.version)
+			continue
+		}
+		testing.expectf(t, len(errors) == 1, "version %d: errors %v", c.version, errors)
+		if len(errors) == 1 {
+			testing.expect_value(t, errors[0].code, Error_Code.Config_Invalid)
+			testing.expect_value(t, errors[0].message, c.message)
+		}
+	}
 }
 
 @(test)
@@ -141,7 +185,8 @@ parse_config_rejects_a_collection_symlinked_outside_the_repo :: proc(t: ^testing
 	)
 
 	text := fmt.aprintf(
-		`{{"version": 1, "odin": "%s", "collections": ["a=out", "b=in", "c=%s/inside"]}}`,
+		`{{"version": %d, "odin": "%s", "collections": ["a=out", "b=in", "c=%s/inside"]}}`,
+		RULE_SET,
 		PIN,
 		root,
 		allocator = allocator,

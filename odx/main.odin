@@ -6,8 +6,6 @@ import "core:os"
 import "core:strings"
 import "core:sys/posix"
 
-NO_CONFIG_NOTE :: "odx: no odx.json, so rule set 1, the running compiler and every package strict\n"
-
 main :: proc() {
 	os.exit(run_on_work_stack(run))
 }
@@ -100,7 +98,11 @@ check_repo :: proc(result: ^Result) -> (note_err: os.Error) {
 		return
 	}
 	if !repo.has_config {
-		_ = os.write_string(os.stderr, NO_CONFIG_NOTE) or_return
+		note := fmt.tprintf(
+			"odx: no odx.json, so rule set %d, the running compiler and every package strict\n",
+			RULE_SET,
+		)
+		_ = os.write_string(os.stderr, note) or_return
 	}
 	odin_root := read_odin_root(odin, context.allocator)
 	packages := discover(repo.root, config, result, context.allocator)

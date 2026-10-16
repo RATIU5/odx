@@ -5,7 +5,7 @@ app/app.odin:5:1: ignore-invalid: the rule list has an empty item; separate rule
 app/app.odin:6:101: line-length: line is 107 columns wide, over the limit of 100
 app/app.odin:7:1: ignore-invalid: the rule list has an empty item; separate rules with single commas
 app/app.odin:8:101: line-length: line is 107 columns wide, over the limit of 100
-odx: 6 findings, 0 ignored, 0 pending, 0 skipped (rules 1, odx <release>, odin <odin>)
+odx: 6 findings, 0 ignored, 0 pending, 0 skipped (rules 2, odx <release>, odin <odin>)
 --- stderr
-odx: no odx.json, so rule set 1, the running compiler and every package strict
+odx: no odx.json, so rule set 2, the running compiler and every package strict
 --- exit 1

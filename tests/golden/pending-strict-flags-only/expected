@@ -1,6 +1,6 @@
 --- stdout
-lib/lib.odin:5:2: odin: Syntax Error: Expected a comma, got a newline
-odx: 0 findings, 0 ignored, 1 pending, 0 skipped (rules 1, odx <release>, odin <odin>)
+lib/lib.odin:5:3: odin: Syntax Error: Expected a comma, got a newline
+odx: 0 findings, 0 ignored, 1 pending, 0 skipped (rules 2, odx <release>, odin <odin>)
 --- stderr
 odx: lib: compile errors hide this package's other findings
 odx: held-back findings:

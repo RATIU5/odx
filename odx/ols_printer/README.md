@@ -6,7 +6,7 @@ OLS's Odin printer, vendored for odx's `format` rule (`docs/adr/0003-vendored-ol
 | --- | --- |
 | Source | `src/odin/printer/{document,printer,visit}.odin` from <https://github.com/DanielGavin/ols> |
 | OLS commit | `dd0f85d31c91e9d04202cc422288d15b52206474` |
-| Compiler odx builds it with | `dev-2026-09-nightly:a2fb372` |
+| Compiler odx builds it with | `dev-2026-10-nightly:84bc3fc` |
 | License | MIT, in `LICENSE` |
 
 ## Local changes

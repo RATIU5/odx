@@ -7,7 +7,7 @@ import "core:time"
 
 // The compiler this release supports, as its `odin version` text. Support is dropped only in a
 // major release.
-SUPPORTED_COMPILER :: "dev-2026-09-nightly:a2fb372"
+SUPPORTED_COMPILER :: "dev-2026-10-nightly:84bc3fc"
 
 // `running` is the running compiler's version text, and `pin` is odx.json's `odin`, absent without
 // odx.json. A mismatch is reported alone, because support only matters for the compiler that will

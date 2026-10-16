@@ -1,8 +1,8 @@
 --- stdout
 app/app.odin:4:2: ignore-invalid: rule 'odin' can't be ignored
 app/app.odin:5:11: odin: Cannot convert '"text"' to 'int' from 'untyped string', got "text"
-odx: 2 findings, 0 ignored, 0 pending, 0 skipped (rules 1, odx <release>, odin <odin>)
+odx: 2 findings, 0 ignored, 0 pending, 0 skipped (rules 2, odx <release>, odin <odin>)
 --- stderr
-odx: no odx.json, so rule set 1, the running compiler and every package strict
+odx: no odx.json, so rule set 2, the running compiler and every package strict
 odx: app: compile errors hide this package's other findings
 --- exit 1

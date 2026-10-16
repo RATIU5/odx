@@ -368,7 +368,7 @@ clashes_with_foreign_procedure :: proc(
 	foreign_decls: ^map[string][]Position,
 	allocator: runtime.Allocator,
 ) -> bool {
-	if entry.kind != .Error || !strings.has_prefix(entry.msgs[0], "Non unique linking name") {
+	if entry.kind != .Error || !strings.has_prefix(entry.msgs[0], "Non-unique linking name") {
 		return false
 	}
 	for m in entry.msgs[1:] {

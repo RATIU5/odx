@@ -9,7 +9,7 @@ render_config_round_trips_through_the_config_parser :: proc(t: ^testing.T) {
 	pending := []string{"a", `we"ird\dir`}
 	vendored := []string{"third_party", "x/vendor"}
 	report := Init_Report {
-		odin     = "dev-2026-09-nightly:a2fb372",
+		odin     = "dev-2026-10-nightly:84bc3fc",
 		pending  = pending,
 		vendored = vendored,
 	}

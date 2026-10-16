@@ -5,7 +5,7 @@ odx: skipped tests: no non-test file compiles for darwin_arm64 or linux_amd64
 --- exit 0
 --- odx.json
 {
-	"version": 1,
+	"version": 2,
 	"odin": "<odin>",
 	"pending": {
 		"long": "odx init"

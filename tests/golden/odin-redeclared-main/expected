@@ -1,7 +1,7 @@
 --- stdout
 tools/b_gen.odin:3:1: odin: Redeclaration of 'main' in this scope at tools/a_dump.odin(3:1)
 tools/c_verify.odin:3:1: odin: Redeclaration of 'main' in this scope at tools/a_dump.odin(3:1)
-odx: 2 findings, 0 ignored, 0 pending, 0 skipped (rules 1, odx <release>, odin <odin>)
+odx: 2 findings, 0 ignored, 0 pending, 0 skipped (rules 2, odx <release>, odin <odin>)
 --- stderr
-odx: no odx.json, so rule set 1, the running compiler and every package strict
+odx: no odx.json, so rule set 2, the running compiler and every package strict
 --- exit 1

@@ -4,8 +4,5 @@ package app
 B :: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 
 g :: proc() {
-	s := """
-hello
-"""
-	_ = s
+	defer _ = #branch_location
 }

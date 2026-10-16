@@ -1,7 +1,7 @@
 --- stdout
 w/w.odin:3:8: odin: 'linux' declared but not used
 w/w.odin:7:3: odin: 'unused' declared but not used
-odx: 2 findings, 0 ignored, 0 pending, 0 skipped (rules 1, odx <release>, odin <odin>)
+odx: 2 findings, 0 ignored, 0 pending, 0 skipped (rules 2, odx <release>, odin <odin>)
 --- stderr
-odx: no odx.json, so rule set 1, the running compiler and every package strict
+odx: no odx.json, so rule set 2, the running compiler and every package strict
 --- exit 1

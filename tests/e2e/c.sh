@@ -40,7 +40,7 @@ has out "geometry/geometry.odin:"
 has out ": name-case: procedure 'badName'"
 has out "odx: 1 findings, "
 
-printf '{"version": 1, "odin": ' >"$S/clone2/odx.json"
+printf '{"version": 2, "odin": ' >"$S/clone2/odx.json"
 ci "a corrupt odx.json: exit 2 and an empty stdout" 2 clone2 check
 empty out
 has err "odx: error: config-invalid: "
