@@ -13,7 +13,7 @@ I want one standard for Odin code that a team can't argue its way out of: no rul
 
 ## Get started
 
-odx installs through [mise](https://mise.jdx.dev), beside the compiler a project pins. A release carries `odx` and `odinfmt` for macOS on arm64 only. On Linux, build odx from source (see Develop). Add both lines to the project's `mise.toml`:
+odx installs through [mise](https://mise.jdx.dev), beside the compiler a project pins. A release carries `odx` and `odinfmt` for macOS on arm64 and for Linux on amd64. The Linux build needs glibc 2.34 or newer, so it runs on Ubuntu 22.04 and later. On any other platform, build odx from source (see Develop). Add both lines to the project's `mise.toml`:
 
 ```toml
 [tools]
@@ -54,4 +54,4 @@ mise run self      # odx check on odx's own sources
 mise run release   # build/release/odx
 ```
 
-`mise tasks` lists the rest, such as `selection`, `e2e` and `dist`. CI runs the build, test, golden and self tasks on every pull request. A release is built by the manual release workflow, which creates a draft release `v<release>`. Raise `RELEASE` in `odx/rules.odin` first.
+`mise tasks` lists the rest, such as `selection`, `e2e` and `dist`. CI runs the build, test, golden and self tasks on macOS and on Linux on every pull request. A release is built by the manual release workflow on both platforms, which creates a draft release `v<release>` that holds both tarballs. Raise `RELEASE` in `odx/rules.odin` first.

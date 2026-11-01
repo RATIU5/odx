@@ -14,6 +14,8 @@ A project on `dev-2026-09` stays on odx 0.1.0.
 
 A misplaced file tag, such as `#+vet` after the `package` line, no longer ends the run with a `compiler-output` timeout. The compiler loops on it for minutes when asked for a million errors, so odx now asks for at most 10000 per package and target. A package with more compile errors than that has the rest left out. Your findings, messages, exit codes and JSON keys are otherwise the same.
 
+Releases now carry a build of `odx` and `odinfmt` for Linux on amd64 beside the one for macOS on arm64. It needs glibc 2.34 or newer. CI also runs every gate on Linux.
+
 ## 0.3.0
 
 Your findings, messages, exit codes and existing JSON keys are the same as in 0.2.0. Upgrading needs no change to `odx.json`; set `"github:RATIU5/odx"` to `0.3.0` in `mise.toml`.
