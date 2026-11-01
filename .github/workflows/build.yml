@@ -90,6 +90,13 @@ jobs:
             sudo apt-get install -y clang
           fi
 
+      - name: Show the core dump settings
+        run: |
+          cat /proc/sys/kernel/core_pattern
+          ulimit -c
+          nproc
+          free -m
+
       - uses: jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca # v5.1.1
         with:
           version: 2026.8.6
