@@ -40,7 +40,7 @@ init_child_budget :: proc(budget: ^Child_Budget, limit: int) {
 	sync.sema_post(&budget.slots, limit)
 }
 
-// One heavy check can peak at 600 MB (probe R-G), so odx never runs more children at once than
+// One heavy check can peak at 600 MB, so odx never runs more children at once than
 // there are gigabytes of RAM.
 worker_count :: proc() -> int {
 	n := os.get_processor_core_count()

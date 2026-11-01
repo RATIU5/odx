@@ -38,8 +38,8 @@ Check_Jobs :: struct {
 	work: virtual.Arena,
 }
 
-// Starts `odin check` per package and target per Appendix E.4, twice for a pending package per
-// Appendix E.7, and returns without waiting. `finish_compile` must follow. `odin` is the compiler's
+// Starts `odin check` per package and target, twice for a pending package, and returns
+// without waiting. `finish_compile` must follow. `odin` is the compiler's
 // path, `odin_root` what `odin root` printed and `root` the repo root. The checks run within
 // `budget`, and a check that the compiler's own crash ended runs once more. Allocates the jobs with
 // `allocator`.
@@ -228,8 +228,8 @@ reports_name_conflict :: proc(entry: Compiler_Entry, placed: Placed, packages: [
 	return false
 }
 
-// Appendix E.4's command line. The package-scoped flags take the package's name, never its
-// directory (probe R-C), and are left out for a package no file names. Allocates with `allocator`.
+// Command line of one check. The package-scoped flags take the package's name, never its
+// directory, and are left out for a package no file names. Allocates with `allocator`.
 check_command :: proc(
 	odin, dir: string,
 	pkg: Package,

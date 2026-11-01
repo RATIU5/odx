@@ -43,7 +43,7 @@ ODINFMT_FILE :: "odinfmt.json"
 // `FORMAT_CONFIG` key by key, so the repo's file is the one copy that is edited by hand.
 ODINFMT_JSON :: #load("../odinfmt.json", string)
 
-// Appendix E.6. odx ignores any `odinfmt.json` in the checked repo.
+// The config is fixed: odx ignores any `odinfmt.json` in the checked repo.
 FORMAT_CONFIG :: printer.Config {
 	character_width              = 100,
 	spaces                       = 4,
@@ -111,8 +111,7 @@ Format_Outcome :: union {
 // Allocates `out` with `context.allocator`. `ok` is false when the printer can't read `src`.
 Print_Proc :: #type proc(src: string) -> (out: string, ok: bool)
 
-// Prints `src` once and compares, per Appendix E.7. The print's memory stays with
-// `context.allocator`, so the caller frees it in bulk.
+// Prints `src` once and compares. Its memory stays with `context.allocator` for bulk freeing.
 print_result :: proc(src: string, print: Print_Proc) -> Print_Result {
 	out, ok := print(src)
 	switch {
@@ -163,7 +162,7 @@ read_print_result :: proc(text: string) -> Print_Result {
 	return nil
 }
 
-// Prints `src` with the vendored printer and Appendix E.6's config, the way OLS's `format` does,
+// Prints `src` with the vendored printer and `FORMAT_CONFIG`, the way OLS's `format` does,
 // except that any parser or tokenizer error refuses the print and none reaches stderr. Allocates
 // the AST, the printer's state and `out` with `context.allocator`, which suits an arena.
 @(require_results)
@@ -436,7 +435,7 @@ destroy_format :: proc(jobs: ^Format_Jobs) {
 	virtual.arena_destroy(&jobs.work)
 }
 
-// A whole result line decides the outcome however the child then ended (Appendix E.7). Without one,
+// A whole result line decides the outcome however the child then ended. Without one,
 // a child that ended in any way is `Crashed`, except that one its own limit ended timed out: under
 // load odx charges a slow poll less than it took, so the child's limit can run out first. A crash
 // doesn't stop new prints. The outcomes that leave the run without a result do. The outcome may

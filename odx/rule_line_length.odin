@@ -14,7 +14,7 @@ Alignment_Gap :: struct {
 	len:         int,
 }
 
-// What the parse tells `line-length` about a file's layout, per Appendix E.8. Empty for a file the
+// What the parse tells `line-length` about a file's layout. Empty for a file the
 // parser can't read, which is then measured as written.
 Layout :: struct {
 	gaps:               [dynamic]Alignment_Gap,

@@ -177,7 +177,7 @@ Path_Resolver :: struct {
 	allocator:   runtime.Allocator,
 }
 
-// Adds `import-escape` and `path-case` per Appendix E.5 to the findings of each file that names an
+// Adds `import-escape` and `path-case` to the findings of each file that names an
 // escaping or miscased path. `repo_root` and `odin_root` need not be real paths. Allocates what it
 // adds with `allocator`.
 check_paths :: proc(
