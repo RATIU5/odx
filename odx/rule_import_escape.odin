@@ -187,7 +187,7 @@ check_paths :: proc(
 	allocator: runtime.Allocator,
 ) {
 	work: virtual.Arena
-	ensure(virtual.arena_init_growing(&work) == nil, "out of memory")
+	arena_init_or_die(&work)
 	defer virtual.arena_destroy(&work)
 	scratch := virtual.arena_allocator(&work)
 

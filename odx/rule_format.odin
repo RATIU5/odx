@@ -260,7 +260,7 @@ run_format :: proc(cmd: Format_Child_Command) -> int {
 		}, self_cleanup = true)
 
 	arena: virtual.Arena
-	ensure(virtual.arena_init_growing(&arena) == nil, "out of memory")
+	arena_init_or_die(&arena)
 	context.allocator = virtual.arena_allocator(&arena)
 
 	b := strings.builder_make()
@@ -298,7 +298,7 @@ start_format :: proc(
 	allocator: runtime.Allocator,
 ) -> ^Format_Jobs {
 	jobs := new(Format_Jobs, allocator)
-	ensure(virtual.arena_init_growing(&jobs.work) == nil, "out of memory")
+	arena_init_or_die(&jobs.work)
 	work := virtual.arena_allocator(&jobs.work)
 
 	odx, exe_err := os.get_executable_path(work)

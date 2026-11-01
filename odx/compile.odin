@@ -51,7 +51,7 @@ start_compile :: proc(
 	allocator: runtime.Allocator,
 ) -> ^Check_Jobs {
 	checks := new(Check_Jobs, allocator)
-	ensure(virtual.arena_init_growing(&checks.work) == nil, "out of memory")
+	arena_init_or_die(&checks.work)
 	scratch := virtual.arena_allocator(&checks.work)
 
 	jobs := make([dynamic]Check_Job, scratch)

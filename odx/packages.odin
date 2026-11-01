@@ -103,9 +103,9 @@ discover :: proc(
 	allocator: runtime.Allocator,
 ) -> [dynamic]Package {
 	listings, scratch: virtual.Arena
-	ensure(virtual.arena_init_growing(&listings) == nil, "out of memory")
+	arena_init_or_die(&listings)
 	defer virtual.arena_destroy(&listings)
-	ensure(virtual.arena_init_growing(&scratch) == nil, "out of memory")
+	arena_init_or_die(&scratch)
 	defer virtual.arena_destroy(&scratch)
 
 	w := Walker {
