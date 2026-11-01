@@ -292,9 +292,13 @@ decode_collection :: proc(config: ^Config, errors: ^[dynamic]Error, entry, real_
 	}
 
 	full := path if os.is_absolute_path(path) else fmt.tprintf("%s/%s", real_root, path)
-	real, real_err := os.get_absolute_path(full, context.allocator)
+	real: string
+	real_err: os.Error
+	if disk_kind(full) == .Dir {
+		real, real_err = os.get_absolute_path(full, context.allocator)
+	}
 	switch {
-	case real_err != nil || disk_kind(real) != .Dir:
+	case real == "" || real_err != nil || disk_kind(real) != .Dir:
 		append(errors, invalid("collection '%s' path '%s' is not a directory", name, path))
 	case !is_within(real, real_root):
 		append(errors, invalid("collection '%s' path '%s' is outside the repo", name, path))
