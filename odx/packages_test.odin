@@ -131,3 +131,62 @@ dir_entry_kind_follows_a_link_only_to_learn_its_kind :: proc(t: ^testing.T) {
 		)
 	}
 }
+
+@(test)
+listed_dir_set_agrees_with_cleaning_each_dir_per_lookup :: proc(t: ^testing.T) {
+	context.allocator = context.temp_allocator
+
+	listed_by_cleaning_each :: proc(dirs: []string, rel: string) -> bool {
+		for dir in dirs {
+			if cleaned, _ := os.clean_path(dir, context.temp_allocator); cleaned == rel {
+				return true
+			}
+		}
+		return false
+	}
+	spellings := []string {
+		"a",
+		"./a",
+		"a/",
+		"a/../a",
+		"a//",
+		"a/b",
+		"./a/b/",
+		"a/b/..",
+		"",
+		".",
+		"./",
+		"/",
+		"/abs/a",
+		"/abs/a/",
+		"..",
+		"../a",
+		"a/../..",
+		"b//c",
+		"x/./y",
+		"x/y",
+	}
+	combined := listed_dir_set(spellings, context.allocator)
+	for rel in spellings {
+		testing.expectf(
+			t,
+			(rel in combined) == listed_by_cleaning_each(spellings, rel),
+			"%q: set disagrees with cleaning each dir",
+			rel,
+		)
+		single := listed_dir_set({rel}, context.allocator)
+		for probe in spellings {
+			testing.expectf(
+				t,
+				(probe in single) == listed_by_cleaning_each({rel}, probe),
+				"%q listed, probing %q: set disagrees with cleaning each dir",
+				rel,
+				probe,
+			)
+		}
+	}
+	empty := listed_dir_set({}, context.allocator)
+	for probe in spellings {
+		testing.expectf(t, probe not_in empty, "%q is listed by no dirs", probe)
+	}
+}
