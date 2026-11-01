@@ -55,98 +55,122 @@ parse_args :: proc(args: []string, allocator: runtime.Allocator) -> Parsed_Args 
 	name, rest := args[0], args[1:]
 	switch name {
 	case "check":
-		cmd: Check_Command
-		for i := 0; i < len(rest); i += 1 {
-			switch rest[i] {
-			case "--json":
-				cmd.json = true
-			case "--pending":
-				cmd.pending = true
-			case MAX_FINDINGS_FLAG:
-				if cmd.max_findings > 0 {
-					return usage(allocator, "'%s' given twice for '%s'", MAX_FINDINGS_FLAG, name)
-				}
-				if i + 1 == len(rest) {
-					return usage(
-						allocator,
-						"'%s' for '%s' needs a number",
-						MAX_FINDINGS_FLAG,
-						name,
-					)
-				}
-				i += 1
-				n, ok := parse_positive(rest[i])
-				if !ok {
-					return usage(
-						allocator,
-						"'%s' for '%s' needs a positive number, not '%s'",
-						MAX_FINDINGS_FLAG,
-						name,
-						rest[i],
-					)
-				}
-				cmd.max_findings = n
-			case:
-				return bad_arg(allocator, name, rest[i])
-			}
-		}
-		// A capped JSON document would leave out findings its schema promises.
-		if cmd.json && cmd.max_findings > 0 {
-			return usage(allocator, "'%s' can't be combined with '--json'", MAX_FINDINGS_FLAG)
-		}
-		return cmd
+		return parse_check(name, rest, allocator)
 	case "init":
-		if len(rest) > 0 {
-			return bad_arg(allocator, name, rest[0])
-		}
-		return Init_Command{}
+		return parse_bare(name, rest, allocator, Init_Command{})
 	case HELP_FLAG:
-		if len(rest) > 0 {
-			return bad_arg(allocator, name, rest[0])
-		}
-		return Help_Command{}
+		return parse_bare(name, rest, allocator, Help_Command{})
 	case VERSION_FLAG:
-		if len(rest) > 0 {
-			return bad_arg(allocator, name, rest[0])
-		}
-		return Version_Command{}
+		return parse_bare(name, rest, allocator, Version_Command{})
 	case "rules":
-		cmd: Rules_Command
-		for arg in rest {
-			if arg != "--json" {
-				return bad_arg(allocator, name, arg)
-			}
-			cmd.json = true
-		}
-		return cmd
+		return parse_rules(name, rest, allocator)
 	case "explain":
-		cmd: Explain_Command
-		id := ""
-		for arg in rest {
-			switch {
-			case arg == "--json":
-				cmd.json = true
-			case id != "" || strings.has_prefix(arg, "-"):
-				return bad_arg(allocator, name, arg)
-			case:
-				id = arg
-			}
-		}
-		if id == "" {
-			return usage(allocator, "'%s' needs a rule", name)
-		}
-		known: bool
-		cmd.rule, known = rule_by_id(id)
-		if !known {
-			return usage(allocator, "unknown rule '%s' for '%s'", id, name)
-		}
-		return cmd
+		return parse_explain(name, rest, allocator)
 	case FORMAT_COMMAND:
-		if len(rest) == 1 {
-			return Format_Child_Command{rest[0]}
-		}
+		return parse_format_child(name, rest, allocator)
 	}
 	return usage(allocator, "unknown command '%s'", name)
+}
+
+@(private = "file")
+parse_check :: proc(name: string, rest: []string, allocator: runtime.Allocator) -> Parsed_Args {
+	cmd: Check_Command
+	for i := 0; i < len(rest); i += 1 {
+		switch rest[i] {
+		case "--json":
+			cmd.json = true
+		case "--pending":
+			cmd.pending = true
+		case MAX_FINDINGS_FLAG:
+			if cmd.max_findings > 0 {
+				return usage(allocator, "'%s' given twice for '%s'", MAX_FINDINGS_FLAG, name)
+			}
+			if i + 1 == len(rest) {
+				return usage(allocator, "'%s' for '%s' needs a number", MAX_FINDINGS_FLAG, name)
+			}
+			i += 1
+			n, ok := parse_positive(rest[i])
+			if !ok {
+				return usage(
+					allocator,
+					"'%s' for '%s' needs a positive number, not '%s'",
+					MAX_FINDINGS_FLAG,
+					name,
+					rest[i],
+				)
+			}
+			cmd.max_findings = n
+		case:
+			return bad_arg(allocator, name, rest[i])
+		}
+	}
+	// A capped JSON document would leave out findings its schema promises.
+	if cmd.json && cmd.max_findings > 0 {
+		return usage(allocator, "'%s' can't be combined with '--json'", MAX_FINDINGS_FLAG)
+	}
+	return cmd
+}
+
+@(private = "file")
+parse_bare :: proc(
+	name: string,
+	rest: []string,
+	allocator: runtime.Allocator,
+	cmd: Parsed_Args,
+) -> Parsed_Args {
+	if len(rest) > 0 {
+		return bad_arg(allocator, name, rest[0])
+	}
+	return cmd
+}
+
+@(private = "file")
+parse_rules :: proc(name: string, rest: []string, allocator: runtime.Allocator) -> Parsed_Args {
+	cmd: Rules_Command
+	for arg in rest {
+		if arg != "--json" {
+			return bad_arg(allocator, name, arg)
+		}
+		cmd.json = true
+	}
+	return cmd
+}
+
+@(private = "file")
+parse_explain :: proc(name: string, rest: []string, allocator: runtime.Allocator) -> Parsed_Args {
+	cmd: Explain_Command
+	id := ""
+	for arg in rest {
+		switch {
+		case arg == "--json":
+			cmd.json = true
+		case id != "" || strings.has_prefix(arg, "-"):
+			return bad_arg(allocator, name, arg)
+		case:
+			id = arg
+		}
+	}
+	if id == "" {
+		return usage(allocator, "'%s' needs a rule", name)
+	}
+	known: bool
+	cmd.rule, known = rule_by_id(id)
+	if !known {
+		return usage(allocator, "unknown rule '%s' for '%s'", id, name)
+	}
+	return cmd
+}
+
+@(private = "file")
+parse_format_child :: proc(
+	name: string,
+	rest: []string,
+	allocator: runtime.Allocator,
+) -> Parsed_Args {
+	if len(rest) != 1 {
+		return usage(allocator, "unknown command '%s'", name)
+	}
+	return Format_Child_Command{rest[0]}
 }
 
 // Decimal digits only: `strconv` also takes a sign, `_` separators and a base prefix, and doesn't
