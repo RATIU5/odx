@@ -1,0 +1,2 @@
+check --max-findings 2 --json
+check --json --max-findings 2

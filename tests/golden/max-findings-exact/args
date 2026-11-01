@@ -1,0 +1,2 @@
+check --max-findings 5
+check --max-findings 6

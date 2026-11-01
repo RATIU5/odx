@@ -1,0 +1,10 @@
+=== odx check --max-findings 0
+--- stdout
+--- stderr
+odx: error: usage: '--max-findings' for 'check' needs a positive number, not '0'; run 'odx --help'
+--- exit 2
+=== odx check --max-findings -1
+--- stdout
+--- stderr
+odx: error: usage: '--max-findings' for 'check' needs a positive number, not '-1'; run 'odx --help'
+--- exit 2

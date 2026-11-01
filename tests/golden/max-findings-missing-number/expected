@@ -1,0 +1,4 @@
+--- stdout
+--- stderr
+odx: error: usage: '--max-findings' for 'check' needs a number; run 'odx --help'
+--- exit 2

@@ -19,7 +19,7 @@ RETRIES_LINE :: "odx: the compiler died by a signal %d times, and odx ran it aga
 HELP :: `odx checks Odin code against one standard.
 
 Usage:
-  odx check [--json] [--pending]
+  odx check [--json] [--pending] [--max-findings N]
   odx init
   odx --help
   odx --version
@@ -27,6 +27,8 @@ Usage:
   odx check      Checks every package under the repo root and prints the findings.
     --json       Prints the same result as one JSON document on stdout.
     --pending    Also prints the held-back findings of pending packages.
+    --max-findings N
+                 Prints only the first N finding lines; not with --json.
   odx init       Writes odx.json and odinfmt.json for a repo that has no odx.json.
   odx --help     Prints this text.
   odx --version  Prints the release, its rule set and the compiler it supports, in the
@@ -185,17 +187,33 @@ write_result :: proc(out, err: io.Writer, result: Result, cmd: Check_Command) ->
 	return nil
 }
 
+// Needs `result.findings` sorted by `finding_cmp`, which puts the held-back findings last, so the
+// lines to print are a prefix.
 @(private = "file")
 render_result :: proc(out, err: ^strings.Builder, result: Result, cmd: Check_Command) {
 	for e in result.errors {
 		fmt.sbprintf(err, "odx: error: %s: %s\n", ERROR_CODES[e.code], e.message)
 	}
 	failed := len(result.errors) > 0
+	count := 0
+	for f in result.findings {
+		if !f.held_back {
+			count += 1
+		}
+	}
+	total := cmd.pending ? len(result.findings) : count
+	lines := result.findings[:total]
+	if cmd.max_findings > 0 && cmd.max_findings < total {
+		lines = lines[:cmd.max_findings]
+	}
 	if !failed {
 		for note in result.notes {
 			if cmd.pending || !note.held_back {
 				fmt.sbprintf(err, "%s\n", note.text)
 			}
+		}
+		if len(lines) < total {
+			fmt.sbprintf(err, "odx: showing %d of %d findings\n", len(lines), total)
 		}
 	}
 	// A run that ends in an error still says how often the compiler crashed.
@@ -203,11 +221,11 @@ render_result :: proc(out, err: ^strings.Builder, result: Result, cmd: Check_Com
 		fmt.sbprintf(err, RETRIES_LINE, result.compiler_retries)
 	}
 	if !failed {
-		render_finding_notes(err, result.findings[:], false)
+		render_finding_notes(err, lines, false)
 	}
 	if cmd.json {
 		if !failed && cmd.pending {
-			render_finding_notes(err, result.findings[:], true)
+			render_finding_notes(err, lines, true)
 		}
 		render_json(out, result, cmd, failed)
 		return
@@ -216,20 +234,16 @@ render_result :: proc(out, err: ^strings.Builder, result: Result, cmd: Check_Com
 		return
 	}
 
-	count := 0
-	for f in result.findings {
-		if !f.held_back {
-			count += 1
-			render_finding_text(out, f)
-		}
+	shown := lines[:min(count, len(lines))]
+	held := lines[len(shown):]
+	for f in shown {
+		render_finding_text(out, f)
 	}
-	if cmd.pending && count < len(result.findings) {
+	if len(held) > 0 {
 		strings.write_string(err, "odx: held-back findings:\n")
-		render_finding_notes(err, result.findings[:], true)
-		for f in result.findings {
-			if f.held_back {
-				render_finding_text(out, f)
-			}
+		render_finding_notes(err, held, true)
+		for f in held {
+			render_finding_text(out, f)
 		}
 	}
 	fmt.sbprintf(

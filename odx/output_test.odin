@@ -430,12 +430,107 @@ an_error_prints_no_finding_note :: proc(t: ^testing.T) {
 	testing.expect_value(t, strings.to_string(w.err), "odx: error: odin-missing: no odin\n")
 }
 
+@(private = "file")
+five_findings :: proc() -> Result {
+	result := Result {
+		pending  = 1,
+		rule_set = 2,
+		odin     = "dev-x",
+	}
+	for path in ([]string{"a.odin", "b.odin", "c.odin"}) {
+		append(
+			&result.findings,
+			Finding{path = path, line = 1, col = 1, rule = .Odin, message = "m"},
+		)
+	}
+	for path in ([]string{"p.odin", "q.odin"}) {
+		append(
+			&result.findings,
+			Finding{path = path, line = 1, col = 1, rule = .Odin, message = "m", held_back = true},
+		)
+	}
+	return result
+}
+
+@(test)
+max_findings_caps_the_finding_lines_and_keeps_the_true_summary :: proc(t: ^testing.T) {
+	SUMMARY ::
+		"odx: 3 findings, 0 ignored, 1 pending, 0 skipped (rules 2, odx " +
+		RELEASE +
+		", odin dev-x)\n"
+	A :: "a.odin:1:1: odin: m\n"
+	B :: "b.odin:1:1: odin: m\n"
+	C :: "c.odin:1:1: odin: m\n"
+	P :: "p.odin:1:1: odin: m\n"
+	Q :: "q.odin:1:1: odin: m\n"
+	HEADER :: "odx: held-back findings:\n"
+	cases := []struct {
+		cmd:      Check_Command,
+		want_out: string,
+		want_err: string,
+	} {
+		{{max_findings = 2}, A + B + SUMMARY, "odx: showing 2 of 3 findings\n"},
+		{{max_findings = 3}, A + B + C + SUMMARY, ""},
+		{{max_findings = 9}, A + B + C + SUMMARY, ""},
+		{{pending = true, max_findings = 2}, A + B + SUMMARY, "odx: showing 2 of 5 findings\n"},
+		{
+			{pending = true, max_findings = 4},
+			A + B + C + P + SUMMARY,
+			"odx: showing 4 of 5 findings\n" + HEADER,
+		},
+		{{pending = true, max_findings = 5}, A + B + C + P + Q + SUMMARY, HEADER},
+	}
+	for c in cases {
+		result := five_findings()
+		defer delete(result.findings)
+		w: Written
+		defer destroy_written(&w)
+		write_to_builders(t, &w, result, c.cmd)
+		testing.expectf(
+			t,
+			strings.to_string(w.out) == c.want_out,
+			"%v: stdout is %q",
+			c.cmd,
+			strings.to_string(w.out),
+		)
+		testing.expectf(
+			t,
+			strings.to_string(w.err) == c.want_err,
+			"%v: stderr is %q",
+			c.cmd,
+			strings.to_string(w.err),
+		)
+		testing.expect_value(t, exit_code(result), 1)
+	}
+}
+
+@(test)
+max_findings_note_follows_the_run_notes_and_hides_the_notes_of_cut_findings :: proc(
+	t: ^testing.T,
+) {
+	result := noted_result()
+	defer destroy_noted(&result)
+
+	w: Written
+	defer destroy_written(&w)
+	write_to_builders(t, &w, result, {pending = true, max_findings = 1})
+
+	testing.expect_value(
+		t,
+		strings.to_string(w.err),
+		"odx: skipped x: no file\n" +
+		"odx: showing 1 of 2 findings\n" +
+		"odx: format: a/b.odin formatter crashed\n",
+	)
+}
+
 @(test)
 help_names_every_command_and_exit_code_in_under_40_lines :: proc(t: ^testing.T) {
 	wanted := []string {
 		"odx check",
 		"--json",
 		"--pending",
+		"--max-findings N",
 		"odx init",
 		"--help",
 		"--version",

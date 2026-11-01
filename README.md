@@ -43,15 +43,16 @@ export PATH="$HOME/.local/odx/bin:$PATH"
 
 ## Commands
 
-| Command               | Does                                                                                                                         |
-| --------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| `odx check`           | Checks every package under the repo root and prints the findings.                                                            |
-| `odx check --json`    | Prints the same result as one JSON document on stdout.                                                                       |
-| `odx check --pending` | Also prints the held-back findings of pending packages.                                                                      |
-| `odx init`            | Writes `odx.json` and `odinfmt.json` for a repo that has no `odx.json`.                                                      |
-| `odx --help`          | Prints the commands, the flags and the exit codes.                                                                           |
-| `odx --version`       | Prints the release, its rule set and the compiler it supports, as `odx 0.2.0, rule set 2, odin dev-2026-10-nightly:84bc3fc`. |
-| `odx test`, `odx run` | Planned. Today each is a `usage` error.                                                                                      |
+| Command                      | Does                                                                                                                         |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `odx check`                  | Checks every package under the repo root and prints the findings.                                                            |
+| `odx check --json`           | Prints the same result as one JSON document on stdout.                                                                       |
+| `odx check --pending`        | Also prints the held-back findings of pending packages.                                                                      |
+| `odx check --max-findings N` | Prints only the first N finding lines.                                                                                       |
+| `odx init`                   | Writes `odx.json` and `odinfmt.json` for a repo that has no `odx.json`.                                                      |
+| `odx --help`                 | Prints the commands, the flags and the exit codes.                                                                           |
+| `odx --version`              | Prints the release, its rule set and the compiler it supports, as `odx 0.2.0, rule set 2, odin dev-2026-10-nightly:84bc3fc`. |
+| `odx test`, `odx run`        | Planned. Today each is a `usage` error.                                                                                      |
 
 The repo root is the nearest directory above the working directory that holds `odx.json`, else the nearest that holds `.git`, else the working directory.
 
@@ -92,6 +93,8 @@ The error codes, which `odx --help` also lists:
 `--json` prints `{"version":1,"findings":[...],"errors":[...],"summary":{...}}`. Each finding has `path`, `line`, `col`, `rule` and `message`. `errors` is non-empty when the exit is 2, except for a usage error, which prints no JSON. `summary` has `findings`, `ignored`, `pending`, `skipped`, `rules`, `release`, `odin` and `targets`, the list of targets odx checked.
 
 `--pending` prints the held-back findings after the others, under the stderr line `odx: held-back findings:`. In `--json` each carries `"held_back":true`. The exit code doesn't change.
+
+`--max-findings N` caps the finding lines on stdout at N, held-back lines from `--pending` included. When it cuts any, stderr says so, as in `odx: showing 2 of 5 findings`, where the total includes the held-back lines that `--pending` adds, so it can exceed the summary's count. The summary line and the exit code keep the true totals. It can't be combined with `--json`, which is a `usage` error.
 
 A package whose own compile check reports an error in its own files gets only its `odin`, `parse-unsupported`, `import-escape`, `path-case` and `ignore-invalid` findings. When that hides a finding, stderr says so with one line per package, and stdout and `--json` stay the same:
 

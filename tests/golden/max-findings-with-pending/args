@@ -1,0 +1,3 @@
+check --pending --max-findings 1
+check --pending --max-findings 2
+check --max-findings 1

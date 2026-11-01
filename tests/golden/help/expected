@@ -2,7 +2,7 @@
 odx checks Odin code against one standard.
 
 Usage:
-  odx check [--json] [--pending]
+  odx check [--json] [--pending] [--max-findings N]
   odx init
   odx --help
   odx --version
@@ -10,6 +10,8 @@ Usage:
   odx check      Checks every package under the repo root and prints the findings.
     --json       Prints the same result as one JSON document on stdout.
     --pending    Also prints the held-back findings of pending packages.
+    --max-findings N
+                 Prints only the first N finding lines; not with --json.
   odx init       Writes odx.json and odinfmt.json for a repo that has no odx.json.
   odx --help     Prints this text.
   odx --version  Prints the release, its rule set and the compiler it supports, in the

@@ -1,0 +1,10 @@
+=== odx check --max-findings 2 --json
+--- stdout
+--- stderr
+odx: error: usage: '--max-findings' can't be combined with '--json'; run 'odx --help'
+--- exit 2
+=== odx check --json --max-findings 2
+--- stdout
+--- stderr
+odx: error: usage: '--max-findings' can't be combined with '--json'; run 'odx --help'
+--- exit 2
