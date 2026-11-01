@@ -1,0 +1,22 @@
+=== odx check --max-findings 5
+--- stdout
+app/app.odin:4:9: transmute: 'transmute' isn't allowed
+app/app.odin:8:9: transmute: 'transmute' isn't allowed
+app/app.odin:12:9: transmute: 'transmute' isn't allowed
+app/app.odin:16:9: transmute: 'transmute' isn't allowed
+app/app.odin:20:9: transmute: 'transmute' isn't allowed
+odx: 5 findings, 0 ignored, 0 pending, 0 skipped (rules 2, odx <release>, odin <odin>)
+--- stderr
+odx: no odx.json, so rule set 2, the running compiler and every package strict
+--- exit 1
+=== odx check --max-findings 6
+--- stdout
+app/app.odin:4:9: transmute: 'transmute' isn't allowed
+app/app.odin:8:9: transmute: 'transmute' isn't allowed
+app/app.odin:12:9: transmute: 'transmute' isn't allowed
+app/app.odin:16:9: transmute: 'transmute' isn't allowed
+app/app.odin:20:9: transmute: 'transmute' isn't allowed
+odx: 5 findings, 0 ignored, 0 pending, 0 skipped (rules 2, odx <release>, odin <odin>)
+--- stderr
+odx: no odx.json, so rule set 2, the running compiler and every package strict
+--- exit 1

@@ -1,0 +1,4 @@
+--- stdout
+--- stderr
+odx: error: usage: 'explain' needs a rule; run 'odx --help'
+--- exit 2

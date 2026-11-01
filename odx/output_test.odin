@@ -1,5 +1,7 @@
 package odx
 
+import "core:fmt"
+import "core:slice"
 import "core:strings"
 import "core:testing"
 
@@ -262,10 +264,40 @@ json_prints_one_document :: proc(t: ^testing.T) {
 		`"errors":[],` +
 		`"summary":{"findings":1,"ignored":2,"pending":1,"skipped":3,"rules":1,"release":"` +
 		RELEASE +
-		`","odin":"dev-x"}}` +
+		`","odin":"dev-x","targets":["darwin_arm64","linux_amd64"]}}` +
 		"\n",
 	)
 	testing.expect_value(t, strings.to_string(w.err), "")
+}
+
+@(test)
+json_summary_ends_with_every_target_in_table_order :: proc(t: ^testing.T) {
+	result := sample_result()
+	defer delete(result.findings)
+
+	w: Written
+	defer destroy_written(&w)
+	write_to_builders(t, &w, result, {json = true})
+
+	want := strings.builder_make()
+	defer strings.builder_destroy(&want)
+	strings.write_string(&want, `,"odin":"dev-x","targets":[`)
+	for info, target in TARGETS {
+		if target != min(Target) {
+			strings.write_byte(&want, ',')
+		}
+		fmt.sbprintf(&want, `"%s"`, info.name)
+	}
+	strings.write_string(&want, "]}}\n")
+
+	got := strings.to_string(w.out)
+	testing.expectf(
+		t,
+		strings.has_suffix(got, strings.to_string(want)),
+		"summary should end with %q, got %q",
+		strings.to_string(want),
+		got,
+	)
 }
 
 @(test)
@@ -286,7 +318,7 @@ json_error_has_no_findings :: proc(t: ^testing.T) {
 		`"errors":[{"code":"odin-missing","message":"no odin"}],` +
 		`"summary":{"findings":0,"ignored":0,"pending":0,"skipped":0,"rules":1,"release":"` +
 		RELEASE +
-		`","odin":"dev-x"}}` +
+		`","odin":"dev-x","targets":["darwin_arm64","linux_amd64"]}}` +
 		"\n",
 	)
 	testing.expect_value(t, strings.to_string(w.err), "odx: error: odin-missing: no odin\n")
@@ -398,15 +430,112 @@ an_error_prints_no_finding_note :: proc(t: ^testing.T) {
 	testing.expect_value(t, strings.to_string(w.err), "odx: error: odin-missing: no odin\n")
 }
 
+@(private = "file")
+five_findings :: proc() -> Result {
+	result := Result {
+		pending  = 1,
+		rule_set = 2,
+		odin     = "dev-x",
+	}
+	for path in ([]string{"a.odin", "b.odin", "c.odin"}) {
+		append(
+			&result.findings,
+			Finding{path = path, line = 1, col = 1, rule = .Odin, message = "m"},
+		)
+	}
+	for path in ([]string{"p.odin", "q.odin"}) {
+		append(
+			&result.findings,
+			Finding{path = path, line = 1, col = 1, rule = .Odin, message = "m", held_back = true},
+		)
+	}
+	return result
+}
+
 @(test)
-help_names_every_command_and_exit_code_in_under_20_lines :: proc(t: ^testing.T) {
+max_findings_caps_the_finding_lines_and_keeps_the_true_summary :: proc(t: ^testing.T) {
+	SUMMARY ::
+		"odx: 3 findings, 0 ignored, 1 pending, 0 skipped (rules 2, odx " +
+		RELEASE +
+		", odin dev-x)\n"
+	A :: "a.odin:1:1: odin: m\n"
+	B :: "b.odin:1:1: odin: m\n"
+	C :: "c.odin:1:1: odin: m\n"
+	P :: "p.odin:1:1: odin: m\n"
+	Q :: "q.odin:1:1: odin: m\n"
+	HEADER :: "odx: held-back findings:\n"
+	cases := []struct {
+		cmd:      Check_Command,
+		want_out: string,
+		want_err: string,
+	} {
+		{{max_findings = 2}, A + B + SUMMARY, "odx: showing 2 of 3 findings\n"},
+		{{max_findings = 3}, A + B + C + SUMMARY, ""},
+		{{max_findings = 9}, A + B + C + SUMMARY, ""},
+		{{pending = true, max_findings = 2}, A + B + SUMMARY, "odx: showing 2 of 5 findings\n"},
+		{
+			{pending = true, max_findings = 4},
+			A + B + C + P + SUMMARY,
+			"odx: showing 4 of 5 findings\n" + HEADER,
+		},
+		{{pending = true, max_findings = 5}, A + B + C + P + Q + SUMMARY, HEADER},
+	}
+	for c in cases {
+		result := five_findings()
+		defer delete(result.findings)
+		w: Written
+		defer destroy_written(&w)
+		write_to_builders(t, &w, result, c.cmd)
+		testing.expectf(
+			t,
+			strings.to_string(w.out) == c.want_out,
+			"%v: stdout is %q",
+			c.cmd,
+			strings.to_string(w.out),
+		)
+		testing.expectf(
+			t,
+			strings.to_string(w.err) == c.want_err,
+			"%v: stderr is %q",
+			c.cmd,
+			strings.to_string(w.err),
+		)
+		testing.expect_value(t, exit_code(result), 1)
+	}
+}
+
+@(test)
+max_findings_note_follows_the_run_notes_and_hides_the_notes_of_cut_findings :: proc(
+	t: ^testing.T,
+) {
+	result := noted_result()
+	defer destroy_noted(&result)
+
+	w: Written
+	defer destroy_written(&w)
+	write_to_builders(t, &w, result, {pending = true, max_findings = 1})
+
+	testing.expect_value(
+		t,
+		strings.to_string(w.err),
+		"odx: skipped x: no file\n" +
+		"odx: showing 1 of 2 findings\n" +
+		"odx: format: a/b.odin formatter crashed\n",
+	)
+}
+
+@(test)
+help_names_every_command_and_exit_code_in_under_40_lines :: proc(t: ^testing.T) {
 	wanted := []string {
 		"odx check",
 		"--json",
 		"--pending",
+		"--max-findings N",
 		"odx init",
 		"--help",
 		"--version",
+		"odx rules [--json]",
+		"odx explain <rule> [--json]",
 		"  0  ",
 		"  1  ",
 		"  2  ",
@@ -418,7 +547,56 @@ help_names_every_command_and_exit_code_in_under_20_lines :: proc(t: ^testing.T) 
 		testing.expectf(t, !strings.contains(HELP, unwanted), "the help text names %q", unwanted)
 	}
 	testing.expect(t, strings.has_suffix(HELP, "\n"), "the help text must end its last line")
-	testing.expect(t, strings.count(HELP, "\n") < 20, "the help text must stay under 20 lines")
+	testing.expect(t, strings.count(HELP, "\n") < 40, "the help text must stay under 40 lines")
+}
+
+@(test)
+help_lists_every_error_code_in_enum_order :: proc(t: ^testing.T) {
+	after := 0
+	for name, code in ERROR_CODES {
+		at := strings.index(HELP, fmt.tprintf("\n  %s  ", name))
+		if !testing.expectf(t, at >= 0, "the help text lacks the error code %q", name) {
+			continue
+		}
+		testing.expectf(t, at >= after, "the help text lists %v out of enum order", code)
+		after = at
+	}
+}
+
+README :: #load("../README.md", string)
+
+@(test)
+readme_error_code_table_lists_exactly_the_error_codes :: proc(t: ^testing.T) {
+	listed := make([dynamic]string, context.temp_allocator)
+	text := README
+	in_table := false
+	for line in strings.split_lines_iterator(&text) {
+		if strings.has_prefix(line, "| Code ") {
+			in_table = true
+			continue
+		}
+		if !in_table {
+			continue
+		}
+		if !strings.has_prefix(line, "|") {
+			break
+		}
+		cell := strings.trim_space(strings.split(line, "|", context.temp_allocator)[1])
+		if strings.has_prefix(cell, "`") {
+			append(&listed, strings.trim(cell, "`"))
+		}
+	}
+	want := make([dynamic]string, context.temp_allocator)
+	for name in ERROR_CODES {
+		append(&want, name)
+	}
+	testing.expectf(
+		t,
+		slice.equal(listed[:], want[:]),
+		"the README's error code table lists %v, want %v",
+		listed[:],
+		want[:],
+	)
 }
 
 @(test)
@@ -581,4 +759,73 @@ muted_lines_are_not_written_with_an_error :: proc(t: ^testing.T) {
 	defer destroy_written(&w)
 	write_to_builders(t, &w, result, {pending = true})
 	testing.expect_value(t, strings.to_string(w.err), "odx: error: config-invalid: bad\n")
+}
+
+@(test)
+rules_output_prints_each_rule_in_enum_order_with_whether_it_is_ignorable_and_why :: proc(
+	t: ^testing.T,
+) {
+	text := rules_output(false, context.temp_allocator)
+	lines := strings.split_lines(strings.trim_suffix(text, "\n"), context.temp_allocator)
+	testing.expect_value(t, len(lines), len(Rule))
+	for info, rule in RULES {
+		if int(rule) >= len(lines) {
+			break
+		}
+		state := "ignorable" if info.ignorable else "not ignorable"
+		want := fmt.tprintf("%-22s  %-13s  %s", info.id, state, info.why)
+		testing.expect_value(t, lines[rule], want)
+	}
+}
+
+@(test)
+explain_output_prints_the_rule_whether_it_is_ignorable_why_and_the_fix :: proc(t: ^testing.T) {
+	info := RULES[.Transmute]
+	testing.expect_value(
+		t,
+		explain_output(.Transmute, false, context.temp_allocator),
+		fmt.tprintf(
+			"rule:       transmute\nignorable:  yes\nwhy:        %s\nfix:        %s\n",
+			info.why,
+			info.fix,
+		),
+	)
+	odin := explain_output(.Odin, false, context.temp_allocator)
+	testing.expectf(t, strings.contains(odin, "\nignorable:  no\n"), "got %q", odin)
+}
+
+@(test)
+explain_output_prints_one_rule_as_json :: proc(t: ^testing.T) {
+	info := RULES[.Transmute]
+	testing.expect_value(
+		t,
+		explain_output(.Transmute, true, context.temp_allocator),
+		fmt.tprintf(
+			`{{"version":1,"rules":[{{"id":"transmute","ignorable":true,"why":"%s","fix":"%s"}]}` +
+			"\n",
+			info.why,
+			info.fix,
+		),
+	)
+}
+
+@(test)
+rules_output_prints_every_rule_as_json_in_enum_order :: proc(t: ^testing.T) {
+	text := rules_output(true, context.temp_allocator)
+	testing.expect(
+		t,
+		strings.has_prefix(text, `{"version":1,"rules":[{"id":"odin","ignorable":false,`),
+	)
+	testing.expect(t, strings.has_suffix(text, "}]}\n"))
+	testing.expect_value(t, strings.count(text, `{"id":`), len(Rule))
+	for info in RULES {
+		object := fmt.tprintf(
+			`{{"id":"%s","ignorable":%v,"why":"%s","fix":"%s"}`,
+			info.id,
+			info.ignorable,
+			info.why,
+			info.fix,
+		)
+		testing.expectf(t, strings.contains(text, object), "the JSON lacks %s", object)
+	}
 }

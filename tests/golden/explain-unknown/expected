@@ -1,0 +1,4 @@
+--- stdout
+--- stderr
+odx: error: usage: unknown rule 'frob' for 'explain'; run 'odx --help'
+--- exit 2

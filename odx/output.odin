@@ -19,22 +19,42 @@ RETRIES_LINE :: "odx: the compiler died by a signal %d times, and odx ran it aga
 HELP :: `odx checks Odin code against one standard.
 
 Usage:
-  odx check [--json] [--pending]
+  odx check [--json] [--pending] [--max-findings N]
   odx init
+  odx rules [--json]
+  odx explain <rule> [--json]
   odx --help
   odx --version
 
-  odx check      Checks every package under the repo root and prints the findings.
-    --json       Prints the same result as one JSON document on stdout.
-    --pending    Also prints the held-back findings of pending packages.
-  odx init       Writes odx.json and odinfmt.json for a repo that has no odx.json.
-  odx --help     Prints this text.
-  odx --version  Prints the release, its rule set and the compiler it supports.
+  odx check           Checks every package under the repo root and prints the findings.
+    --json            Prints the same result as one JSON document on stdout.
+    --pending         Also prints the held-back findings of pending packages.
+    --max-findings N  Prints only the first N finding lines; not with --json.
+  odx init            Writes odx.json and odinfmt.json for a repo that has no odx.json.
+  odx rules           Prints each rule and why it exists; explain <rule> adds its fix.
+  odx --version       Prints the release, its rule set and the compiler it supports, in
+                      the current format "odx <release>, rule set <n>, odin <compiler>".
+
+--help, --version, rules and explain need no repo, no odx.json and no odin on PATH.
+Exit 0 from --version means the odx binary runs, not that odx check will.
 
 Exit codes:
   0  No findings.
   1  At least one finding.
   2  An error: odx can't give a trustworthy result.
+
+Error codes, printed on stderr as "odx: error: <code>: <message>":
+  usage                 The command line is wrong.
+  compiler-mismatch     The odin on PATH isn't the one odx.json pins.
+  compiler-unsupported  This odx release doesn't support the odin on PATH.
+  config-invalid        odx.json is invalid, or odx can't find the repo root.
+  odin-missing          odin isn't on PATH.
+  compiler-output       The compiler crashed, timed out or wrote output odx can't read.
+  init-exists           odx init wrote nothing, because a file it writes already exists.
+  init-write            odx init couldn't write its files.
+  dir-unreadable        odx can't list a directory it scans.
+  format-timeout        Checking one file's format took too long.
+  format-failed         odx can't run the formatter or read a file to check its format.
 `
 
 Finding :: struct {
@@ -90,6 +110,59 @@ version_line :: proc(allocator: runtime.Allocator) -> string {
 		SUPPORTED_COMPILER,
 		allocator = allocator,
 	)
+}
+
+// What `odx rules` prints: a line per rule in enum order with whether an ignore can cover it and
+// why it exists, or all of each rule as JSON. Allocates the text with `allocator`.
+rules_output :: proc(json: bool, allocator: runtime.Allocator) -> string {
+	b := strings.builder_make(allocator)
+	if json {
+		render_rules_json(&b, ~bit_set[Rule]{})
+		return strings.to_string(b)
+	}
+	width := 0
+	for info in RULES {
+		width = max(width, len(info.id))
+	}
+	for info in RULES {
+		state := "ignorable" if info.ignorable else "not ignorable"
+		fmt.sbprintf(&b, "%-*s  %-13s  %s\n", width, info.id, state, info.why)
+	}
+	return strings.to_string(b)
+}
+
+// What `odx explain <rule>` prints. Allocates the text with `allocator`.
+explain_output :: proc(rule: Rule, json: bool, allocator: runtime.Allocator) -> string {
+	b := strings.builder_make(allocator)
+	if json {
+		render_rules_json(&b, {rule})
+		return strings.to_string(b)
+	}
+	info := RULES[rule]
+	fmt.sbprintf(&b, "rule:       %s\n", info.id)
+	fmt.sbprintf(&b, "ignorable:  %s\n", "yes" if info.ignorable else "no")
+	fmt.sbprintf(&b, "why:        %s\n", info.why)
+	fmt.sbprintf(&b, "fix:        %s\n", info.fix)
+	return strings.to_string(b)
+}
+
+@(private = "file")
+render_rules_json :: proc(out: ^strings.Builder, rules: bit_set[Rule]) {
+	fmt.sbprintf(out, `{{"version":%d,"rules":[`, JSON_VERSION)
+	separator := ""
+	for rule in rules {
+		strings.write_string(out, separator)
+		separator = ","
+		info := RULES[rule]
+		strings.write_string(out, `{"id":`)
+		render_json_string(out, info.id)
+		fmt.sbprintf(out, `,"ignorable":%v,"why":`, info.ignorable)
+		render_json_string(out, info.why)
+		strings.write_string(out, `,"fix":`)
+		render_json_string(out, info.fix)
+		strings.write_byte(out, '}')
+	}
+	strings.write_string(out, "]}\n")
 }
 
 // Rules order by ID, not enum position, because the ID is the contract.
@@ -168,17 +241,33 @@ write_result :: proc(out, err: io.Writer, result: Result, cmd: Check_Command) ->
 	return nil
 }
 
+// Needs `result.findings` sorted by `finding_cmp`, which puts the held-back findings last, so the
+// lines to print are a prefix.
 @(private = "file")
 render_result :: proc(out, err: ^strings.Builder, result: Result, cmd: Check_Command) {
 	for e in result.errors {
 		fmt.sbprintf(err, "odx: error: %s: %s\n", ERROR_CODES[e.code], e.message)
 	}
 	failed := len(result.errors) > 0
+	count := 0
+	for f in result.findings {
+		if !f.held_back {
+			count += 1
+		}
+	}
+	total := cmd.pending ? len(result.findings) : count
+	lines := result.findings[:total]
+	if cmd.max_findings > 0 && cmd.max_findings < total {
+		lines = lines[:cmd.max_findings]
+	}
 	if !failed {
 		for note in result.notes {
 			if cmd.pending || !note.held_back {
 				fmt.sbprintf(err, "%s\n", note.text)
 			}
+		}
+		if len(lines) < total {
+			fmt.sbprintf(err, "odx: showing %d of %d findings\n", len(lines), total)
 		}
 	}
 	// A run that ends in an error still says how often the compiler crashed.
@@ -186,11 +275,11 @@ render_result :: proc(out, err: ^strings.Builder, result: Result, cmd: Check_Com
 		fmt.sbprintf(err, RETRIES_LINE, result.compiler_retries)
 	}
 	if !failed {
-		render_finding_notes(err, result.findings[:], false)
+		render_finding_notes(err, lines, false)
 	}
 	if cmd.json {
 		if !failed && cmd.pending {
-			render_finding_notes(err, result.findings[:], true)
+			render_finding_notes(err, lines, true)
 		}
 		render_json(out, result, cmd, failed)
 		return
@@ -199,20 +288,16 @@ render_result :: proc(out, err: ^strings.Builder, result: Result, cmd: Check_Com
 		return
 	}
 
-	count := 0
-	for f in result.findings {
-		if !f.held_back {
-			count += 1
-			render_finding_text(out, f)
-		}
+	shown := lines[:min(count, len(lines))]
+	held := lines[len(shown):]
+	for f in shown {
+		render_finding_text(out, f)
 	}
-	if cmd.pending && count < len(result.findings) {
+	if len(held) > 0 {
 		strings.write_string(err, "odx: held-back findings:\n")
-		render_finding_notes(err, result.findings[:], true)
-		for f in result.findings {
-			if f.held_back {
-				render_finding_text(out, f)
-			}
+		render_finding_notes(err, held, true)
+		for f in held {
+			render_finding_text(out, f)
 		}
 	}
 	fmt.sbprintf(
@@ -297,7 +382,14 @@ render_json :: proc(out: ^strings.Builder, result: Result, cmd: Check_Command, f
 		RELEASE,
 	)
 	render_json_string(out, result.odin)
-	strings.write_string(out, "}}\n")
+	strings.write_string(out, `,"targets":[`)
+	for info, target in TARGETS {
+		if target != min(Target) {
+			strings.write_byte(out, ',')
+		}
+		render_json_string(out, info.name)
+	}
+	strings.write_string(out, "]}}\n")
 }
 
 render_json_string :: proc(out: ^strings.Builder, s: string) {

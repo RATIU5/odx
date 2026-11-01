@@ -192,16 +192,6 @@ parse_rules :: proc(
 	return
 }
 
-@(private = "file", require_results)
-rule_by_id :: proc(id: string) -> (rule: Rule, known: bool) {
-	for info, r in RULES {
-		if info.id == id {
-			return r, true
-		}
-	}
-	return
-}
-
 @(private = "file")
 FILE_SCOPE :: -1
 
