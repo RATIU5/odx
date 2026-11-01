@@ -55,7 +55,7 @@ export PATH="$HOME/.local/odx/bin:$PATH"
 
 The repo root is the nearest directory above the working directory that holds `odx.json`, else the nearest that holds `.git`, else the working directory.
 
-`odx --help` and `odx --version` need no repo, no `odx.json` and no `odin` on `PATH`. Any other spelling, such as `odx help` or `odx check --help`, is a `usage` error, and every `usage` error ends with `; run 'odx --help'`.
+`odx --help` and `odx --version` need no repo, no `odx.json` and no `odin` on `PATH`. So exit 0 from `odx --version` shows that the odx binary runs, not that `odx check` will. Its current format is `odx <release>, rule set <n>, odin <compiler>`, with those three fields in that order. Any other spelling, such as `odx help` or `odx check --help`, is a `usage` error, and every `usage` error ends with `; run 'odx --help'`.
 
 `odx init` writes nothing when `odx.json` exists, or when an `odinfmt.json` exists that differs from the one it writes. Both are the error `init-exists`. It leaves an `odinfmt.json` with the same bytes as it is.
 
@@ -72,6 +72,22 @@ odx: 0 findings, 2 ignored, 0 pending, 0 skipped (rules 2, odx 0.2.0, odin dev-2
 | 0    | No findings.                                                                               |
 | 1    | At least one finding.                                                                      |
 | 2    | An error: odx can't give a trustworthy result. Stderr has `odx: error: <code>: <message>`. |
+
+The error codes, which `odx --help` also lists:
+
+| Code                   | Means and what to do                                                                                                                                                              |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `usage`                | The command line isn't one odx accepts, so run `odx --help` and fix the command.                                                                                                  |
+| `compiler-mismatch`    | The `odin` on `PATH` isn't the compiler `odx.json` pins, so put that compiler on `PATH` or change the pin.                                                                        |
+| `compiler-unsupported` | This odx release doesn't support the `odin` on `PATH`, so install the compiler `odx --version` names or the odx release that supports yours.                                      |
+| `config-invalid`       | `odx.json` is invalid or odx can't find the repo root, so fix what the message names.                                                                                             |
+| `odin-missing`         | No `odin` is on `PATH`, so install the compiler `odx --version` names and put it on `PATH`.                                                                                       |
+| `compiler-output`      | The compiler, or `odin version` or `odin root`, crashed, timed out, exited with an unexpected code or wrote output odx can't read, so rerun and report the message if it repeats. |
+| `init-exists`          | `odx init` wrote nothing, because `odx.json` exists or `odinfmt.json` differs from the one it writes or can't be read, so move that file away, keep it or fix it.                 |
+| `init-write`           | `odx init` couldn't write `odx.json` or `odinfmt.json`, so fix what the message names, such as permissions, and run it again.                                                     |
+| `dir-unreadable`       | odx can't list a directory it scans, so fix its permissions or list it in `exclude_dirs`.                                                                                         |
+| `format-timeout`       | The formatter took more than 120 s on one file, so rerun and report the message if it repeats.                                                                                    |
+| `format-failed`        | odx can't run the formatter or read a file to check its format, so fix what the message names.                                                                                    |
 
 `--json` prints `{"version":1,"findings":[...],"errors":[...],"summary":{...}}`. Each finding has `path`, `line`, `col`, `rule` and `message`. `errors` is non-empty when the exit is 2, except for a usage error, which prints no JSON.
 

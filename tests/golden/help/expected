@@ -12,11 +12,28 @@ Usage:
     --pending    Also prints the held-back findings of pending packages.
   odx init       Writes odx.json and odinfmt.json for a repo that has no odx.json.
   odx --help     Prints this text.
-  odx --version  Prints the release, its rule set and the compiler it supports.
+  odx --version  Prints the release, its rule set and the compiler it supports, in the
+                 current format "odx <release>, rule set <n>, odin <compiler>".
+
+--help and --version need no repo, no odx.json and no odin on PATH. Exit 0 from
+--version means the odx binary runs, not that odx check will.
 
 Exit codes:
   0  No findings.
   1  At least one finding.
   2  An error: odx can't give a trustworthy result.
+
+Error codes, printed on stderr as "odx: error: <code>: <message>":
+  usage                 The command line is wrong.
+  compiler-mismatch     The odin on PATH isn't the one odx.json pins.
+  compiler-unsupported  This odx release doesn't support the odin on PATH.
+  config-invalid        odx.json is invalid, or odx can't find the repo root.
+  odin-missing          odin isn't on PATH.
+  compiler-output       The compiler crashed, timed out or wrote output odx can't read.
+  init-exists           odx init wrote nothing, because a file it writes already exists.
+  init-write            odx init couldn't write its files.
+  dir-unreadable        odx can't list a directory it scans.
+  format-timeout        Checking one file's format took too long.
+  format-failed         odx can't run the formatter or read a file to check its format.
 --- stderr
 --- exit 0

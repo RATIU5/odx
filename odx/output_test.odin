@@ -1,5 +1,7 @@
 package odx
 
+import "core:fmt"
+import "core:slice"
 import "core:strings"
 import "core:testing"
 
@@ -399,7 +401,7 @@ an_error_prints_no_finding_note :: proc(t: ^testing.T) {
 }
 
 @(test)
-help_names_every_command_and_exit_code_in_under_20_lines :: proc(t: ^testing.T) {
+help_names_every_command_and_exit_code_in_under_40_lines :: proc(t: ^testing.T) {
 	wanted := []string {
 		"odx check",
 		"--json",
@@ -418,7 +420,56 @@ help_names_every_command_and_exit_code_in_under_20_lines :: proc(t: ^testing.T) 
 		testing.expectf(t, !strings.contains(HELP, unwanted), "the help text names %q", unwanted)
 	}
 	testing.expect(t, strings.has_suffix(HELP, "\n"), "the help text must end its last line")
-	testing.expect(t, strings.count(HELP, "\n") < 20, "the help text must stay under 20 lines")
+	testing.expect(t, strings.count(HELP, "\n") < 40, "the help text must stay under 40 lines")
+}
+
+@(test)
+help_lists_every_error_code_in_enum_order :: proc(t: ^testing.T) {
+	after := 0
+	for name, code in ERROR_CODES {
+		at := strings.index(HELP, fmt.tprintf("\n  %s  ", name))
+		if !testing.expectf(t, at >= 0, "the help text lacks the error code %q", name) {
+			continue
+		}
+		testing.expectf(t, at >= after, "the help text lists %v out of enum order", code)
+		after = at
+	}
+}
+
+README :: #load("../README.md", string)
+
+@(test)
+readme_error_code_table_lists_exactly_the_error_codes :: proc(t: ^testing.T) {
+	listed := make([dynamic]string, context.temp_allocator)
+	text := README
+	in_table := false
+	for line in strings.split_lines_iterator(&text) {
+		if strings.has_prefix(line, "| Code ") {
+			in_table = true
+			continue
+		}
+		if !in_table {
+			continue
+		}
+		if !strings.has_prefix(line, "|") {
+			break
+		}
+		cell := strings.trim_space(strings.split(line, "|", context.temp_allocator)[1])
+		if strings.has_prefix(cell, "`") {
+			append(&listed, strings.trim(cell, "`"))
+		}
+	}
+	want := make([dynamic]string, context.temp_allocator)
+	for name in ERROR_CODES {
+		append(&want, name)
+	}
+	testing.expectf(
+		t,
+		slice.equal(listed[:], want[:]),
+		"the README's error code table lists %v, want %v",
+		listed[:],
+		want[:],
+	)
 }
 
 @(test)
