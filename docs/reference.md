@@ -7,7 +7,7 @@ Behavior of odx that `odx --help`, `odx rules` and `odx explain <rule>` don't pr
 A finding is one line on stdout, `path:line:col: rule: message`. The last stdout line is the summary:
 
 ```text
-odx: 0 findings, 2 ignored, 0 pending, 0 skipped (rules 2, odx 0.2.0, odin dev-2026-10-nightly:84bc3fc)
+odx: 0 findings, 2 ignored, 0 pending, 0 skipped (rules 2, odx 0.3.0, odin dev-2026-10-nightly:84bc3fc)
 ```
 
 | Exit | Means                                                                                      |
@@ -18,7 +18,7 @@ odx: 0 findings, 2 ignored, 0 pending, 0 skipped (rules 2, odx 0.2.0, odin dev-2
 
 `odx --help` lists the error codes.
 
-`--json` prints `{"version":1,"findings":[...],"errors":[...],"summary":{...}}`. Each finding has `path`, `line`, `col`, `rule` and `message`. `errors` is non-empty when the exit is 2, except for a usage error, which prints no JSON. `summary` has `findings`, `ignored`, `pending`, `skipped`, `rules`, `release`, `odin` and `targets`, the list of targets odx checked.
+`--json` prints `{"version":1,"findings":[...],"errors":[...],"summary":{...}}`. Each finding has `path`, `line`, `col`, `rule` and `message`. `errors` is non-empty when the exit is 2, except for a usage error, which prints no JSON. `summary` has `findings`, `ignored`, `pending`, `skipped`, `rules`, `release`, `odin` and `targets`, the two targets odx checks for.
 
 `--pending` prints the held-back findings after the others, under the stderr line `odx: held-back findings:`. In `--json` each carries `"held_back":true`. The exit code doesn't change.
 
@@ -84,7 +84,7 @@ A `pending` entry with nothing left to fix is the finding `pending-stale`, at th
 
 odx checks every package for `darwin_arm64` and `linux_amd64`. A package written for one platform says so with a build tag, such as `#+build darwin` at the top of each file, or with a file suffix such as `_darwin.odin`. odx then checks it for that target only. An `#assert(ODIN_OS == .Darwin)` alone fails on the other target, because the compiler still selects the file. A finding doesn't say which target it comes from, so a finding in a `_linux.odin` file or in a `when ODIN_OS == .Linux` branch reads like any other.
 
-The `--json` summary lists the targets checked under `targets`. odx compiles no code for any other target, so a Windows-only file, such as one named `_windows.odin`, never gets an `odin` finding.
+The `--json` summary lists under `targets` the two targets odx checks for, whether or not a package compiled for them. odx compiles no code for any other target, so a Windows-only file, such as one named `_windows.odin`, never gets an `odin` finding.
 
 ## Files odx can't read
 
