@@ -12,6 +12,8 @@ import "core:time"
 
 CHECK_TIMEOUT :: 120 * time.Second
 
+MAX_ERROR_COUNT :: 10000
+
 // A message that quotes a child's stderr shows at most this much of its end, where a crash leaves
 // its assertion.
 STDERR_LINES_SHOWN :: 40
@@ -246,7 +248,7 @@ check_command :: proc(
 		"check",
 		dir,
 		"-json-errors",
-		"-max-error-count:1000000",
+		fmt.aprintf("-max-error-count:%d", MAX_ERROR_COUNT),
 		"-thread-count:1",
 		"-ignore-unused-defineables",
 		fmt.aprintf("-target:%s", TARGETS[target].name),
