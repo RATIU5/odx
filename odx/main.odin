@@ -65,6 +65,10 @@ run :: proc() -> int {
 		return print(HELP)
 	case Version_Command:
 		return print(version_line(context.allocator))
+	case Rules_Command:
+		return print(rules_output(parsed.json, context.allocator))
+	case Explain_Command:
+		return print(explain_output(parsed.rule, parsed.json, context.allocator))
 	case Check_Command:
 		cmd = parsed
 		if check_repo(&result) != nil {

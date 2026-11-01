@@ -21,6 +21,15 @@ Help_Command :: struct {}
 
 Version_Command :: struct {}
 
+Rules_Command :: struct {
+	json: bool,
+}
+
+Explain_Command :: struct {
+	rule: Rule,
+	json: bool,
+}
+
 FORMAT_COMMAND :: "__format"
 HELP_FLAG :: "--help"
 VERSION_FLAG :: "--version"
@@ -33,6 +42,8 @@ Parsed_Args :: union {
 	Format_Child_Command,
 	Help_Command,
 	Version_Command,
+	Rules_Command,
+	Explain_Command,
 	Error,
 }
 
@@ -99,6 +110,37 @@ parse_args :: proc(args: []string, allocator: runtime.Allocator) -> Parsed_Args 
 			return bad_arg(allocator, name, rest[0])
 		}
 		return Version_Command{}
+	case "rules":
+		cmd: Rules_Command
+		for arg in rest {
+			if arg != "--json" {
+				return bad_arg(allocator, name, arg)
+			}
+			cmd.json = true
+		}
+		return cmd
+	case "explain":
+		cmd: Explain_Command
+		id := ""
+		for arg in rest {
+			switch {
+			case arg == "--json":
+				cmd.json = true
+			case id != "" || strings.has_prefix(arg, "-"):
+				return bad_arg(allocator, name, arg)
+			case:
+				id = arg
+			}
+		}
+		if id == "" {
+			return usage(allocator, "'%s' needs a rule", name)
+		}
+		known: bool
+		cmd.rule, known = rule_by_id(id)
+		if !known {
+			return usage(allocator, "unknown rule '%s' for '%s'", id, name)
+		}
+		return cmd
 	case FORMAT_COMMAND:
 		if len(rest) == 1 {
 			return Format_Child_Command{rest[0]}

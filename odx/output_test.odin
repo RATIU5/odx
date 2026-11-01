@@ -534,6 +534,8 @@ help_names_every_command_and_exit_code_in_under_40_lines :: proc(t: ^testing.T) 
 		"odx init",
 		"--help",
 		"--version",
+		"odx rules [--json]",
+		"odx explain <rule> [--json]",
 		"  0  ",
 		"  1  ",
 		"  2  ",
@@ -757,4 +759,73 @@ muted_lines_are_not_written_with_an_error :: proc(t: ^testing.T) {
 	defer destroy_written(&w)
 	write_to_builders(t, &w, result, {pending = true})
 	testing.expect_value(t, strings.to_string(w.err), "odx: error: config-invalid: bad\n")
+}
+
+@(test)
+rules_output_prints_each_rule_in_enum_order_with_whether_it_is_ignorable_and_why :: proc(
+	t: ^testing.T,
+) {
+	text := rules_output(false, context.temp_allocator)
+	lines := strings.split_lines(strings.trim_suffix(text, "\n"), context.temp_allocator)
+	testing.expect_value(t, len(lines), len(Rule))
+	for info, rule in RULES {
+		if int(rule) >= len(lines) {
+			break
+		}
+		state := "ignorable" if info.ignorable else "not ignorable"
+		want := fmt.tprintf("%-22s  %-13s  %s", info.id, state, info.why)
+		testing.expect_value(t, lines[rule], want)
+	}
+}
+
+@(test)
+explain_output_prints_the_rule_whether_it_is_ignorable_why_and_the_fix :: proc(t: ^testing.T) {
+	info := RULES[.Transmute]
+	testing.expect_value(
+		t,
+		explain_output(.Transmute, false, context.temp_allocator),
+		fmt.tprintf(
+			"rule:       transmute\nignorable:  yes\nwhy:        %s\nfix:        %s\n",
+			info.why,
+			info.fix,
+		),
+	)
+	odin := explain_output(.Odin, false, context.temp_allocator)
+	testing.expectf(t, strings.contains(odin, "\nignorable:  no\n"), "got %q", odin)
+}
+
+@(test)
+explain_output_prints_one_rule_as_json :: proc(t: ^testing.T) {
+	info := RULES[.Transmute]
+	testing.expect_value(
+		t,
+		explain_output(.Transmute, true, context.temp_allocator),
+		fmt.tprintf(
+			`{{"version":1,"rules":[{{"id":"transmute","ignorable":true,"why":"%s","fix":"%s"}]}` +
+			"\n",
+			info.why,
+			info.fix,
+		),
+	)
+}
+
+@(test)
+rules_output_prints_every_rule_as_json_in_enum_order :: proc(t: ^testing.T) {
+	text := rules_output(true, context.temp_allocator)
+	testing.expect(
+		t,
+		strings.has_prefix(text, `{"version":1,"rules":[{"id":"odin","ignorable":false,`),
+	)
+	testing.expect(t, strings.has_suffix(text, "}]}\n"))
+	testing.expect_value(t, strings.count(text, `{"id":`), len(Rule))
+	for info in RULES {
+		object := fmt.tprintf(
+			`{{"id":"%s","ignorable":%v,"why":"%s","fix":"%s"}`,
+			info.id,
+			info.ignorable,
+			info.why,
+			info.fix,
+		)
+		testing.expectf(t, strings.contains(text, object), "the JSON lacks %s", object)
+	}
 }

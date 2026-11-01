@@ -1,0 +1,7 @@
+--- stdout
+rule:       transmute
+ignorable:  yes
+why:        transmute reinterprets bits with no check that they make sense as the new type.
+fix:        Use a cast or a conversion; an ignore with a reason is the exception.
+--- stderr
+--- exit 0

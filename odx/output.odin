@@ -21,21 +21,22 @@ HELP :: `odx checks Odin code against one standard.
 Usage:
   odx check [--json] [--pending] [--max-findings N]
   odx init
+  odx rules [--json]
+  odx explain <rule> [--json]
   odx --help
   odx --version
 
-  odx check      Checks every package under the repo root and prints the findings.
-    --json       Prints the same result as one JSON document on stdout.
-    --pending    Also prints the held-back findings of pending packages.
-    --max-findings N
-                 Prints only the first N finding lines; not with --json.
-  odx init       Writes odx.json and odinfmt.json for a repo that has no odx.json.
-  odx --help     Prints this text.
-  odx --version  Prints the release, its rule set and the compiler it supports, in the
-                 current format "odx <release>, rule set <n>, odin <compiler>".
+  odx check           Checks every package under the repo root and prints the findings.
+    --json            Prints the same result as one JSON document on stdout.
+    --pending         Also prints the held-back findings of pending packages.
+    --max-findings N  Prints only the first N finding lines; not with --json.
+  odx init            Writes odx.json and odinfmt.json for a repo that has no odx.json.
+  odx rules           Prints each rule and why it exists; explain <rule> adds its fix.
+  odx --version       Prints the release, its rule set and the compiler it supports, in
+                      the current format "odx <release>, rule set <n>, odin <compiler>".
 
---help and --version need no repo, no odx.json and no odin on PATH. Exit 0 from
---version means the odx binary runs, not that odx check will.
+--help, --version, rules and explain need no repo, no odx.json and no odin on PATH.
+Exit 0 from --version means the odx binary runs, not that odx check will.
 
 Exit codes:
   0  No findings.
@@ -109,6 +110,59 @@ version_line :: proc(allocator: runtime.Allocator) -> string {
 		SUPPORTED_COMPILER,
 		allocator = allocator,
 	)
+}
+
+// What `odx rules` prints: a line per rule in enum order with whether an ignore can cover it and
+// why it exists, or all of each rule as JSON. Allocates the text with `allocator`.
+rules_output :: proc(json: bool, allocator: runtime.Allocator) -> string {
+	b := strings.builder_make(allocator)
+	if json {
+		render_rules_json(&b, ~bit_set[Rule]{})
+		return strings.to_string(b)
+	}
+	width := 0
+	for info in RULES {
+		width = max(width, len(info.id))
+	}
+	for info in RULES {
+		state := "ignorable" if info.ignorable else "not ignorable"
+		fmt.sbprintf(&b, "%-*s  %-13s  %s\n", width, info.id, state, info.why)
+	}
+	return strings.to_string(b)
+}
+
+// What `odx explain <rule>` prints. Allocates the text with `allocator`.
+explain_output :: proc(rule: Rule, json: bool, allocator: runtime.Allocator) -> string {
+	b := strings.builder_make(allocator)
+	if json {
+		render_rules_json(&b, {rule})
+		return strings.to_string(b)
+	}
+	info := RULES[rule]
+	fmt.sbprintf(&b, "rule:       %s\n", info.id)
+	fmt.sbprintf(&b, "ignorable:  %s\n", "yes" if info.ignorable else "no")
+	fmt.sbprintf(&b, "why:        %s\n", info.why)
+	fmt.sbprintf(&b, "fix:        %s\n", info.fix)
+	return strings.to_string(b)
+}
+
+@(private = "file")
+render_rules_json :: proc(out: ^strings.Builder, rules: bit_set[Rule]) {
+	fmt.sbprintf(out, `{{"version":%d,"rules":[`, JSON_VERSION)
+	separator := ""
+	for rule in rules {
+		strings.write_string(out, separator)
+		separator = ","
+		info := RULES[rule]
+		strings.write_string(out, `{"id":`)
+		render_json_string(out, info.id)
+		fmt.sbprintf(out, `,"ignorable":%v,"why":`, info.ignorable)
+		render_json_string(out, info.why)
+		strings.write_string(out, `,"fix":`)
+		render_json_string(out, info.fix)
+		strings.write_byte(out, '}')
+	}
+	strings.write_string(out, "]}\n")
 }
 
 // Rules order by ID, not enum position, because the ID is the contract.

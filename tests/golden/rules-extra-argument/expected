@@ -1,0 +1,4 @@
+--- stdout
+--- stderr
+odx: error: usage: unexpected argument 'odin' for 'rules'; run 'odx --help'
+--- exit 2

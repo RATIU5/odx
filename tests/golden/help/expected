@@ -4,21 +4,22 @@ odx checks Odin code against one standard.
 Usage:
   odx check [--json] [--pending] [--max-findings N]
   odx init
+  odx rules [--json]
+  odx explain <rule> [--json]
   odx --help
   odx --version
 
-  odx check      Checks every package under the repo root and prints the findings.
-    --json       Prints the same result as one JSON document on stdout.
-    --pending    Also prints the held-back findings of pending packages.
-    --max-findings N
-                 Prints only the first N finding lines; not with --json.
-  odx init       Writes odx.json and odinfmt.json for a repo that has no odx.json.
-  odx --help     Prints this text.
-  odx --version  Prints the release, its rule set and the compiler it supports, in the
-                 current format "odx <release>, rule set <n>, odin <compiler>".
+  odx check           Checks every package under the repo root and prints the findings.
+    --json            Prints the same result as one JSON document on stdout.
+    --pending         Also prints the held-back findings of pending packages.
+    --max-findings N  Prints only the first N finding lines; not with --json.
+  odx init            Writes odx.json and odinfmt.json for a repo that has no odx.json.
+  odx rules           Prints each rule and why it exists; explain <rule> adds its fix.
+  odx --version       Prints the release, its rule set and the compiler it supports, in
+                      the current format "odx <release>, rule set <n>, odin <compiler>".
 
---help and --version need no repo, no odx.json and no odin on PATH. Exit 0 from
---version means the odx binary runs, not that odx check will.
+--help, --version, rules and explain need no repo, no odx.json and no odin on PATH.
+Exit 0 from --version means the odx binary runs, not that odx check will.
 
 Exit codes:
   0  No findings.

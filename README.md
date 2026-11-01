@@ -50,13 +50,15 @@ export PATH="$HOME/.local/odx/bin:$PATH"
 | `odx check --pending`        | Also prints the held-back findings of pending packages.                                                                      |
 | `odx check --max-findings N` | Prints only the first N finding lines.                                                                                       |
 | `odx init`                   | Writes `odx.json` and `odinfmt.json` for a repo that has no `odx.json`.                                                      |
+| `odx rules`                  | Prints each rule, whether an ignore can cover it, and why it exists. `--json` prints them as JSON.                           |
+| `odx explain <rule>`         | Prints one rule, whether an ignore can cover it, why it exists and its fix. `--json` prints it as JSON.                      |
 | `odx --help`                 | Prints the commands, the flags and the exit codes.                                                                           |
 | `odx --version`              | Prints the release, its rule set and the compiler it supports, as `odx 0.2.0, rule set 2, odin dev-2026-10-nightly:84bc3fc`. |
 | `odx test`, `odx run`        | Planned. Today each is a `usage` error.                                                                                      |
 
 The repo root is the nearest directory above the working directory that holds `odx.json`, else the nearest that holds `.git`, else the working directory.
 
-`odx --help` and `odx --version` need no repo, no `odx.json` and no `odin` on `PATH`. So exit 0 from `odx --version` shows that the odx binary runs, not that `odx check` will. Its current format is `odx <release>, rule set <n>, odin <compiler>`, with those three fields in that order. Any other spelling, such as `odx help` or `odx check --help`, is a `usage` error, and every `usage` error ends with `; run 'odx --help'`.
+`odx --help`, `odx --version`, `odx rules` and `odx explain` need no repo, no `odx.json` and no `odin` on `PATH`. So exit 0 from `odx --version` shows that the odx binary runs, not that `odx check` will. Its current format is `odx <release>, rule set <n>, odin <compiler>`, with those three fields in that order. Any other spelling, such as `odx help` or `odx check --help`, is a `usage` error, and every `usage` error ends with `; run 'odx --help'`.
 
 `odx init` writes nothing when `odx.json` exists, or when an `odinfmt.json` exists that differs from the one it writes. Both are the error `init-exists`. It leaves an `odinfmt.json` with the same bytes as it is.
 
@@ -182,6 +184,8 @@ All rules belong to rule set 2. It has the same rules as rule set 1, and its `fo
 | `file-name`              | no        | A `.odin` file name that isn't `snake_case`.                                                                                                                                                 |
 | `import-alias`           | no        | An import alias equal to the name the import has without one.                                                                                                                                |
 | `import-order`           | no        | Imports out of group order or spaced wrongly. Groups run `base:` and `core:`, then `vendor:`, then other collections, then relative paths, with one blank line between groups.               |
+
+`odx rules` and `odx explain <rule>` print why each rule exists, and `explain` also prints what to change in the code. A finding never carries that fix, per principle 6 in `docs/adr/0004-principles.md`. With `--json`, both print `{"version":1,"rules":[{"id":...,"ignorable":...,"why":...,"fix":...}]}`, with one rule for `explain`. A test checks that this table lists the binary's rules in order and that its Ignorable column matches.
 
 ## Packages for one platform
 

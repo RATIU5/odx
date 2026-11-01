@@ -1,0 +1,27 @@
+--- stdout
+odin                    not ignorable  Every package must compile under odx's strict flags, since odx's rules need valid Odin.
+parse-unsupported       not ignorable  A file odx can't read or parse gets none of the rules that need its syntax tree.
+import-escape           not ignorable  A result must depend only on the repo and the Odin root, not on code outside them.
+path-case               not ignorable  A miscased path works on a case-insensitive disk and breaks on a case-sensitive one.
+line-length             ignorable      Lines stay within 100 columns, with a tab counted as 4, so code reads without wrapping.
+ignore-invalid          not ignorable  An ignore odx can't apply looks like an exception while it suppresses nothing.
+ignore-unused           not ignorable  An ignore that suppresses nothing is a stale exception that could hide a later finding.
+pending-stale           not ignorable  Pending is debt to fix, so an entry with nothing left to fix leaves the list.
+block-comment           not ignorable  Line comments are the one comment form, so every comment reads the same way.
+one-line-block          not ignorable  A short body has two forms only: do on one line, or braces on lines of their own.
+auto-cast               not ignorable  auto_cast hides the target type, so a reader can't see what the conversion does.
+fallthrough             ignorable      Each switch case stands alone, so no case's code runs on into the next one.
+bounds-check-directive  ignorable      Bounds checking follows the build's flags, not a directive that changes it for one block.
+vet-disabled            not ignorable  Every file gets the compiler's vet checks, so a #+vet tag can't turn one off for a file.
+feature-relaxed         ignorable      A #+feature tag turns off a compiler error that protects the file, such as using-stmt.
+transmute               ignorable      transmute reinterprets bits with no check that they make sense as the new type.
+format                  not ignorable  All code has the formatter's layout, so a diff shows only real changes.
+proc-length             ignorable      A procedure body of over 100 counted lines is too long to read as one unit.
+nesting-depth           ignorable      Blocks nested more than 6 deep are hard to follow.
+name-case               ignorable      Each kind of name has one case, so a name shows if it is a type, procedure or constant.
+package-name            not ignorable  A package is named for its directory, in snake_case, so an import path shows its name.
+file-name               not ignorable  File names are snake_case like package names, so every path in the repo has one form.
+import-alias            not ignorable  An alias equal to the import's own name is noise that looks like a rename.
+import-order            not ignorable  Imports keep one order, so a reader finds each one where the order puts it.
+--- stderr
+--- exit 0

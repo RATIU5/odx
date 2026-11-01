@@ -1,6 +1,7 @@
 package odx
 
 import "core:slice"
+import "core:strings"
 import "core:testing"
 
 @(test)
@@ -98,7 +99,14 @@ add_rule_finding_keeps_a_held_back_finding_held_back_in_a_strict_package :: proc
 
 @(test)
 rules_table_matches_the_contract_flag_by_flag :: proc(t: ^testing.T) {
-	want := [Rule]Rule_Info {
+	Flags :: struct {
+		id:              string,
+		ignorable:       bool,
+		runs_when_muted: bool,
+		held_back:       bool,
+		needs_parse:     bool,
+	}
+	want := [Rule]Flags {
 		.Odin                   = {"odin", false, true, false, false},
 		.Parse_Unsupported      = {"parse-unsupported", false, true, false, false},
 		.Import_Escape          = {"import-escape", false, true, false, true},
@@ -265,4 +273,70 @@ note_test_tagged_counts_each_package_s_test_tagged_files_in_package_order :: pro
 		{text = "odx: c: the compiler doesn't check 1 files tagged #+test"},
 	}
 	testing.expectf(t, slice.equal(result.notes[:], want), "got %v", result.notes)
+}
+
+@(test)
+every_rule_says_in_one_sentence_why_it_exists_and_how_to_fix_a_finding :: proc(t: ^testing.T) {
+	// These two report ignores, so only they may name one without being ignorable.
+	about_ignores := bit_set[Rule]{.Ignore_Invalid, .Ignore_Unused}
+	for info, rule in RULES {
+		for sentence in ([]string{info.why, info.fix}) {
+			testing.expectf(t, sentence != "", "%s: a why or a fix is empty", info.id)
+			testing.expectf(
+				t,
+				strings.has_suffix(sentence, ".") && !strings.contains(sentence, ". "),
+				"%s: %q isn't one sentence ending with a period",
+				info.id,
+				sentence,
+			)
+			if !info.ignorable && rule not_in about_ignores {
+				testing.expectf(
+					t,
+					!strings.contains(sentence, "ignore"),
+					"%s can't be ignored, but %q names an ignore",
+					info.id,
+					sentence,
+				)
+			}
+		}
+	}
+}
+
+@(test)
+readme_rule_table_lists_the_rules_in_order_with_whether_each_is_ignorable :: proc(t: ^testing.T) {
+	Row :: struct {
+		id:        string,
+		ignorable: string,
+	}
+	listed := make([dynamic]Row, context.temp_allocator)
+	text := README
+	in_table := false
+	for line in strings.split_lines_iterator(&text) {
+		if strings.has_prefix(line, "| Rule ") {
+			in_table = true
+			continue
+		}
+		if !in_table {
+			continue
+		}
+		if !strings.has_prefix(line, "|") {
+			break
+		}
+		cells := strings.split(line, "|", context.temp_allocator)
+		id := strings.trim_space(cells[1])
+		if strings.has_prefix(id, "`") {
+			append(&listed, Row{strings.trim(id, "`"), strings.trim_space(cells[2])})
+		}
+	}
+	want := make([dynamic]Row, context.temp_allocator)
+	for info in RULES {
+		append(&want, Row{info.id, "yes" if info.ignorable else "no"})
+	}
+	testing.expectf(
+		t,
+		slice.equal(listed[:], want[:]),
+		"the README's rule table lists %v, want %v",
+		listed[:],
+		want[:],
+	)
 }
