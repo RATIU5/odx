@@ -194,14 +194,22 @@ sort_and_dedupe_findings :: proc(findings: ^[dynamic]Finding) {
 	drop_held_back_copies_of_shown(findings)
 }
 
-// Needs `findings` sorted and deduped by `finding_cmp`, which puts every shown finding before every
-// held-back one, so the shown ones form a sorted prefix to binary search.
+// Needs `findings` sorted by `finding_cmp`, which puts every shown finding before every held-back
+// one, so the shown ones form a prefix.
+@(private = "file")
+count_shown_findings :: proc(findings: []Finding) -> int {
+	count := 0
+	for count < len(findings) && !findings[count].held_back {
+		count += 1
+	}
+	return count
+}
+
+// Needs `findings` sorted and deduped by `finding_cmp`, so the shown ones form a sorted prefix to
+// binary search.
 @(private = "file")
 drop_held_back_copies_of_shown :: proc(findings: ^[dynamic]Finding) {
-	shown_count := 0
-	for shown_count < len(findings) && !findings[shown_count].held_back {
-		shown_count += 1
-	}
+	shown_count := count_shown_findings(findings[:])
 	shown := findings[:shown_count]
 	kept := shown_count
 	for f in findings[shown_count:] {
@@ -219,12 +227,7 @@ exit_code :: proc(result: Result) -> int {
 	if len(result.errors) > 0 {
 		return 2
 	}
-	for f in result.findings {
-		if !f.held_back {
-			return 1
-		}
-	}
-	return 0
+	return count_shown_findings(result.findings[:]) > 0 ? 1 : 0
 }
 
 // Any error means no result, so findings and counts are not written.
@@ -241,39 +244,52 @@ write_result :: proc(out, err: io.Writer, result: Result, cmd: Check_Command) ->
 	return nil
 }
 
-// Needs `result.findings` sorted by `finding_cmp`, which puts the held-back findings last, so the
-// lines to print are a prefix.
 @(private = "file")
 render_result :: proc(out, err: ^strings.Builder, result: Result, cmd: Check_Command) {
 	for e in result.errors {
 		fmt.sbprintf(err, "odx: error: %s: %s\n", ERROR_CODES[e.code], e.message)
 	}
 	failed := len(result.errors) > 0
-	count := 0
-	for f in result.findings {
-		if !f.held_back {
-			count += 1
-		}
-	}
-	total := cmd.pending ? len(result.findings) : count
+	total := cmd.pending ? len(result.findings) : count_shown_findings(result.findings[:])
 	lines := result.findings[:total]
 	if cmd.max_findings > 0 && cmd.max_findings < total {
 		lines = lines[:cmd.max_findings]
 	}
 	if !failed {
-		for note in result.notes {
-			if cmd.pending || !note.held_back {
-				fmt.sbprintf(err, "%s\n", note.text)
-			}
-		}
-		if len(lines) < total {
-			fmt.sbprintf(err, "odx: showing %d of %d findings\n", len(lines), total)
-		}
+		render_notes(err, result, cmd, len(lines), total)
 	}
 	// A run that ends in an error still says how often the compiler crashed.
 	if result.compiler_retries > 0 {
 		fmt.sbprintf(err, RETRIES_LINE, result.compiler_retries)
 	}
+	render_findings(out, err, result, cmd, lines, failed)
+}
+
+@(private = "file")
+render_notes :: proc(
+	err: ^strings.Builder,
+	result: Result,
+	cmd: Check_Command,
+	printed, total: int,
+) {
+	for note in result.notes {
+		if cmd.pending || !note.held_back {
+			fmt.sbprintf(err, "%s\n", note.text)
+		}
+	}
+	if printed < total {
+		fmt.sbprintf(err, "odx: showing %d of %d findings\n", printed, total)
+	}
+}
+
+@(private = "file")
+render_findings :: proc(
+	out, err: ^strings.Builder,
+	result: Result,
+	cmd: Check_Command,
+	lines: []Finding,
+	failed: bool,
+) {
 	if !failed {
 		render_finding_notes(err, lines, false)
 	}
@@ -287,7 +303,12 @@ render_result :: proc(out, err: ^strings.Builder, result: Result, cmd: Check_Com
 	if failed {
 		return
 	}
+	render_text(out, err, result, lines)
+}
 
+@(private = "file")
+render_text :: proc(out, err: ^strings.Builder, result: Result, lines: []Finding) {
+	count := count_shown_findings(result.findings[:])
 	shown := lines[:min(count, len(lines))]
 	held := lines[len(shown):]
 	for f in shown {
@@ -329,14 +350,11 @@ render_finding_text :: proc(out: ^strings.Builder, f: Finding) {
 @(private = "file")
 render_json :: proc(out: ^strings.Builder, result: Result, cmd: Check_Command, failed: bool) {
 	fmt.sbprintf(out, `{{"version":%d,"findings":[`, JSON_VERSION)
-	count := 0
+	count := failed ? 0 : count_shown_findings(result.findings[:])
 	written := 0
 	for f in result.findings {
 		if failed || (f.held_back && !cmd.pending) {
 			continue
-		}
-		if !f.held_back {
-			count += 1
 		}
 		if written > 0 {
 			strings.write_byte(out, ',')
