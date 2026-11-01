@@ -4,17 +4,21 @@ All notable changes to odx are listed here, newest first. The format follows [Ke
 
 | Release | Rule set | Compiler                      |
 | ------- | -------- | ----------------------------- |
+| 0.4.0   | 2        | `dev-2026-10-nightly:84bc3fc` |
 | 0.3.0   | 2        | `dev-2026-10-nightly:84bc3fc` |
 | 0.2.0   | 2        | `dev-2026-10-nightly:84bc3fc` |
 | 0.1.0   | 1        | `dev-2026-09-nightly:a2fb372` |
 
 A project on `dev-2026-09` stays on odx 0.1.0.
 
-## Unreleased
+## 0.4.0
 
-A misplaced file tag, such as `#+vet` after the `package` line, no longer ends the run with a `compiler-output` timeout. The compiler loops on it for minutes when asked for a million errors, so odx now asks for at most 10000 per package and target. A package with more compile errors than that has the rest left out. Your findings, messages, exit codes and JSON keys are otherwise the same.
+Your findings, messages, exit codes and JSON keys are the same as in 0.3.0. Upgrading needs no change to `odx.json`; set `"github:RATIU5/odx"` to `0.4.0` in `mise.toml`. The 0.2.0 and 0.3.0 releases carry no download, so install 0.4.0 or later.
 
-Releases now carry a build of `odx` and `odinfmt` for Linux on amd64 beside the one for macOS on arm64. It needs glibc 2.34 or newer. CI also runs every gate on Linux.
+### Added
+
+- The release carries a build of `odx` and `odinfmt` for Linux on amd64 beside the one for macOS on arm64. It needs glibc 2.34 or newer, so it runs on Ubuntu 22.04 and later.
+- CI runs every gate on Linux as well as macOS.
 
 ## 0.3.0
 
@@ -31,6 +35,12 @@ Your findings, messages, exit codes and existing JSON keys are the same as in 0.
 
 - `odx check` is much faster on repos with many directories and long `exclude_dirs`, `vendored` or `pending` lists. A test repo with 4000 directories and 3000 listed ones went from 4.4 s to 0.2 s.
 - The README is shorter. The rest of the behavior is in `docs/reference.md`.
+- odx asks the compiler for at most 10000 errors per package and target, where it asked for a million. A package with more compile errors than that has the rest left out.
+
+### Fixed
+
+- A file tag such as `#+vet` after the `package` line no longer ends the run with a `compiler-output` timeout. The compiler loops on it for minutes when asked for a million errors.
+- A collection path that is a FIFO no longer hangs odx on Linux.
 
 ## 0.2.0
 

@@ -7,7 +7,7 @@ Behavior of odx that `odx --help`, `odx rules` and `odx explain <rule>` don't pr
 A finding is one line on stdout, `path:line:col: rule: message`. The last stdout line is the summary:
 
 ```text
-odx: 0 findings, 2 ignored, 0 pending, 0 skipped (rules 2, odx 0.3.0, odin dev-2026-10-nightly:84bc3fc)
+odx: 0 findings, 2 ignored, 0 pending, 0 skipped (rules 2, odx 0.4.0, odin dev-2026-10-nightly:84bc3fc)
 ```
 
 | Exit | Means                                                                                      |

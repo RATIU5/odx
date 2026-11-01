@@ -18,7 +18,7 @@ odx installs through [mise](https://mise.jdx.dev), beside the compiler a project
 ```toml
 [tools]
 odin = "dev-2026-10"
-"github:RATIU5/odx" = "0.3.0"
+"github:RATIU5/odx" = "0.4.0"
 ```
 
 If the repository is private, mise needs a GitHub token that can read it, set as `MISE_GITHUB_TOKEN`.

@@ -2,7 +2,7 @@ package odx
 
 import "core:fmt"
 
-RELEASE :: "0.3.0"
+RELEASE :: "0.4.0"
 
 // The one rule set this release runs, with or without `odx.json`.
 RULE_SET :: 2
