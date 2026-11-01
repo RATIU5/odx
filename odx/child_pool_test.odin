@@ -138,14 +138,14 @@ a_pool_runs_a_command_once_more_only_when_a_signal_ended_it_on_its_own :: proc(t
 	} {
 		{
 			"a crash, then a clean run",
-			`echo x >> "$0"; [ "$(wc -l < "$0")" -eq 2 ] || kill -SEGV $$`,
+			`ulimit -c 0; echo x >> "$0"; [ "$(wc -l < "$0")" -eq 2 ] || kill -SEGV $$`,
 			true,
 			{status = Exited{0}, retried = true},
 			2,
 		},
 		{
 			"a crash both times",
-			`echo x >> "$0"; kill -SEGV $$`,
+			`ulimit -c 0; echo x >> "$0"; kill -SEGV $$`,
 			true,
 			{status = Signaled{11}, retried = true},
 			2,
@@ -167,7 +167,7 @@ a_pool_runs_a_command_once_more_only_when_a_signal_ended_it_on_its_own :: proc(t
 		},
 		{
 			"a crash in a pool that doesn't retry",
-			`echo x >> "$0"; kill -SEGV $$`,
+			`ulimit -c 0; echo x >> "$0"; kill -SEGV $$`,
 			false,
 			{status = Signaled{11}},
 			1,
