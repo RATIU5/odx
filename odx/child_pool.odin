@@ -40,7 +40,7 @@ init_child_budget :: proc(budget: ^Child_Budget, limit: int) {
 	sync.sema_post(&budget.slots, limit)
 }
 
-// One heavy check can peak at 600 MB (probe R-G), so odx never runs more children at once than
+// One heavy check can peak at 600 MB, so odx never runs more children at once than
 // there are gigabytes of RAM.
 worker_count :: proc() -> int {
 	n := os.get_processor_core_count()
@@ -108,6 +108,10 @@ Pool :: struct($Run: typeid) {
 	killed:       bool,
 }
 
+arena_init_or_die :: proc(arena: ^virtual.Arena) {
+	ensure(virtual.arena_init_growing(arena) == nil, "out of memory")
+}
+
 // Allocates the pool's lists with `allocator`.
 start_pool :: proc(pool: ^Pool($Run), config: Pool_Config(Run), allocator: runtime.Allocator) {
 	pool.config = config
@@ -118,7 +122,7 @@ start_pool :: proc(pool: ^Pool($Run), config: Pool_Config(Run), allocator: runti
 	pool.arenas = make([]virtual.Arena, min(pool.budget.limit, len(pool.commands)), allocator)
 	pool.threads = make([]^thread.Thread, len(pool.arenas), allocator)
 	for &arena, i in pool.arenas {
-		ensure(virtual.arena_init_growing(&arena) == nil, "out of memory")
+		arena_init_or_die(&arena)
 		// A slot that is free now goes to this worker, so a pool that starts later can't take it
 		// first. A zero wait never takes a slot.
 		has_slot := sync.sema_wait_with_timeout(&pool.budget.slots, time.Nanosecond)

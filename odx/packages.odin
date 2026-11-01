@@ -82,13 +82,16 @@ Walker :: struct {
 	result:    ^Result,
 	packages:  [dynamic]Package,
 	allocator: runtime.Allocator,
-	// Holds directory listings for the whole walk.
+	// Holds directory listings and the cleaned configured dirs for the whole walk.
 	listings:  runtime.Allocator,
+	excluded:  Dir_Set,
+	vendored:  Dir_Set,
+	pending:   Dir_Set,
 	// Holds one file's text and AST at a time.
 	scratch:   ^virtual.Arena,
 }
 
-// Walks the repo at `root` per Appendix E.3 and returns its packages in path order. Each file holds
+// Walks the repo at `root` and returns its packages in path order. Each file holds
 // the findings odx reads from it, and the first disagreeing file of a package whose files disagree
 // on the name holds that `odin` finding. Adds the skipped and pending counts, a note per skipped
 // package and a `dir-unreadable` error per directory it can't list to `result`. Allocates the
@@ -100,9 +103,9 @@ discover :: proc(
 	allocator: runtime.Allocator,
 ) -> [dynamic]Package {
 	listings, scratch: virtual.Arena
-	ensure(virtual.arena_init_growing(&listings) == nil, "out of memory")
+	arena_init_or_die(&listings)
 	defer virtual.arena_destroy(&listings)
-	ensure(virtual.arena_init_growing(&scratch) == nil, "out of memory")
+	arena_init_or_die(&scratch)
 	defer virtual.arena_destroy(&scratch)
 
 	w := Walker {
@@ -112,6 +115,12 @@ discover :: proc(
 		allocator = allocator,
 		listings  = virtual.arena_allocator(&listings),
 		scratch   = &scratch,
+	}
+	w.excluded = listed_dir_set(config.exclude_dirs[:], w.listings)
+	w.vendored = listed_dir_set(config.vendored[:], w.listings)
+	w.pending = make(Dir_Set, len(config.pending), w.listings)
+	for entry in config.pending {
+		add_listed_dir(&w.pending, entry.dir, w.listings)
 	}
 	walk_dir(&w, ".", root, os.base(real_root(root, w.listings)))
 
@@ -209,7 +218,7 @@ walk_dir :: proc(w: ^Walker, rel, abs, project: string) {
 	is_package := false
 	pkg := Package {
 		dir    = strings.clone(rel, w.allocator),
-		status = .Pending if is_pending(w.config.pending[:], rel) else .Strict,
+		status = .Pending if rel in w.pending else .Strict,
 		files  = make([dynamic]Source_File, w.allocator),
 	}
 	has_special := false
@@ -225,9 +234,7 @@ walk_dir :: proc(w: ^Walker, rel, abs, project: string) {
 		switch kind {
 		case .Other:
 		case .Dir:
-			if strings.has_prefix(entry.name, ".") ||
-			   is_listed_dir(w.config.exclude_dirs[:], child) ||
-			   is_listed_dir(w.config.vendored[:], child) {
+			if strings.has_prefix(entry.name, ".") || child in w.excluded || child in w.vendored {
 				continue
 			}
 			walk_dir(w, child, entry.fullpath, entry.name)
@@ -416,23 +423,20 @@ name_package :: proc(w: ^Walker, pkg: ^Package, has_special: bool) {
 	}
 }
 
-// odx.json's dirs may carry `./` or a trailing `/`.
-@(private = "file")
-is_listed_dir :: proc(dirs: []string, rel: string) -> bool {
+Dir_Set :: map[string]struct{}
+
+// odx.json's dirs may carry `./` or a trailing `/`, so the set holds them cleaned. Allocates with
+// `allocator`.
+@(require_results)
+listed_dir_set :: proc(dirs: []string, allocator: runtime.Allocator) -> Dir_Set {
+	set := make(Dir_Set, len(dirs), allocator)
 	for dir in dirs {
-		if cleaned, _ := os.clean_path(dir, context.temp_allocator); cleaned == rel {
-			return true
-		}
+		add_listed_dir(&set, dir, allocator)
 	}
-	return false
+	return set
 }
 
-@(private = "file")
-is_pending :: proc(entries: []Pending_Entry, rel: string) -> bool {
-	for entry in entries {
-		if is_listed_dir({entry.dir}, rel) {
-			return true
-		}
-	}
-	return false
+add_listed_dir :: proc(set: ^Dir_Set, dir: string, allocator: runtime.Allocator) {
+	cleaned, _ := os.clean_path(dir, allocator)
+	set[cleaned] = {}
 }

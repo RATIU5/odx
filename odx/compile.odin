@@ -12,6 +12,8 @@ import "core:time"
 
 CHECK_TIMEOUT :: 120 * time.Second
 
+MAX_ERROR_COUNT :: 10000
+
 // A message that quotes a child's stderr shows at most this much of its end, where a crash leaves
 // its assertion.
 STDERR_LINES_SHOWN :: 40
@@ -38,8 +40,8 @@ Check_Jobs :: struct {
 	work: virtual.Arena,
 }
 
-// Starts `odin check` per package and target per Appendix E.4, twice for a pending package per
-// Appendix E.7, and returns without waiting. `finish_compile` must follow. `odin` is the compiler's
+// Starts `odin check` per package and target, twice for a pending package, and returns
+// without waiting. `finish_compile` must follow. `odin` is the compiler's
 // path, `odin_root` what `odin root` printed and `root` the repo root. The checks run within
 // `budget`, and a check that the compiler's own crash ended runs once more. Allocates the jobs with
 // `allocator`.
@@ -51,7 +53,7 @@ start_compile :: proc(
 	allocator: runtime.Allocator,
 ) -> ^Check_Jobs {
 	checks := new(Check_Jobs, allocator)
-	ensure(virtual.arena_init_growing(&checks.work) == nil, "out of memory")
+	arena_init_or_die(&checks.work)
 	scratch := virtual.arena_allocator(&checks.work)
 
 	jobs := make([dynamic]Check_Job, scratch)
@@ -228,8 +230,8 @@ reports_name_conflict :: proc(entry: Compiler_Entry, placed: Placed, packages: [
 	return false
 }
 
-// Appendix E.4's command line. The package-scoped flags take the package's name, never its
-// directory (probe R-C), and are left out for a package no file names. Allocates with `allocator`.
+// Command line of one check. The package-scoped flags take the package's name, never its
+// directory, and are left out for a package no file names. Allocates with `allocator`.
 check_command :: proc(
 	odin, dir: string,
 	pkg: Package,
@@ -246,7 +248,7 @@ check_command :: proc(
 		"check",
 		dir,
 		"-json-errors",
-		"-max-error-count:1000000",
+		fmt.aprintf("-max-error-count:%d", MAX_ERROR_COUNT),
 		"-thread-count:1",
 		"-ignore-unused-defineables",
 		fmt.aprintf("-target:%s", TARGETS[target].name),

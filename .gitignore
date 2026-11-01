@@ -5,16 +5,14 @@
 !.gitattributes
 !LICENSE
 !README.md
+!CHANGELOG.md
 !CLAUDE.md
 !mise.toml
 !ols.json
 !odinfmt.json
 !odx.json
-!GLOSSARY.md
 !docs/
 !docs/**
-!.out-of-scope/
-!.out-of-scope/**
 !odx/
 !odx/**
 !.claude/

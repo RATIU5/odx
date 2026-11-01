@@ -1,0 +1,7 @@
+--- stdout
+app/app.odin:3:1: odin: Syntax Error: Lines starting with #+ (file tags) are only allowed before the package line.
+app/app.odin:3:1: parse-unsupported: odx can't parse this file: expected a statement, got FileTag
+odx: 2 findings, 0 ignored, 0 pending, 0 skipped (rules 2, odx <release>, odin <odin>)
+--- stderr
+odx: no odx.json, so rule set 2, the running compiler and every package strict
+--- exit 1

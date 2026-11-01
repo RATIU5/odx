@@ -45,8 +45,8 @@ Check_Outcome :: union {
 	Untrusted,
 }
 
-// Decides one check's outcome from how it ended and its stderr alone, per the table in Appendix
-// E.4. `stderr` is all the check wrote, so an empty one with exit code 0 is a clean check.
+// Decides one check's outcome from how it ended and its stderr alone.
+// Here `stderr` is all the check wrote, so an empty one with exit code 0 is a clean check.
 // `retried` says this is the check's second run, which the pool gives a check that a signal ended.
 // The outcome borrows `stderr` and allocates the rest with `allocator`.
 read_check :: proc(
@@ -113,7 +113,7 @@ read_check :: proc(
 }
 
 // `json.parse` accepts trailing data, so the document counts only when the parser reaches the end
-// of input (probe R-H).
+// of input.
 @(private = "file", require_results)
 read_document :: proc(stderr: string) -> (entries: []Compiler_Entry, error_count: int, ok: bool) {
 	p := json.make_parser(stderr, .JSON, true)
@@ -131,7 +131,7 @@ read_document :: proc(stderr: string) -> (entries: []Compiler_Entry, error_count
 	return result, int(count), true
 }
 
-// Syntax errors and missing imports arrive typed as warnings (probe R-A), so the first message
+// Syntax errors and missing imports arrive typed as warnings, so the first message
 // decides.
 @(private = "file", require_results)
 read_entry :: proc(item: json.Value) -> (entry: Compiler_Entry, ok: bool) {
@@ -215,7 +215,7 @@ Placed :: struct {
 	relocated:     bool,
 }
 
-// Applies Appendix E.4's normalization, in its order, to one entry of `checked`'s check. Allocates
+// Normalizes one entry of `checked`'s check. Allocates
 // with `allocator`.
 normalize :: proc(
 	entry: Compiler_Entry,
@@ -506,8 +506,8 @@ read_redeclaration :: proc(
 }
 
 // The compiler reports a redeclared name at each later declaration, naming the earlier ones, but
-// the one it counts as first follows the order it read the files in, which varies under load
-// (Appendix C). The positions the entries name link into one group per declared name, and odx
+// the one it counts as first follows the order it read the files in, which varies under load.
+// The positions the entries name link into one group per declared name, and odx
 // reports each declaration after the first in path order. A lone entry that names nothing keeps its
 // message. Allocates with `allocator`.
 settle_redeclarations :: proc(records: []Redeclaration, allocator: runtime.Allocator) -> []Placed {

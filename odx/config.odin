@@ -3,6 +3,7 @@ package odx
 import "base:runtime"
 import "core:encoding/json"
 import "core:fmt"
+import "core:mem/virtual"
 import "core:os"
 import "core:slice"
 import "core:strconv"
@@ -166,16 +167,32 @@ parse_config :: proc(
 			append(&errors, invalid("missing required key '%s'", info.name))
 		}
 	}
+	check_vendored_not_pending(&config, &errors)
+	return
+}
+
+// Appends one error per vendored dir and pending entry that name the same directory.
+@(private = "file")
+check_vendored_not_pending :: proc(config: ^Config, errors: ^[dynamic]Error) {
+	if len(config.vendored) == 0 || len(config.pending) == 0 {
+		return
+	}
+	scratch: virtual.Arena
+	arena_init_or_die(&scratch)
+	defer virtual.arena_destroy(&scratch)
+	allocator := virtual.arena_allocator(&scratch)
+
+	pending_count := make(map[string]int, len(config.pending), allocator)
+	for entry in config.pending {
+		cleaned, _ := os.clean_path(entry.dir, allocator)
+		pending_count[cleaned] += 1
+	}
 	for dir in config.vendored {
-		clean_dir, _ := os.clean_path(dir, context.temp_allocator)
-		for entry in config.pending {
-			clean_entry, _ := os.clean_path(entry.dir, context.temp_allocator)
-			if clean_dir == clean_entry {
-				append(&errors, invalid("'%s' is listed under both 'vendored' and 'pending'", dir))
-			}
+		cleaned, _ := os.clean_path(dir, allocator)
+		for _ in 0 ..< pending_count[cleaned] {
+			append(errors, invalid("'%s' is listed under both 'vendored' and 'pending'", dir))
 		}
 	}
-	return
 }
 
 // Appends the problems a well-typed value has. Returns false when the value has the wrong type.
@@ -275,9 +292,13 @@ decode_collection :: proc(config: ^Config, errors: ^[dynamic]Error, entry, real_
 	}
 
 	full := path if os.is_absolute_path(path) else fmt.tprintf("%s/%s", real_root, path)
-	real, real_err := os.get_absolute_path(full, context.allocator)
+	real: string
+	real_err: os.Error
+	if disk_kind(full) == .Dir {
+		real, real_err = os.get_absolute_path(full, context.allocator)
+	}
 	switch {
-	case real_err != nil || disk_kind(real) != .Dir:
+	case real == "" || real_err != nil || disk_kind(real) != .Dir:
 		append(errors, invalid("collection '%s' path '%s' is not a directory", name, path))
 	case !is_within(real, real_root):
 		append(errors, invalid("collection '%s' path '%s' is outside the repo", name, path))

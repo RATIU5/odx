@@ -18,7 +18,7 @@ check_command_scopes_strict_flags_by_package_name :: proc(t: ^testing.T) {
 		"check",
 		"/repo/foo",
 		"-json-errors",
-		"-max-error-count:1000000",
+		"-max-error-count:10000",
 		"-thread-count:1",
 		"-ignore-unused-defineables",
 	}
@@ -125,7 +125,7 @@ check_command_leaves_out_the_package_flags_for_a_package_without_a_name :: proc(
 		"check",
 		"/repo/foo",
 		"-json-errors",
-		"-max-error-count:1000000",
+		"-max-error-count:10000",
 		"-thread-count:1",
 		"-ignore-unused-defineables",
 		"-target:darwin_arm64",
