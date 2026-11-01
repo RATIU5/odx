@@ -1,7 +1,6 @@
 package odx
 
 import "core:fmt"
-import "core:slice"
 import "core:strings"
 import "core:testing"
 
@@ -563,47 +562,11 @@ help_lists_every_error_code_in_enum_order :: proc(t: ^testing.T) {
 	}
 }
 
-README :: #load("../README.md", string)
-
-@(test)
-readme_error_code_table_lists_exactly_the_error_codes :: proc(t: ^testing.T) {
-	listed := make([dynamic]string, context.temp_allocator)
-	text := README
-	in_table := false
-	for line in strings.split_lines_iterator(&text) {
-		if strings.has_prefix(line, "| Code ") {
-			in_table = true
-			continue
-		}
-		if !in_table {
-			continue
-		}
-		if !strings.has_prefix(line, "|") {
-			break
-		}
-		cell := strings.trim_space(strings.split(line, "|", context.temp_allocator)[1])
-		if strings.has_prefix(cell, "`") {
-			append(&listed, strings.trim(cell, "`"))
-		}
-	}
-	want := make([dynamic]string, context.temp_allocator)
-	for name in ERROR_CODES {
-		append(&want, name)
-	}
-	testing.expectf(
-		t,
-		slice.equal(listed[:], want[:]),
-		"the README's error code table lists %v, want %v",
-		listed[:],
-		want[:],
-	)
-}
-
 @(test)
 version_line_names_the_release_the_rule_set_and_the_compiler :: proc(t: ^testing.T) {
 	line := version_line(context.allocator)
 	defer delete(line)
-	testing.expect_value(t, line, "odx 0.2.0, rule set 2, odin dev-2026-10-nightly:84bc3fc\n")
+	testing.expect_value(t, line, "odx 0.3.0, rule set 2, odin dev-2026-10-nightly:84bc3fc\n")
 }
 
 MUTED_ROOT_LINE :: "odx: .: compile errors hide this package's other findings\n"

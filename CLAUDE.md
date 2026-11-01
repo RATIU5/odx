@@ -1,6 +1,6 @@
 # odx
 
-@GLOSSARY.md
+@docs/GLOSSARY.md
 
 ## Docs
 
@@ -10,12 +10,12 @@
 | `~/.claude/orchestrate/odx/docs/<feature>/spec.md` | the earlier behavior contract and its later items; input to that feature's plan until the plan replaces it | writing that feature's plan | nobody; delete once the plan lands |
 | `~/.claude/orchestrate/odx/docs/review-2026-09-30.md` | 12 scope-review findings, each with a decision needed | writing the checker plans | nobody |
 | `docs/adr/` | hard-to-reverse decisions with reasons; `0004-principles.md` settles conflicts | designing in the area an ADR names, or when goals conflict | agent, with the user's approval |
-| `.out-of-scope/` | rejected features and why | a request looks like something odx refuses | agent, with the user's approval |
+| `docs/out-of-scope/` | rejected features and why | a request looks like something odx refuses | agent, with the user's approval |
 | `README.md` | the user workflow and dev commands | | user |
 
 - The plan store is local to the user's machine. If it's missing, say so and ask before inferring behavior from code.
 - Glossary terms are the vocabulary for code, tests, plans and messages. Adding, renaming or redefining a term needs the user's approval.
-- When work contradicts a plan, an ADR or an `.out-of-scope/` entry, say so before going on. When a plan is silent or ambiguous, ask the user.
+- When work contradicts a plan, an ADR or a `docs/out-of-scope/` entry, say so before going on. When a plan is silent or ambiguous, ask the user.
 
 ## Workflow
 
