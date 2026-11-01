@@ -10,6 +10,10 @@ All notable changes to odx are listed here, newest first. The format follows [Ke
 
 A project on `dev-2026-09` stays on odx 0.1.0.
 
+## Unreleased
+
+A misplaced file tag, such as `#+vet` after the `package` line, no longer ends the run with a `compiler-output` timeout. The compiler loops on it for minutes when asked for a million errors, so odx now asks for at most 10000 per package and target. A package with more compile errors than that has the rest left out. Your findings, messages, exit codes and JSON keys are otherwise the same.
+
 ## 0.3.0
 
 Your findings, messages, exit codes and existing JSON keys are the same as in 0.2.0. Upgrading needs no change to `odx.json`; set `"github:RATIU5/odx"` to `0.3.0` in `mise.toml`.

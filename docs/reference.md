@@ -32,6 +32,8 @@ odx: app: compile errors hide this package's other findings
 
 Fix the compile errors and run `odx check` again to see the rest. For a pending package the line prints only with `--pending`.
 
+odx asks the compiler for at most 10000 errors per package and target. A package with more has the rest left out, and nothing says so.
+
 `odin check` leaves out a file tagged `#+test`. Only `odin test` compiles such a file, and odx can't run `odin test`, because it links. So a compile error in a `#+test` file doesn't fail the run. odx's own rules still run on the file, and stderr names each package that holds one, with the number of files:
 
 ```text
