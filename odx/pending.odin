@@ -21,7 +21,7 @@ stale_pending :: proc(
 	allocator: runtime.Allocator,
 ) -> []Finding {
 	scratch: virtual.Arena
-	ensure(virtual.arena_init_growing(&scratch) == nil, "out of memory")
+	arena_init_or_die(&scratch)
 	defer virtual.arena_destroy(&scratch)
 	temp := virtual.arena_allocator(&scratch)
 

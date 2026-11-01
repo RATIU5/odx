@@ -178,7 +178,7 @@ check_vendored_not_pending :: proc(config: ^Config, errors: ^[dynamic]Error) {
 		return
 	}
 	scratch: virtual.Arena
-	ensure(virtual.arena_init_growing(&scratch) == nil, "out of memory")
+	arena_init_or_die(&scratch)
 	defer virtual.arena_destroy(&scratch)
 	allocator := virtual.arena_allocator(&scratch)
 
