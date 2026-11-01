@@ -314,7 +314,14 @@ render_json :: proc(out: ^strings.Builder, result: Result, cmd: Check_Command, f
 		RELEASE,
 	)
 	render_json_string(out, result.odin)
-	strings.write_string(out, "}}\n")
+	strings.write_string(out, `,"targets":[`)
+	for info, target in TARGETS {
+		if target != min(Target) {
+			strings.write_byte(out, ',')
+		}
+		render_json_string(out, info.name)
+	}
+	strings.write_string(out, "]}}\n")
 }
 
 render_json_string :: proc(out: ^strings.Builder, s: string) {

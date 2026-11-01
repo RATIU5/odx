@@ -264,10 +264,40 @@ json_prints_one_document :: proc(t: ^testing.T) {
 		`"errors":[],` +
 		`"summary":{"findings":1,"ignored":2,"pending":1,"skipped":3,"rules":1,"release":"` +
 		RELEASE +
-		`","odin":"dev-x"}}` +
+		`","odin":"dev-x","targets":["darwin_arm64","linux_amd64"]}}` +
 		"\n",
 	)
 	testing.expect_value(t, strings.to_string(w.err), "")
+}
+
+@(test)
+json_summary_ends_with_every_target_in_table_order :: proc(t: ^testing.T) {
+	result := sample_result()
+	defer delete(result.findings)
+
+	w: Written
+	defer destroy_written(&w)
+	write_to_builders(t, &w, result, {json = true})
+
+	want := strings.builder_make()
+	defer strings.builder_destroy(&want)
+	strings.write_string(&want, `,"odin":"dev-x","targets":[`)
+	for info, target in TARGETS {
+		if target != min(Target) {
+			strings.write_byte(&want, ',')
+		}
+		fmt.sbprintf(&want, `"%s"`, info.name)
+	}
+	strings.write_string(&want, "]}}\n")
+
+	got := strings.to_string(w.out)
+	testing.expectf(
+		t,
+		strings.has_suffix(got, strings.to_string(want)),
+		"summary should end with %q, got %q",
+		strings.to_string(want),
+		got,
+	)
 }
 
 @(test)
@@ -288,7 +318,7 @@ json_error_has_no_findings :: proc(t: ^testing.T) {
 		`"errors":[{"code":"odin-missing","message":"no odin"}],` +
 		`"summary":{"findings":0,"ignored":0,"pending":0,"skipped":0,"rules":1,"release":"` +
 		RELEASE +
-		`","odin":"dev-x"}}` +
+		`","odin":"dev-x","targets":["darwin_arm64","linux_amd64"]}}` +
 		"\n",
 	)
 	testing.expect_value(t, strings.to_string(w.err), "odx: error: odin-missing: no odin\n")

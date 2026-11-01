@@ -89,7 +89,7 @@ The error codes, which `odx --help` also lists:
 | `format-timeout`       | The formatter took more than 120 s on one file, so rerun and report the message if it repeats.                                                                                    |
 | `format-failed`        | odx can't run the formatter or read a file to check its format, so fix what the message names.                                                                                    |
 
-`--json` prints `{"version":1,"findings":[...],"errors":[...],"summary":{...}}`. Each finding has `path`, `line`, `col`, `rule` and `message`. `errors` is non-empty when the exit is 2, except for a usage error, which prints no JSON.
+`--json` prints `{"version":1,"findings":[...],"errors":[...],"summary":{...}}`. Each finding has `path`, `line`, `col`, `rule` and `message`. `errors` is non-empty when the exit is 2, except for a usage error, which prints no JSON. `summary` has `findings`, `ignored`, `pending`, `skipped`, `rules`, `release`, `odin` and `targets`, the list of targets odx checked.
 
 `--pending` prints the held-back findings after the others, under the stderr line `odx: held-back findings:`. In `--json` each carries `"held_back":true`. The exit code doesn't change.
 
@@ -183,6 +183,8 @@ All rules belong to rule set 2. It has the same rules as rule set 1, and its `fo
 ## Packages for one platform
 
 odx checks every package for `darwin_arm64` and `linux_amd64`. A package written for one platform says so with a build tag, such as `#+build darwin` at the top of each file, or with a file suffix such as `_darwin.odin`. odx then checks it for that target only. An `#assert(ODIN_OS == .Darwin)` alone fails on the other target, because the compiler still selects the file. A finding doesn't say which target it comes from, so a finding in a `_linux.odin` file or in a `when ODIN_OS == .Linux` branch reads like any other.
+
+The `--json` summary lists the targets checked under `targets`. odx compiles no code for any other target, so a Windows-only file, such as one named `_windows.odin`, never gets an `odin` finding.
 
 ## Files odx can't read
 
