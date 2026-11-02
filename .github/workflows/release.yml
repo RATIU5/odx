@@ -157,13 +157,14 @@ jobs:
               echo "::error::$asset holds release $this, and an earlier asset holds $release"
               exit 1
             fi
+            if [ -z "$release" ]; then
+              {
+                echo '```text'
+                grep -v -e '^platform: ' -e '^minimum macOS: ' "$RUNNER_TEMP/VERSIONS"
+                echo '```'
+              } >"$notes"
+            fi
             release=$this
-            {
-              echo '```text'
-              cat "$RUNNER_TEMP/VERSIONS"
-              echo '```'
-              echo
-            } >>"$notes"
             printf '%s\n%s\n' "$asset" "$asset.sha256" >>"$assets"
           done
           echo "tag=v$release" >>"$GITHUB_OUTPUT"
@@ -196,5 +197,14 @@ jobs:
           while IFS= read -r f; do
             files+=("$f")
           done <"$RUNNER_TEMP/assets"
+          gh api -H 'Accept: application/vnd.github.raw' \
+            "repos/$GITHUB_REPOSITORY/contents/CHANGELOG.md?ref=$GITHUB_SHA" >"$RUNNER_TEMP/CHANGELOG.md"
+          awk -v h="## ${TAG#v}" '$0 == h { on = 1; next } /^## / { on = 0 } on' \
+            "$RUNNER_TEMP/CHANGELOG.md" >"$RUNNER_TEMP/changes"
+          if ! grep -q '[^[:space:]]' "$RUNNER_TEMP/changes"; then
+            echo "::error::CHANGELOG.md has no '## ${TAG#v}' section with text under it"
+            exit 1
+          fi
+          cat "$RUNNER_TEMP/changes" "$RUNNER_TEMP/notes" >"$RUNNER_TEMP/body"
           gh release create "$TAG" --draft --target "$GITHUB_SHA" --title "$TAG" \
-            --notes-file "$RUNNER_TEMP/notes" "${files[@]}"
+            --notes-file "$RUNNER_TEMP/body" "${files[@]}"
